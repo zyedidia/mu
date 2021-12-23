@@ -1,0 +1,130 @@
+package input
+
+import (
+	"errors"
+	"io/ioutil"
+	"os"
+	"time"
+
+	"github.com/zyedidia/ned/pkg/cpu"
+	"github.com/zyedidia/ned/pkg/input/parallel"
+)
+
+// Input is an interface for defining sources of input data. This may include
+// file reads via various mechanisms or over the network, or other forms of
+// data (memory buffers or pipes).
+type Input interface {
+	// Read the entire contents of the input source into a byte slice.
+	Read() ([]byte, error)
+	// ModTime returns the time when the most recent modification was made to
+	// this input source.
+	ModTime() (time.Time, error)
+	// Name returns the name of this input source
+	Name() string
+}
+
+// A File is an input source for a local file. If the file does not exist,
+// reading from it will return an empty byte slice rather than an error.
+type File struct {
+	Path string
+}
+
+// Read opens the file, and reads its contents using all available CPUs.
+func (f *File) Read() ([]byte, error) {
+	file, err := os.Open(f.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return []byte{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	b := make([]byte, fi.Size())
+	n, err := parallel.ReadFull(file, b, cpu.NumCores())
+	return b[:n], err
+}
+
+// ModTime returns the most recent modification time of this file reported by
+// the file system.
+func (f *File) ModTime() (time.Time, error) {
+	fi, err := os.Stat(f.Path)
+	if err != nil {
+		return time.Now(), err
+	}
+	return fi.ModTime(), nil
+}
+
+func (f *File) Name() string {
+	return f.Path
+}
+
+// A Reader is a general input source that reads from a SizedReaderAt.
+type Reader struct {
+	rs   SizedReaderAt
+	name string
+	time time.Time
+}
+
+// A SizedReaderAt is a ReaderAt which also supports a Size function.
+type SizedReaderAt interface {
+	ReadAt(p []byte, off int64) (n int, err error)
+	Size() int64
+}
+
+type ModTimer interface {
+	ModTime() (time.Time, error)
+}
+
+// NewReader creates a new reader that wraps a SizedReaderAt.
+func NewReader(r SizedReaderAt, name string) *Reader {
+	return &Reader{
+		rs:   r,
+		name: name,
+		time: time.Now(),
+	}
+}
+
+func (r *Reader) Read() ([]byte, error) {
+	b := make([]byte, r.rs.Size())
+	n, err := parallel.ReadFull(r.rs, b, cpu.NumCores())
+	return b[:n], err
+}
+
+func (r *Reader) Name() string {
+	return r.name
+}
+
+// If the SizedReaderAt supports the ModTime() function, that will be called,
+// otherwise the time of the creation of the Reader will be used.
+func (r *Reader) ModTime() (time.Time, error) {
+	if mt, ok := r.rs.(ModTimer); ok {
+		return mt.ModTime()
+	}
+	return r.time, nil
+}
+
+type Stdin struct {
+	time time.Time
+}
+
+func NewStdin() *Stdin {
+	return &Stdin{
+		time: time.Now(),
+	}
+}
+
+func (s *Stdin) Read() ([]byte, error) {
+	return ioutil.ReadAll(os.Stdin)
+}
+
+func (s *Stdin) Name() string {
+	return "stdin"
+}
+
+func (s *Stdin) ModTime() (time.Time, error) {
+	return s.time, nil
+}

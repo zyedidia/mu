@@ -1,0 +1,33 @@
+atomic file fallback
+save with sudo [x]
+search/replace [x]
+    structural regex
+display [x]
+buffer modification [x]
+undo/redo [x]
+highlighting
+ftdetect [x]
+options
+comments
+backups [x]
+cache (maybe just decrease splitLen instead?)
+    reading [x]
+    line conversion
+tests
+    undo [x]
+        undo tree
+    diff [x]
+    cache [x]
+    linerope [x]
+    read [x]
+    endings [x]
+    input
+    output
+    search/replace/regexp
+    modified
+    reload
+    unicode
+    display
+    marks
+reloading [x]
+diffing [x]
