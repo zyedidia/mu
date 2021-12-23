@@ -2,6 +2,7 @@ package ned
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -9,11 +10,14 @@ import (
 	"github.com/zyedidia/ned/pkg/output"
 )
 
+// --- Basic ---
 func (e *Editor) Help() {
 	for _, cmd := range commands {
 		fmt.Println(cmd.doc)
 	}
 }
+
+// --- Buffer management ---
 
 func (e *Editor) Open(path string) error {
 	in := &input.File{
@@ -23,64 +27,6 @@ func (e *Editor) Open(path string) error {
 		Path: path,
 	}
 	return e.open(in, out)
-}
-
-func (e *Editor) Save() error {
-	return e.active().Save()
-}
-
-func (e *Editor) InsertAt(pos int, val string) {
-	e.active().Insert(pos, []byte(val))
-}
-
-func (e *Editor) Remove(from, to int) {
-	e.active().Remove(from, to)
-}
-
-func (e *Editor) Read(from, to int) string {
-	b := make([]byte, to-from)
-	n, _ := e.active().ReadAt(b, int64(from))
-	return string(b[:n])
-}
-
-func (e *Editor) ReadLine(l int) string {
-	return string(e.active().GetLine(l))
-}
-
-func (e *Editor) ReadAll() string {
-	return string(e.active().Bytes())
-}
-
-func (e *Editor) FindDown(off int, regex string) ([]int, error) {
-	r, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, err
-	}
-	match := e.active().FindDown(r, off)
-	if len(match) < 1 {
-		return nil, fmt.Errorf("no match found")
-	}
-	return match, nil
-}
-
-func (e *Editor) FindUp(off int, regex string) ([]int, error) {
-	r, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, err
-	}
-	match := e.active().FindUp(r, off)
-	if len(match) < 1 {
-		return nil, fmt.Errorf("no match found")
-	}
-	return match, nil
-}
-
-func (e *Editor) Filetype() string {
-	return e.active().Filetype()
-}
-
-func (e *Editor) Name() string {
-	return e.active().Name()
 }
 
 func (e *Editor) Quit() {
@@ -131,6 +77,98 @@ func (e *Editor) NewBuffer() {
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 }
 
+func (e *Editor) Save() error {
+	return e.active().Save()
+}
+
+func (e *Editor) SaveAs(path string) error {
+	e.active().SetOutput(&output.File{
+		Path: path,
+	})
+	return e.Save()
+}
+
+// --- Editing ---
+
+func (e *Editor) InsertAt(pos int, val string) {
+	log.Println("insert", pos, val)
+	e.active().Insert(pos, []byte(val))
+}
+
+func (e *Editor) Remove(from, to int) {
+	e.active().Remove(from, to)
+}
+
+// --- Reading ---
+
+func (e *Editor) Read(from, to int) string {
+	b := make([]byte, to-from)
+	n, _ := e.active().ReadAt(b, int64(from))
+	return string(b[:n])
+}
+
+func (e *Editor) ReadLine(l int) string {
+	return string(e.active().GetLine(l))
+}
+
+func (e *Editor) ReadAll() string {
+	return string(e.active().Bytes())
+}
+
+// --- Searching ---
+
+func (e *Editor) FindDown(off int, regex string) ([]int, error) {
+	r, err := regexp.Compile(regex)
+	if err != nil {
+		return nil, err
+	}
+	match := e.active().FindDown(r, off)
+	if len(match) < 1 {
+		return nil, fmt.Errorf("no match found")
+	}
+	return match, nil
+}
+
+func (e *Editor) FindUp(off int, regex string) ([]int, error) {
+	r, err := regexp.Compile(regex)
+	if err != nil {
+		return nil, err
+	}
+	match := e.active().FindUp(r, off)
+	if len(match) < 1 {
+		return nil, fmt.Errorf("no match found")
+	}
+	return match, nil
+}
+
+// --- Cursors ---
+
+func (e *Editor) CursorUp(from int) int {
+	b := e.active()
+	c := SpawnCursorAt(from).Up(b.Buffer)
+	return c.Pos
+}
+
+func (e *Editor) CursorDown(from int) int {
+	b := e.active()
+	c := SpawnCursorAt(from).Down(b.Buffer)
+	return c.Pos
+}
+
+func (e *Editor) CursorLeft(from int) int {
+	b := e.active()
+	c := SpawnCursorAt(from).Left(b.Buffer)
+	return c.Pos
+}
+
+func (e *Editor) CursorRight(from int) int {
+	b := e.active()
+	c := SpawnCursorAt(from).Right(b.Buffer)
+	return c.Pos
+}
+
+// --- Locations ---
+
 func (e *Editor) LineCol(pos int) []int {
 	line, col := e.active().LineColAt(pos)
 	return []int{line, col}
@@ -138,6 +176,20 @@ func (e *Editor) LineCol(pos int) []int {
 
 func (e *Editor) Offset(line, col int) int {
 	return e.active().OffsetAt(line, col)
+}
+
+func (e *Editor) Size() int {
+	return int(e.active().Size())
+}
+
+// --- Options ---
+
+func (e *Editor) Filetype() string {
+	return e.active().Filetype()
+}
+
+func (e *Editor) Name() string {
+	return e.active().Name()
 }
 
 var commands = []command{
@@ -150,6 +202,11 @@ var commands = []command{
 		"save",
 		(*Editor).Save,
 		"save: save the current buffer",
+	},
+	{
+		"save-as",
+		(*Editor).SaveAs,
+		"save-as: change the current buffer's output and save",
 	},
 	{
 		"insert-at",
@@ -230,5 +287,30 @@ var commands = []command{
 		"new-buffer",
 		(*Editor).NewBuffer,
 		"new-buffer: open a new empty buffer",
+	},
+	{
+		"size",
+		(*Editor).Size,
+		"size: return the number of bytes in the buffer",
+	},
+	{
+		"cursor-left",
+		(*Editor).CursorLeft,
+		"cursor-left <pos>: returns the resulting position from moving a cursor at <pos> left one character",
+	},
+	{
+		"cursor-right",
+		(*Editor).CursorRight,
+		"cursor-right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
+	},
+	{
+		"cursor-up",
+		(*Editor).CursorUp,
+		"cursor-up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
+	},
+	{
+		"cursor-down",
+		(*Editor).CursorDown,
+		"cursor-down <pos>: returns the resulting position from moving a cursor at <pos> down one line",
 	},
 }

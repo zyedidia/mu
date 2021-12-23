@@ -25,6 +25,7 @@ type Editor struct {
 
 func newEditor() *Editor {
 	interp := tcl.NewInterp()
+	interp.SetVarRaw("pos", tcl.FromInt(0))
 	e := &Editor{
 		interp: interp,
 	}

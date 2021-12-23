@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"unicode/utf8"
 
 	tcl "github.com/zyedidia/gotcl"
@@ -104,4 +105,17 @@ func (e *Editor) Eval(cmd string) error {
 	}
 
 	return err
+}
+
+func (e *Editor) EvalWithVars(cmd string, vars []interface{}) error {
+	for i, v := range vars {
+		name := strconv.Itoa(i)
+		switch v := v.(type) {
+		case string:
+			e.interp.SetVarRaw(name, tcl.FromStr(v))
+		case int:
+			e.interp.SetVarRaw(name, tcl.FromInt(v))
+		}
+	}
+	return e.Eval(cmd)
 }
