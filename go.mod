@@ -3,17 +3,23 @@ module github.com/zyedidia/ned
 go 1.18
 
 require (
+	github.com/go-errors/errors v1.4.1
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/micro-editor/tcell/v2 v2.2.2-0.20210627050507-71193250da58
+	github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d
 	github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071
 	github.com/zyedidia/generic v0.0.0-20211222002821-df59a340226d
+	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20211222231648-7a7e978d89ea
+	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
 	github.com/zyedidia/kbd v0.0.0-20211222015115-9232bd3926b7
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/readline.v1 v1.0.0-20160726135117-62c6fe619375
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -27,8 +33,8 @@ require (
 	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
-	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68 // indirect
-	golang.org/x/term v0.0.0-20201210144234-2321bbc49cbf // indirect
+	golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4 // indirect
+	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 )
 
 replace github.com/zyedidia/gotcl => ../gotcl

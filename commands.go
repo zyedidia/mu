@@ -2,18 +2,17 @@ package ned
 
 import (
 	"fmt"
-	"log"
-	"regexp"
 	"strings"
 
 	"github.com/zyedidia/ned/pkg/input"
 	"github.com/zyedidia/ned/pkg/output"
+	"github.com/zyedidia/ned/pkg/tclutil"
 )
 
 // --- Basic ---
 func (e *Editor) Help() {
 	for _, cmd := range commands {
-		fmt.Println(cmd.doc)
+		fmt.Println(cmd.Doc)
 	}
 }
 
@@ -31,21 +30,24 @@ func (e *Editor) Open(path string) error {
 
 func (e *Editor) Quit() {
 	i := e.cur
-	copy(e.bufs[i:], e.bufs[i+1:])
-	e.bufs[len(e.bufs)-1] = nil
-	e.bufs = e.bufs[:len(e.bufs)-1]
+	e.panes[i].Unregister(e.interp)
+	copy(e.panes[i:], e.panes[i+1:])
+	e.panes[len(e.panes)-1] = nil
+	e.panes = e.panes[:len(e.panes)-1]
 	if !e.valid() {
-		e.cur = len(e.bufs) - 1
+		e.cur = len(e.panes) - 1
 	}
 }
 
 func (e *Editor) QuitAll() {
-	e.bufs = nil
-	e.cur = 0
+	ln := len(e.panes)
+	for i := 0; i < ln; i++ {
+		e.Quit()
+	}
 }
 
 func (e *Editor) ShowBuffers() {
-	for i, b := range e.bufs {
+	for i, b := range e.panes {
 		if e.cur == i {
 			fmt.Printf("[%d: %v]\n", i, b.Name())
 		} else {
@@ -55,7 +57,7 @@ func (e *Editor) ShowBuffers() {
 }
 
 func (e *Editor) SetBuffer(name string) error {
-	for i, b := range e.bufs {
+	for i, b := range e.panes {
 		if b.Name() == name {
 			e.cur = i
 			return nil
@@ -65,7 +67,7 @@ func (e *Editor) SetBuffer(name string) error {
 }
 
 func (e *Editor) SetBufferIdx(idx int) error {
-	if idx < 0 || idx >= len(e.bufs) {
+	if idx < 0 || idx >= len(e.panes) {
 		return fmt.Errorf("invalid buffer index: %d", idx)
 	}
 	e.cur = idx
@@ -73,244 +75,44 @@ func (e *Editor) SetBufferIdx(idx int) error {
 }
 
 func (e *Editor) NewBuffer() {
-	e.mkbuf()
+	e.MakePane()
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 }
 
-func (e *Editor) Save() error {
-	return e.active().Save()
-}
-
-func (e *Editor) SaveAs(path string) error {
-	e.active().SetOutput(&output.File{
-		Path: path,
-	})
-	return e.Save()
-}
-
-// --- Editing ---
-
-func (e *Editor) InsertAt(pos int, val string) {
-	log.Println("insert", pos, val)
-	e.active().Insert(pos, []byte(val))
-}
-
-func (e *Editor) Remove(from, to int) {
-	e.active().Remove(from, to)
-}
-
-// --- Reading ---
-
-func (e *Editor) Read(from, to int) string {
-	b := make([]byte, to-from)
-	n, _ := e.active().ReadAt(b, int64(from))
-	return string(b[:n])
-}
-
-func (e *Editor) ReadLine(l int) string {
-	return string(e.active().GetLine(l))
-}
-
-func (e *Editor) ReadAll() string {
-	return string(e.active().Bytes())
-}
-
-// --- Searching ---
-
-func (e *Editor) FindDown(off int, regex string) ([]int, error) {
-	r, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, err
-	}
-	match := e.active().FindDown(r, off)
-	if len(match) < 1 {
-		return nil, fmt.Errorf("no match found")
-	}
-	return match, nil
-}
-
-func (e *Editor) FindUp(off int, regex string) ([]int, error) {
-	r, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, err
-	}
-	match := e.active().FindUp(r, off)
-	if len(match) < 1 {
-		return nil, fmt.Errorf("no match found")
-	}
-	return match, nil
-}
-
-// --- Cursors ---
-
-func (e *Editor) CursorUp(from int) int {
-	b := e.active()
-	c := SpawnCursorAt(from).Up(b.Buffer)
-	return c.Pos
-}
-
-func (e *Editor) CursorDown(from int) int {
-	b := e.active()
-	c := SpawnCursorAt(from).Down(b.Buffer)
-	return c.Pos
-}
-
-func (e *Editor) CursorLeft(from int) int {
-	b := e.active()
-	c := SpawnCursorAt(from).Left(b.Buffer)
-	return c.Pos
-}
-
-func (e *Editor) CursorRight(from int) int {
-	b := e.active()
-	c := SpawnCursorAt(from).Right(b.Buffer)
-	return c.Pos
-}
-
-// --- Locations ---
-
-func (e *Editor) LineCol(pos int) []int {
-	line, col := e.active().LineColAt(pos)
-	return []int{line, col}
-}
-
-func (e *Editor) Offset(line, col int) int {
-	return e.active().OffsetAt(line, col)
-}
-
-func (e *Editor) Size() int {
-	return int(e.active().Size())
-}
-
-// --- Options ---
-
-func (e *Editor) Filetype() string {
-	return e.active().Filetype()
-}
-
-func (e *Editor) Name() string {
-	return e.active().Name()
-}
-
-var commands = []command{
+var commands = []tclutil.Command{
 	{
 		"open",
 		(*Editor).Open,
-		"open <file>: open <file> in the current buffer",
-	},
-	{
-		"save",
-		(*Editor).Save,
-		"save: save the current buffer",
-	},
-	{
-		"save-as",
-		(*Editor).SaveAs,
-		"save-as: change the current buffer's output and save",
-	},
-	{
-		"insert-at",
-		(*Editor).InsertAt,
-		"insert-at <pos> <text>: insert <text> at <pos>",
-	},
-	{
-		"read",
-		(*Editor).Read,
-		"read <from> <to>: return the buffer contents in the range [<from>:<to>)",
-	},
-	{
-		"read-line",
-		(*Editor).ReadLine,
-		"read-line <line>: return the contents of <line>",
-	},
-	{
-		"read-all",
-		(*Editor).ReadAll,
-		"read-all: return the contents of the current buffer",
-	},
-	{
-		"find-down",
-		(*Editor).FindDown,
-		"find-down <pos> <regex>: search down from <pos> for <regex> and return match as a pair of positions",
-	},
-	{
-		"find-up",
-		(*Editor).FindUp,
-		"find-up <pos> <regex>: search up from <pos> for <regex> and return match as a pair of positions",
-	},
-	{
-		"filetype",
-		(*Editor).Filetype,
-		"filetype: return the filetype of the current buffer",
-	},
-	{
-		"name",
-		(*Editor).Name,
-		"name: return the name of the current buffer",
-	},
-	{
-		"line-col",
-		(*Editor).LineCol,
-		"line-col <pos>: return the line/col pair corresponding to a byte offset",
-	},
-	{
-		"offset",
-		(*Editor).Offset,
-		"offset <line> <col>: return the offset corresponding to a line/col pair",
+		"open <file>: open <file> as a buffer in the current pane",
 	},
 	{
 		"quit",
 		(*Editor).Quit,
-		"quit: close the current buffer",
+		"quit: close the current pane",
 	},
 	{
 		"quit-all",
 		(*Editor).QuitAll,
-		"quit-all: close all buffers",
+		"quit-all: close all panes",
 	},
 	{
-		"show-buffers",
+		"show-panes",
 		(*Editor).ShowBuffers,
-		"show-buffers: display all open buffers",
+		"show-panes: display all open panes",
 	},
 	{
-		"set-buffer-idx",
+		"set-pane-idx",
 		(*Editor).SetBufferIdx,
-		"set-buffer-idx <idx>: set the currently active buffer to the <idx>-th buffer",
+		"set-pane-idx <idx>: set the currently active pane to the <idx>-th pane",
 	},
 	{
-		"set-buffer",
+		"set-pane",
 		(*Editor).SetBuffer,
-		"set-buffer <name>: set the currently active buffer to the buffer with <name>",
+		"set-pane <name>: set the currently active pane to the pane with name <name>",
 	},
 	{
 		"new-buffer",
 		(*Editor).NewBuffer,
 		"new-buffer: open a new empty buffer",
-	},
-	{
-		"size",
-		(*Editor).Size,
-		"size: return the number of bytes in the buffer",
-	},
-	{
-		"cursor-left",
-		(*Editor).CursorLeft,
-		"cursor-left <pos>: returns the resulting position from moving a cursor at <pos> left one character",
-	},
-	{
-		"cursor-right",
-		(*Editor).CursorRight,
-		"cursor-right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
-	},
-	{
-		"cursor-up",
-		(*Editor).CursorUp,
-		"cursor-up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
-	},
-	{
-		"cursor-down",
-		(*Editor).CursorDown,
-		"cursor-down <pos>: returns the resulting position from moving a cursor at <pos> down one line",
 	},
 }

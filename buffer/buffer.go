@@ -2,11 +2,15 @@ package buffer
 
 import (
 	"fmt"
+	"log"
 	"time"
 
+	"github.com/zyedidia/flare"
+	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/ned/buffer/diff"
 	"github.com/zyedidia/ned/buffer/text"
 	"github.com/zyedidia/ned/buffer/undo"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -26,6 +30,12 @@ type Buffer struct {
 	out      Output
 	modified bool
 	modhash  []byte
+
+	syntbl      memo.Table
+	highlighter *flare.Highlighter
+	hisem       *semaphore.Weighted
+	matches     *flare.Matches
+	minvalid    bool
 
 	refs int
 
@@ -54,6 +64,7 @@ func NewBuffer(r Input, out Output, Opts Options) (*Buffer, error) {
 		out:    out,
 		Opts:   Opts,
 		Exited: make(chan bool),
+		hisem:  semaphore.NewWeighted(1),
 		refs:   1,
 	}
 	buf.Opts.Syntax = true
@@ -67,6 +78,13 @@ func NewBuffer(r Input, out Output, Opts Options) (*Buffer, error) {
 			buf.Opts.Filetype = &f
 		}
 	}
+
+	err = buf.LoadHighlighter()
+	if err != nil {
+		// TODO: return this error as a warning maybe
+		log.Println(err)
+	}
+	go buf.InitialHighlight()
 
 	return buf, nil
 }

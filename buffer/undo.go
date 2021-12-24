@@ -2,6 +2,8 @@ package buffer
 
 import (
 	"encoding/gob"
+
+	"github.com/zyedidia/gpeg/memo"
 )
 
 // An Edit represents an edit to the document that can be undone.
@@ -22,6 +24,12 @@ func (e *Edit) Do(base interface{}) {
 	e.Sub = buf.Buffer.Slice(e.Start, e.End)
 	buf.Buffer.Remove(e.Start, e.End)
 	buf.Buffer.Insert(e.Start, e.Text)
+
+	buf.syntbl.ApplyEdit(memo.Edit{
+		Start: e.Start,
+		End:   e.End,
+		Len:   len(e.Text),
+	})
 }
 
 // Undo modifies the base text buffer to remove Text and insert the substring.
@@ -29,6 +37,12 @@ func (e *Edit) Undo(base interface{}) {
 	buf := base.(*Buffer)
 	buf.Buffer.Remove(e.Start, e.Start+len(e.Text))
 	buf.Buffer.Insert(e.Start, e.Sub)
+
+	buf.syntbl.ApplyEdit(memo.Edit{
+		Start: e.Start,
+		End:   e.Start + len(e.Text),
+		Len:   len(e.Sub),
+	})
 }
 
 // Insert val at pos and apply the change to the undo tree.
@@ -53,6 +67,7 @@ func (b *Buffer) Remove(start, end int) {
 func (b *Buffer) Edit(e *Edit) {
 	b.undo.Apply(e)
 	b.modified = true
+	b.minvalid = true
 }
 
 // Undo the previous modification.

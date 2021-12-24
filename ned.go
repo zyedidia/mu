@@ -6,18 +6,15 @@ import (
 
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
+	"github.com/zyedidia/ned/pane"
+	"github.com/zyedidia/ned/pane/buf"
 	"github.com/zyedidia/ned/pkg/input"
 	"github.com/zyedidia/ned/pkg/output"
+	"github.com/zyedidia/ned/pkg/tclutil"
 )
 
-type command struct {
-	name string
-	fn   interface{}
-	doc  string
-}
-
 type Editor struct {
-	bufs   []*Buffer
+	panes  []pane.Pane
 	cur    int
 	interp *tcl.Interp
 	tclerr error
@@ -29,52 +26,55 @@ func newEditor() *Editor {
 	e := &Editor{
 		interp: interp,
 	}
-	e.RegisterCommands()
+	e.Register()
 	return e
 }
 
 func NewEditor() *Editor {
 	e := newEditor()
-	e.mkbuf()
+	e.MakePane()
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 	return e
 }
 
 func NewEditorFromPath(path string) *Editor {
 	e := newEditor()
-	e.mkbuf()
+	e.MakePane()
 	e.Open(path)
 	return e
 }
 
 func init() {
-	commands = append(commands, command{
-		name: "help",
-		fn:   (*Editor).Help,
-		doc:  "help: show help",
+	commands = append(commands, tclutil.Command{
+		Name: "help",
+		Fn:   (*Editor).Help,
+		Doc:  "help: show help",
 	})
 	sort.Slice(commands, func(i, j int) bool {
-		return commands[i].name < commands[j].name
+		return commands[i].Name < commands[j].Name
 	})
 }
 
-func (e *Editor) RegisterCommands() {
+func (e *Editor) Register() {
 	for _, c := range commands {
-		e.RegisterCommand(c.name, c.fn)
+		tclutil.Register(e.interp, c.Name, c.Fn, e)
 	}
 }
 
-func (e *Editor) active() *Buffer {
-	return e.bufs[e.cur]
+func (e *Editor) Active() pane.Pane {
+	return e.panes[e.cur]
 }
 
 func (e *Editor) valid() bool {
-	return e.cur >= 0 && e.cur < len(e.bufs)
+	return e.cur >= 0 && e.cur < len(e.panes)
 }
 
-func (e *Editor) mkbuf() {
-	e.bufs = append(e.bufs, nil)
-	e.cur = len(e.bufs) - 1
+func (e *Editor) MakePane() {
+	if e.valid() {
+		e.panes[e.cur].Unregister(e.interp)
+	}
+	e.panes = append(e.panes, nil)
+	e.cur = len(e.panes) - 1
 }
 
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
@@ -82,6 +82,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.bufs[e.cur] = NewBuffer(b)
+	e.panes[e.cur] = buf.NewBufPane(b)
+	e.panes[e.cur].Register(e.interp)
 	return nil
 }

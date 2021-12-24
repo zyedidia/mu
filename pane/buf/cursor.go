@@ -1,4 +1,4 @@
-package ned
+package buf
 
 import (
 	"github.com/zyedidia/ned/buffer"
