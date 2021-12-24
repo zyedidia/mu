@@ -1,6 +1,8 @@
 package buf
 
 import (
+	"io"
+
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pkg/tclutil"
@@ -34,5 +36,12 @@ func (bp *BufPane) Register(interp *tcl.Interp) {
 func (bp *BufPane) Unregister(interp *tcl.Interp) {
 	for _, c := range commands {
 		tclutil.Unregister(interp, c.Name)
+	}
+}
+
+func (bp *BufPane) Help(w io.Writer) {
+	for _, cmd := range commands {
+		w.Write([]byte(cmd.Doc))
+		w.Write([]byte{'\n'})
 	}
 }

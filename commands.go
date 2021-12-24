@@ -2,6 +2,7 @@ package ned
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/zyedidia/ned/pkg/input"
@@ -14,6 +15,7 @@ func (e *Editor) Help() {
 	for _, cmd := range commands {
 		fmt.Println(cmd.Doc)
 	}
+	e.Active().Help(os.Stdout)
 }
 
 // --- Buffer management ---
