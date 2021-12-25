@@ -11,6 +11,7 @@ import (
 	"github.com/zyedidia/ned/pkg/input"
 	"github.com/zyedidia/ned/pkg/output"
 	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/ned/pkg/theme"
 )
 
 type Editor struct {
@@ -85,4 +86,12 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	e.panes[e.cur] = buf.NewBufPane(b)
 	e.panes[e.cur].Register(e.interp)
 	return nil
+}
+
+func (e *Editor) Resize(w, h int) {
+	e.panes[e.cur].Resize(w, h)
+}
+
+func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
+	e.panes[e.cur].Display(draw, cursor)
 }

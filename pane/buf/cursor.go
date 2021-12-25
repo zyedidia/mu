@@ -49,6 +49,11 @@ func (c Cursor) MoveTo(pos int) Cursor {
 }
 
 func (c Cursor) SelectTo(pos int) Cursor {
+	if !c.HasSel {
+		c.Orig[0] = c.Pos
+		c.Orig[1] = c.Pos
+	}
+
 	c.HasSel = true
 	if pos < c.Orig[0] {
 		c.Sel[0] = pos

@@ -76,30 +76,84 @@ func (bp *BufPane) FindUp(off int, regex string) ([]int, error) {
 	return match, nil
 }
 
-// --- Cursors ---
+// --- Movement ---
 
-func (bp *BufPane) CursorUp(from int) int {
+func (bp *BufPane) Up(from int) int {
 	b := bp
 	c := SpawnCursorAt(from).Up(b.Buffer)
 	return c.Pos
 }
 
-func (bp *BufPane) CursorDown(from int) int {
+func (bp *BufPane) Down(from int) int {
 	b := bp
 	c := SpawnCursorAt(from).Down(b.Buffer)
 	return c.Pos
 }
 
-func (bp *BufPane) CursorLeft(from int) int {
+func (bp *BufPane) Left(from int) int {
 	b := bp
 	c := SpawnCursorAt(from).Left(b.Buffer)
 	return c.Pos
 }
 
-func (bp *BufPane) CursorRight(from int) int {
+func (bp *BufPane) Right(from int) int {
 	b := bp
 	c := SpawnCursorAt(from).Right(b.Buffer)
 	return c.Pos
+}
+
+// --- Cursors ---
+
+func (bp *BufPane) MoveTo(pos int) {
+	c := bp.Cursor()
+	*c = c.MoveTo(pos)
+}
+
+func (bp *BufPane) SelectTo(pos int) {
+	c := bp.Cursor()
+	*c = c.SelectTo(pos)
+}
+
+func (bp *BufPane) SwitchCursor(idx int) error {
+	if idx >= 0 && idx < len(bp.cursors) {
+		bp.cur = idx
+		return nil
+	}
+	return fmt.Errorf("invalid cursor: %d", idx)
+}
+
+func (bp *BufPane) SpawnCursor(at int) {
+	bp.cursors = append(bp.cursors, SpawnCursorAt(at))
+}
+
+func (bp *BufPane) RemoveCursor(idx int) error {
+	if idx < 0 || idx >= len(bp.cursors) {
+		return fmt.Errorf("invalid cursor: %d", idx)
+	}
+	copy(bp.cursors[idx:], bp.cursors[idx+1:])
+	bp.cursors = bp.cursors[:len(bp.cursors)-1]
+	return nil
+}
+
+func (bp *BufPane) NumCursors() int {
+	return len(bp.cursors)
+}
+
+func (bp *BufPane) CursorPos() int {
+	return bp.Cursor().Pos
+}
+
+func (bp *BufPane) CursorRange() []int {
+	sel := bp.Cursor().Sel
+	return []int{sel[0], sel[1]}
+}
+
+func (bp *BufPane) CursorHasSelection() bool {
+	return bp.Cursor().HasSelection()
+}
+
+func (bp *BufPane) CursorSelection() string {
+	return string(bp.Cursor().Selection(bp.Buffer))
 }
 
 // --- Locations ---
@@ -199,23 +253,73 @@ var commands = []tclutil.Command{
 		"size: return the number of bytes in the buffer",
 	},
 	{
-		"cursor-left",
-		(*BufPane).CursorLeft,
-		"cursor-left <pos>: returns the resulting position from moving a cursor at <pos> left one character",
+		"left",
+		(*BufPane).Left,
+		"left <pos>: returns the resulting position from moving a cursor at <pos> left one character",
 	},
 	{
-		"cursor-right",
-		(*BufPane).CursorRight,
-		"cursor-right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
+		"right",
+		(*BufPane).Right,
+		"right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
 	},
 	{
-		"cursor-up",
-		(*BufPane).CursorUp,
-		"cursor-up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
+		"up",
+		(*BufPane).Up,
+		"up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
 	},
 	{
-		"cursor-down",
-		(*BufPane).CursorDown,
-		"cursor-down <pos>: returns the resulting position from moving a cursor at <pos> down one line",
+		"down",
+		(*BufPane).Down,
+		"down <pos>: returns the resulting position from moving a cursor at <pos> down one line",
+	},
+	{
+		"move-to",
+		(*BufPane).MoveTo,
+		"move-to <pos>: move the current cursor to <pos>",
+	},
+	{
+		"select-to",
+		(*BufPane).SelectTo,
+		"select-to <pos>: move the current cursor to <pos> and make a selection",
+	},
+	{
+		"switch-cursor",
+		(*BufPane).SwitchCursor,
+		"switch-cursor <idx>: change the active cursor to the <idx>-th cursors",
+	},
+	{
+		"spawn-cursor",
+		(*BufPane).SpawnCursor,
+		"spawn-cursor <pos>: spawn a new cursor at <pos>",
+	},
+	{
+		"remove-cursor",
+		(*BufPane).RemoveCursor,
+		"remove-cursor <idx>: remove the <idx>-th cursor",
+	},
+	{
+		"num-cursors",
+		(*BufPane).NumCursors,
+		"num-cursors: returns the number of cursors",
+	},
+	{
+		"cursor-pos",
+		(*BufPane).CursorPos,
+		"cursor-pos: returns the position of the current cursor",
+	},
+	{
+		"cursor-range",
+		(*BufPane).CursorRange,
+		"cursor-range: returns the selection range of the current cursor",
+	},
+	{
+		"cursor-has-selection",
+		(*BufPane).CursorHasSelection,
+		"cursor-range: returns whether the current cursor has a selection",
+	},
+	{
+		"cursor-selection",
+		(*BufPane).CursorSelection,
+		"cursor-selection: returns the text of the current cursor's selection",
 	},
 }

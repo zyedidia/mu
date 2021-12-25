@@ -35,7 +35,7 @@ func main() {
 		ed = ned.NewEditor()
 	}
 
-	prog := keybinds()
+	prog := microkeys()
 
 	vm := kbd.NewVM(prog.Compile())
 
@@ -61,8 +61,18 @@ func main() {
 		s.SetContent(vx, vy, mainc, combc, tcellStyle(style))
 	}
 
+	cursor := func(x, y int) {
+		s.ShowCursor(x, y)
+	}
+
 	for {
 		ev := s.PollEvent()
+
+		if rev, ok := ev.(*tcell.EventResize); ok {
+			w, h := rev.Size()
+			ed.Resize(w, h)
+		}
+
 		action, ok, more := vm.Exec(ev)
 		if !more {
 			vm.Reset()
@@ -78,8 +88,7 @@ func main() {
 			}
 		}
 		s.Clear()
-		w, h := s.Size()
-		ed.Display(draw, w, h)
+		ed.Display(draw, cursor)
 		s.Show()
 	}
 }

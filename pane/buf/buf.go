@@ -6,11 +6,24 @@ import (
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/ned/pkg/theme"
 )
 
 type BufPane struct {
 	*buffer.Buffer
 	vis buffer.RuneVisualizer
+
+	cursors []Cursor
+	cur     int
+
+	stpos, stcol  int
+	width, height int
+
+	softwrap, wordwrap bool
+	scrollmargin       int
+	hscrollmargin      int
+
+	theme *theme.Theme
 }
 
 func NewBufPane(b *buffer.Buffer) *BufPane {
@@ -24,6 +37,10 @@ func NewBufPane(b *buffer.Buffer) *BufPane {
 				' ':  " ",
 			},
 		},
+		scrollmargin:  3,
+		hscrollmargin: 1,
+		cursors:       []Cursor{SpawnCursorAt(0)},
+		theme:         theme.Monokai,
 	}
 }
 
@@ -44,4 +61,8 @@ func (bp *BufPane) Help(w io.Writer) {
 		w.Write([]byte(cmd.Doc))
 		w.Write([]byte{'\n'})
 	}
+}
+
+func (bp *BufPane) Cursor() *Cursor {
+	return &bp.cursors[bp.cur]
 }
