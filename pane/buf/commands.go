@@ -26,12 +26,15 @@ func (bp *BufPane) InsertAt(pos int, val string) {
 	bp.Buffer.Insert(pos, []byte(val))
 }
 
-func (bp *BufPane) Remove(from, to int) {
-	to++
+func (bp *BufPane) Remove(from, to int) int {
+	if from > to {
+		from, to = to, from
+	}
 	if from < 0 || from >= to {
-		return
+		return from
 	}
 	bp.Buffer.Remove(from, to)
+	return from
 }
 
 // --- Reading ---

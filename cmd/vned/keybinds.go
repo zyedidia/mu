@@ -31,7 +31,12 @@ func microkeys() k.Pattern {
 
 func vimkeys() k.Pattern {
 	any := k.Cap(k.AnyRune(), "$0")
-	numq := k.Cap(k.Star(k.RangeRune('0', '9')), "$0")
+	numq := k.Cap(k.Opt(
+		k.Seq(
+			k.RangeRune('1', '9'),
+			k.Star(k.RangeRune('0', '9')),
+		),
+	), "$0")
 
 	rmove := k.Alt(
 		k.Cap(k.MustLit("h"), "left-vim"),
@@ -55,7 +60,7 @@ func vimkeys() k.Pattern {
 	)
 
 	raction := k.Alt(
-		k.Cap(k.Seq(k.MustLit("d"), move), "remove [cursor-pos] [$1]"),
+		k.Cap(k.Seq(k.MustLit("d"), move), "move-to [remove [cursor-pos] [$1]]"),
 	)
 
 	action := k.Alt(
