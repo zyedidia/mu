@@ -8,6 +8,29 @@ import (
 	tcl "github.com/zyedidia/gotcl"
 )
 
+var tclcore = `
+proc repeat-move {n fn} {
+	if { [== "" $n] } {
+		return [uplevel [concat $fn [cursor-pos]]]
+	} else {
+		set p [cursor-pos]
+		for { set i 0 } { $i < $n } { incr i } {
+			set p [uplevel [concat $fn $p]]
+		}
+		return $p
+	}
+}
+proc repeat-fn {n fn} {
+	if { [== "" $n] } {
+		uplevel $fn
+	} else {
+		for { set i 0 } { $i < $n } { incr i } {
+			uplevel $fn
+		}
+	}
+}
+`
+
 var errInterface reflect.Type
 
 func init() {

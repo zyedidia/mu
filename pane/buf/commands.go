@@ -2,8 +2,8 @@ package buf
 
 import (
 	"fmt"
-	"log"
 	"regexp"
+	"unicode"
 
 	"github.com/zyedidia/ned/pkg/output"
 	"github.com/zyedidia/ned/pkg/tclutil"
@@ -27,10 +27,10 @@ func (bp *BufPane) InsertAt(pos int, val string) {
 }
 
 func (bp *BufPane) Remove(from, to int) {
+	to++
 	if from < 0 || from >= to {
 		return
 	}
-	log.Println(from, to)
 	bp.Buffer.Remove(from, to)
 }
 
@@ -79,27 +79,148 @@ func (bp *BufPane) FindUp(off int, regex string) ([]int, error) {
 // --- Movement ---
 
 func (bp *BufPane) Up(from int) int {
-	b := bp
-	c := SpawnCursorAt(from).Up(b.Buffer)
+	c := SpawnCursorAt(from).Up(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) Down(from int) int {
-	b := bp
-	c := SpawnCursorAt(from).Down(b.Buffer)
+	c := SpawnCursorAt(from).Down(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) Left(from int) int {
-	b := bp
-	c := SpawnCursorAt(from).Left(b.Buffer)
+	c := SpawnCursorAt(from).Left(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) Right(from int) int {
-	b := bp
-	c := SpawnCursorAt(from).Right(b.Buffer)
+	c := SpawnCursorAt(from).Right(bp.Buffer)
 	return c.Pos
+}
+
+func (bp *BufPane) LeftVim(from int) int {
+	c := SpawnCursorAt(from).LeftVim(bp.Buffer)
+	return c.Pos
+}
+
+func (bp *BufPane) RightVim(from int) int {
+	c := SpawnCursorAt(from).RightVim(bp.Buffer)
+	return c.Pos
+}
+
+func isWord(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+func isNotSpace(r rune) bool {
+	return !unicode.IsSpace(r)
+}
+
+func (bp *BufPane) WordLeft(from int) int {
+	c := SpawnCursorAt(from).WordLeft(bp.Buffer, isWord)
+	return c.Pos
+}
+
+func (bp *BufPane) WordRight(from int) int {
+	c := SpawnCursorAt(from).WordRight(bp.Buffer, isWord)
+	return c.Pos
+}
+
+func (bp *BufPane) WordLeftWS(from int) int {
+	c := SpawnCursorAt(from).WordLeft(bp.Buffer, isNotSpace)
+	return c.Pos
+}
+
+func (bp *BufPane) WordRightWS(from int) int {
+	c := SpawnCursorAt(from).WordRight(bp.Buffer, isNotSpace)
+	return c.Pos
+}
+
+func (bp *BufPane) WordEnd(from int) int {
+	c := SpawnCursorAt(from).WordEnd(bp.Buffer, isWord)
+	return c.Pos
+}
+
+func (bp *BufPane) WordEndWS(from int) int {
+	c := SpawnCursorAt(from).WordEnd(bp.Buffer, isNotSpace)
+	return c.Pos
+}
+
+func (bp *BufPane) FindChar(c rune, from int) int {
+	_, sz := bp.DecodeRuneAt(from)
+	p := from + sz
+	for {
+		r, sz := bp.DecodeRuneAt(p)
+		if r == '\n' || sz == 0 {
+			return from
+		} else if r == c {
+			return p
+		}
+		p += sz
+	}
+}
+
+func (bp *BufPane) FindCharBack(c rune, from int) int {
+	p := from
+	for {
+		r, sz := bp.DecodeRuneBefore(p)
+		if r == '\n' || sz == 0 {
+			return from
+		} else if r == c {
+			return p - sz
+		}
+		p -= sz
+	}
+}
+
+func (bp *BufPane) TillChar(c rune, from int) int {
+	_, sz := bp.DecodeRuneAt(from)
+	last := sz
+	p := from + sz
+	for {
+		r, sz := bp.DecodeRuneAt(p)
+		if r == '\n' || sz == 0 {
+			return from
+		} else if r == c {
+			return p - last
+		}
+		last = sz
+		p += sz
+	}
+}
+
+func (bp *BufPane) TillCharBack(c rune, from int) int {
+	p := from
+	for {
+		r, sz := bp.DecodeRuneBefore(p)
+		if r == '\n' || sz == 0 {
+			return from
+		} else if r == c {
+			return p
+		}
+		p -= sz
+	}
+}
+
+func (bp *BufPane) LineStart(from int) int {
+	for {
+		r, sz := bp.DecodeRuneBefore(from)
+		if r == '\n' || sz == 0 {
+			return from
+		}
+		from -= sz
+	}
+}
+
+func (bp *BufPane) LineEnd(from int) int {
+	var last int
+	for {
+		r, sz := bp.DecodeRuneAt(from)
+		if r == '\n' || sz == 0 {
+			return from - last
+		}
+		last = sz
+		from += sz
+	}
 }
 
 // --- Cursors ---
@@ -263,6 +384,16 @@ var commands = []tclutil.Command{
 		"right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
 	},
 	{
+		"left-vim",
+		(*BufPane).LeftVim,
+		"left-vim <pos>: returns the resulting position from moving a cursor at <pos> left one character",
+	},
+	{
+		"right-vim",
+		(*BufPane).RightVim,
+		"right-vim <pos>: returns the resulting position from moving a cursor at <pos> right one character",
+	},
+	{
 		"up",
 		(*BufPane).Up,
 		"up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
@@ -271,6 +402,66 @@ var commands = []tclutil.Command{
 		"down",
 		(*BufPane).Down,
 		"down <pos>: returns the resulting position from moving a cursor at <pos> down one line",
+	},
+	{
+		"word-left",
+		(*BufPane).WordLeft,
+		"word-left <pos>: returns the resulting position from moving a cursor at <pos> left one word",
+	},
+	{
+		"word-right",
+		(*BufPane).WordRight,
+		"word-right <pos>: returns the resulting position from moving a cursor at <pos> right one word",
+	},
+	{
+		"ws-left",
+		(*BufPane).WordLeftWS,
+		"ws-left <pos>: returns the resulting position from moving a cursor at <pos> left until whitespace",
+	},
+	{
+		"ws-right",
+		(*BufPane).WordRightWS,
+		"ws-right <pos>: returns the resulting position from moving a cursor at <pos> right until the next word, defined by whitespace",
+	},
+	{
+		"word-end",
+		(*BufPane).WordEnd,
+		"word-end <pos>: returns the resulting position from moving a cursor at <pos> right until the end of a word",
+	},
+	{
+		"ws-end",
+		(*BufPane).WordEndWS,
+		"ws-end <pos>: returns the resulting position from moving a cursor at <pos> right until whitespace",
+	},
+	{
+		"line-start",
+		(*BufPane).LineStart,
+		"line-start <pos>:",
+	},
+	{
+		"line-end",
+		(*BufPane).LineEnd,
+		"line-end <pos>:",
+	},
+	{
+		"find-char",
+		(*BufPane).FindChar,
+		"find-char <char> <pos>: jump to the first occurrence of <char> in the current line, starting from <pos>",
+	},
+	{
+		"find-char-back",
+		(*BufPane).FindCharBack,
+		"find-char-back <char> <pos>: jump backwards to the first occurrence of <char> in the current line",
+	},
+	{
+		"till-char",
+		(*BufPane).TillChar,
+		"till-char <char> <pos>: jump to the first occurrence of <char> in the current line, starting from <pos>",
+	},
+	{
+		"till-char-back",
+		(*BufPane).TillCharBack,
+		"till-char-back <char> <pos>: jump backwards to the first occurrence of <char> in the current line",
 	},
 	{
 		"move-to",

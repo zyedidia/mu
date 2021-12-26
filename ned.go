@@ -1,6 +1,7 @@
 package ned
 
 import (
+	"log"
 	"sort"
 	"strings"
 
@@ -23,7 +24,10 @@ type Editor struct {
 
 func newEditor() *Editor {
 	interp := tcl.NewInterp()
-	interp.SetVarRaw("pos", tcl.FromInt(0))
+	_, err := interp.EvalString(tclcore)
+	if err != nil {
+		log.Println(err)
+	}
 	e := &Editor{
 		interp: interp,
 	}

@@ -1,6 +1,8 @@
 package buf
 
 import (
+	"unicode"
+
 	"github.com/zyedidia/ned/buffer"
 )
 
@@ -102,6 +104,24 @@ func (c Cursor) Left(b *buffer.Buffer) Cursor {
 	return c
 }
 
+func (c Cursor) RightVim(b *buffer.Buffer) Cursor {
+	c = c.Deselect(0)
+	l, col := b.LineColAt(c.Pos)
+	if col == b.LineLen(l)-1 {
+		return c
+	}
+	return c.Right(b)
+}
+
+func (c Cursor) LeftVim(b *buffer.Buffer) Cursor {
+	c = c.Deselect(0)
+	_, col := b.LineColAt(c.Pos)
+	if col == 0 {
+		return c
+	}
+	return c.Left(b)
+}
+
 // TODO: need virtual cursors to handle visual x
 func (c Cursor) Up(b *buffer.Buffer) Cursor {
 	c = c.Deselect(0)
@@ -117,14 +137,87 @@ func (c Cursor) Down(b *buffer.Buffer) Cursor {
 	return c
 }
 
-//
-// func (c Cursor) WordLeft(b *buffer.Buffer) Cursor {
-//
-// }
-//
-// func (c Cursor) WordRight(b *buffer.Buffer) Cursor {
-//
-// }
+func (c Cursor) WordRight(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
+	p := c.Pos
+
+	consume := func(s int, fn func(r rune) bool) int {
+		consumed := 0
+
+		for {
+			r, _, sz := b.DecodeGraphemeAt(s + consumed)
+			if !fn(r) || sz == 0 {
+				break
+			}
+			consumed += sz
+		}
+		return consumed
+	}
+
+	var s int
+	// consume space
+	s = consume(p, unicode.IsSpace)
+	if s != 0 {
+		c.Pos = p + s
+		return c
+	}
+	// consume word characters
+	s = consume(p, wordc)
+	if s != 0 {
+		p += s
+	} else {
+		// if on a symbol (non-word), consume the symbol
+		_, _, sz := b.DecodeGraphemeAt(p)
+		p += sz
+	}
+	// consume space characters
+	s = consume(p, unicode.IsSpace)
+	c.Pos = p + s
+	return c
+}
+
+func (c Cursor) WordLeft(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
+	p := c.Pos
+	consume := func(s int, fn func(r rune) bool) int {
+		consumed := 0
+
+		for {
+			r, _, sz := b.DecodeGraphemeBefore(s - consumed)
+			if !fn(r) || sz == 0 {
+				break
+			}
+			consumed += sz
+		}
+		return consumed
+	}
+
+	// consume space
+	var s int
+	s = consume(p, unicode.IsSpace)
+	p -= s
+	// consume word chars
+	s = consume(p, wordc)
+	if s != 0 {
+		p -= s
+		c.Pos = p
+		return c
+	}
+	_, _, sz := b.DecodeGraphemeBefore(p)
+	c.Pos = p - sz
+	return c
+}
+
+func (c Cursor) WordEnd(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
+	p := c.Pos
+	for {
+		r, _, sz := b.DecodeGraphemeAt(c.Pos)
+		if !wordc(r) {
+			break
+		}
+		p += sz
+	}
+	c.Pos = p
+	return c
+}
 
 func clamp(a, min, max int) int {
 	if a > max {

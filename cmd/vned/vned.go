@@ -35,7 +35,7 @@ func main() {
 		ed = ned.NewEditor()
 	}
 
-	prog := microkeys()
+	prog := vimkeys()
 
 	vm := kbd.NewVM(prog.Compile())
 
