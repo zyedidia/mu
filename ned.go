@@ -19,12 +19,17 @@ import (
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
+type Store[K, V any] interface {
+	Get(k K) (V, bool)
+	Put(k K, v V)
+}
+
 type Editor struct {
 	panes  []pane.Pane
 	cur    int
 	interp *tcl.Interp
 
-	modes map[string]kbd.Config
+	modes Store[string, kbd.Config]
 	mode  *kbd.Config
 }
 
@@ -66,12 +71,12 @@ func init() {
 	})
 }
 
-func (e *Editor) SetModes(modes map[string]kbd.Config) {
+func (e *Editor) SetModes(modes Store[string, kbd.Config]) {
 	e.modes = modes
 }
 
 func (e *Editor) SetMode(m string) error {
-	mode, ok := e.modes[m]
+	mode, ok := e.modes.Get(m)
 	if !ok {
 		return fmt.Errorf("mode %s does not exist", m)
 	}

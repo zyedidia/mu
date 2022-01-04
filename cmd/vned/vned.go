@@ -13,6 +13,17 @@ import (
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
+type Map[K comparable, V any] map[K]V
+
+func (m Map[K, V]) Get(k K) (V, bool) {
+	v, ok := m[k]
+	return v, ok
+}
+
+func (m Map[K, V]) Put(k K, v V) {
+	m[k] = v
+}
+
 const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
@@ -38,7 +49,7 @@ func main() {
 	prog := vimkeys()
 
 	vm := kbd.NewVM(prog.Compile())
-	ed.SetModes(map[string]kbd.Config{
+	ed.SetModes(Map[string, kbd.Config]{
 		"normal": kbd.Config{
 			VM: vm,
 		},
