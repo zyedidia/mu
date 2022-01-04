@@ -38,3 +38,5 @@ require (
 )
 
 replace github.com/zyedidia/gotcl => ../gotcl
+
+replace github.com/zyedidia/kbd => ../kbd

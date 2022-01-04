@@ -38,6 +38,9 @@ func main() {
 	prog := vimkeys()
 
 	vm := kbd.NewVM(prog.Compile())
+	ed.SetMode(&kbd.Config{
+		VM: vm,
+	})
 
 	s, e := tcell.NewScreen()
 	if e != nil {
@@ -68,25 +71,14 @@ func main() {
 	for {
 		ev := s.PollEvent()
 
-		if rev, ok := ev.(*tcell.EventResize); ok {
-			w, h := rev.Size()
-			ed.Resize(w, h)
+		err := ed.HandleEvent(ev)
+		if err == ned.ErrQuit {
+			s.Fini()
+			os.Exit(0)
+		} else if err != nil {
+			log.Println("Error:", err)
 		}
 
-		action, ok, more := vm.Exec(ev)
-		if !more {
-			vm.Reset()
-		}
-		if ok {
-			log.Println(action.Cmd, action.Vars)
-			err := ed.EvalWithVars(action.Cmd, action.Vars)
-			if err == ned.ErrQuit {
-				s.Fini()
-				break
-			} else if err != nil {
-				log.Println("ERR", err)
-			}
-		}
 		s.Clear()
 		ed.Display(draw, cursor)
 		s.Show()

@@ -1,11 +1,14 @@
 package ned
 
 import (
+	"errors"
 	"log"
 	"sort"
 	"strings"
 
+	"github.com/micro-editor/tcell/v2"
 	tcl "github.com/zyedidia/gotcl"
+	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pane"
 	"github.com/zyedidia/ned/pane/buf"
@@ -19,7 +22,8 @@ type Editor struct {
 	panes  []pane.Pane
 	cur    int
 	interp *tcl.Interp
-	tclerr error
+
+	mode *kbd.Config
 }
 
 func newEditor() *Editor {
@@ -58,6 +62,31 @@ func init() {
 	sort.Slice(commands, func(i, j int) bool {
 		return commands[i].Name < commands[j].Name
 	})
+}
+
+func (e *Editor) SetMode(m *kbd.Config) {
+	e.mode = m
+}
+
+func (e *Editor) HandleEvent(ev tcell.Event) error {
+	if e.mode == nil {
+		return errors.New("no mode selected")
+	}
+
+	if rev, ok := ev.(*tcell.EventResize); ok {
+		w, h := rev.Size()
+		e.Resize(w, h)
+		return nil
+	}
+
+	action, ok, more := e.mode.VM.Exec(ev)
+	if !more {
+		e.mode.VM.Reset()
+	}
+	if ok {
+		return e.EvalWithVars(action.Cmd, action.Vars)
+	}
+	return nil
 }
 
 func (e *Editor) Register() {
