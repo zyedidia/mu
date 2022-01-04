@@ -3,6 +3,7 @@ package ned
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/zyedidia/ned/pkg/input"
@@ -81,6 +82,25 @@ func (e *Editor) NewBuffer() {
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 }
 
+// --- Options ---
+
+func (e *Editor) Opt(name string, val string) error {
+	if v, err := strconv.Atoi(val); err == nil {
+		return e.panes[e.cur].Set(name, v)
+	} else if v, err := strconv.ParseBool(val); err == nil {
+		return e.panes[e.cur].Set(name, v)
+	}
+	return e.panes[e.cur].Set(name, val)
+}
+
+func (e *Editor) Get(name string) (string, error) {
+	v := e.panes[e.cur].Get(name)
+	if v == nil {
+		return "", fmt.Errorf("option %s not found", name)
+	}
+	return fmt.Sprintf("%v", v), nil
+}
+
 var commands = []tclutil.Command{
 	{
 		"open",
@@ -116,5 +136,15 @@ var commands = []tclutil.Command{
 		"new-buffer",
 		(*Editor).NewBuffer,
 		"new-buffer: open a new empty buffer",
+	},
+	{
+		"opt",
+		(*Editor).Opt,
+		"opt <name> <val>: assign option <name> to <val>",
+	},
+	{
+		"get",
+		(*Editor).Get,
+		"get <name>: return the value of option <name>",
 	},
 }

@@ -50,7 +50,6 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
 				// ignore size
 				r, _ := utf8.DecodeRuneInString(args[i].AsString())
 				argv = append(argv, reflect.ValueOf(r))
-
 			}
 		}
 		ret := v.Call(argv)

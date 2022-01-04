@@ -132,7 +132,10 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b)
+	e.panes[e.cur] = buf.NewBufPane(b, &Options{
+		ed: e,
+		opts: defaults,
+	})
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }

@@ -37,7 +37,7 @@ func (o *Options) Set(name string, v interface{}) error {
 }
 
 func (o *Options) Get(opt string) interface{} {
-	return o.opts[opt]
+	return o.opts[opt].val
 }
 
 type Updater func(e *Editor, v interface{})

@@ -9,6 +9,11 @@ import (
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
+type Options interface {
+	Set(name string, v interface{}) error
+	Get(name string) interface{}
+}
+
 type BufPane struct {
 	*buffer.Buffer
 	vis buffer.RuneVisualizer
@@ -24,9 +29,11 @@ type BufPane struct {
 	hscrollmargin      int
 
 	theme *theme.Theme
+
+	opts Options
 }
 
-func NewBufPane(b *buffer.Buffer) *BufPane {
+func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
 	return &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -41,7 +48,15 @@ func NewBufPane(b *buffer.Buffer) *BufPane {
 		hscrollmargin: 1,
 		cursors:       []Cursor{SpawnCursorAt(0)},
 		theme:         theme.Monokai,
+		opts:          opts,
 	}
+}
+
+func (bp *BufPane) Set(opt string, val interface{}) error {
+	return bp.opts.Set(opt, val)
+}
+func (bp *BufPane) Get(opt string) interface{} {
+	return bp.opts.Get(opt)
 }
 
 func (bp *BufPane) Register(interp *tcl.Interp) {
