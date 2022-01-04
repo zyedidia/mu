@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/zyedidia/ned/bindings"
 	"github.com/micro-editor/tcell/v2"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/kbd"
@@ -29,7 +30,7 @@ type Editor struct {
 	cur    int
 	interp *tcl.Interp
 
-	modes Store[string, kbd.Config]
+	modes map[string]kbd.Config
 	mode  *kbd.Config
 }
 
@@ -41,7 +42,13 @@ func newEditor() *Editor {
 	}
 	e := &Editor{
 		interp: interp,
+		modes: map[string]kbd.Config{
+			"vim-normal": bindings.VimNormal(),
+			"vim-insert": bindings.VimInsert(),
+			"micro": bindings.Micro(),
+		},
 	}
+	e.SetMode("vim-normal")
 	e.Register()
 	return e
 }
@@ -71,12 +78,8 @@ func init() {
 	})
 }
 
-func (e *Editor) SetModes(modes Store[string, kbd.Config]) {
-	e.modes = modes
-}
-
 func (e *Editor) SetMode(m string) error {
-	mode, ok := e.modes.Get(m)
+	mode, ok := e.modes[m]
 	if !ok {
 		return fmt.Errorf("mode %s does not exist", m)
 	}

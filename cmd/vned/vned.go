@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
-	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/ned"
 	"github.com/zyedidia/ned/pkg/theme"
 )
@@ -45,16 +44,6 @@ func main() {
 	} else {
 		ed = ned.NewEditor()
 	}
-
-	prog := vimkeys()
-
-	vm := kbd.NewVM(prog.Compile())
-	ed.SetModes(Map[string, kbd.Config]{
-		"normal": kbd.Config{
-			VM: vm,
-		},
-	})
-	ed.SetMode("normal")
 
 	s, e := tcell.NewScreen()
 	if e != nil {

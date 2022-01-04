@@ -38,7 +38,7 @@ var defaults = map[string]*Option{
 			if e.modes == nil {
 				return fmt.Errorf("no modes available")
 			}
-			if _, ok := e.modes.Get(s); !ok {
+			if _, ok := e.modes[s]; !ok {
 				return fmt.Errorf("mode %s does not exist", s)
 			}
 			return nil
