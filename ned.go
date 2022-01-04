@@ -2,6 +2,7 @@ package ned
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"sort"
 	"strings"
@@ -23,7 +24,8 @@ type Editor struct {
 	cur    int
 	interp *tcl.Interp
 
-	mode *kbd.Config
+	modes map[string]kbd.Config
+	mode  *kbd.Config
 }
 
 func newEditor() *Editor {
@@ -64,8 +66,17 @@ func init() {
 	})
 }
 
-func (e *Editor) SetMode(m *kbd.Config) {
-	e.mode = m
+func (e *Editor) SetModes(modes map[string]kbd.Config) {
+	e.modes = modes
+}
+
+func (e *Editor) SetMode(m string) error {
+	mode, ok := e.modes[m]
+	if !ok {
+		return fmt.Errorf("mode %s does not exist", m)
+	}
+	e.mode = &mode
+	return nil
 }
 
 func (e *Editor) HandleEvent(ev tcell.Event) error {

@@ -38,9 +38,12 @@ func main() {
 	prog := vimkeys()
 
 	vm := kbd.NewVM(prog.Compile())
-	ed.SetMode(&kbd.Config{
-		VM: vm,
+	ed.SetModes(map[string]kbd.Config{
+		"normal": kbd.Config{
+			VM: vm,
+		},
 	})
+	ed.SetMode("normal")
 
 	s, e := tcell.NewScreen()
 	if e != nil {
