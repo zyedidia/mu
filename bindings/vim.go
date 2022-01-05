@@ -28,12 +28,14 @@ func VimNormal() k.Config {
 
 	move := k.Alt(
 		k.Cap(k.MustLit("0"), "line-start [cursor-pos]"),
-		k.Cap(k.MustLit("$"), "line-end [cursor-pos]"),
+		k.Cap(k.MustLit("$"), "line-end-char [cursor-pos]"),
 		k.Cap(k.Seq(numq, rmove), "repeat-move $1 {$2}"),
 	)
 
 	raction := k.Alt(
 		k.Cap(k.Seq(k.MustLit("d"), move), "move-to [remove [cursor-pos] [$1]]"),
+		k.Cap(k.MustLit("D"), "move-to [remove [cursor-pos] [line-end [cursor-pos]]]"),
+		k.Cap(k.Seq(k.MustLit("d"), k.MustLit("d")), "move-to [remove [line-start [cursor-pos]] [next-line-start [cursor-pos]]]"),
 	)
 
 	action := k.Alt(

@@ -32,6 +32,8 @@ type Editor struct {
 
 	modes map[string]kbd.Config
 	mode  *kbd.Config
+
+	opts map[string]*Option
 }
 
 func newEditor() *Editor {
@@ -47,6 +49,7 @@ func newEditor() *Editor {
 			"vim-insert": bindings.VimInsert(),
 			"micro": bindings.Micro(),
 		},
+		opts: defaults,
 	}
 	e.SetMode("vim-normal")
 	e.Register()
@@ -137,7 +140,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	}
 	e.panes[e.cur] = buf.NewBufPane(b, &Options{
 		ed: e,
-		opts: defaults,
+		opts: copymap(e.opts),
 	})
 	e.panes[e.cur].Register(e.interp)
 	return nil
@@ -149,4 +152,13 @@ func (e *Editor) Resize(w, h int) {
 
 func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
 	e.panes[e.cur].Display(draw, cursor)
+}
+
+func copymap(m map[string]*Option) map[string]*Option {
+	newm := make(map[string]*Option)
+	for k, v := range m {
+		nv := *v
+		newm[k] = &nv
+	}
+	return newm
 }

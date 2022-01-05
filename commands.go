@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/micro-editor/tcell/v2"
+	"github.com/zyedidia/kbd/cbind"
 	"github.com/zyedidia/ned/pkg/input"
 	"github.com/zyedidia/ned/pkg/output"
 	"github.com/zyedidia/ned/pkg/tclutil"
@@ -101,6 +103,24 @@ func (e *Editor) Get(name string) (string, error) {
 	return fmt.Sprintf("%v", v), nil
 }
 
+// --- Key events ---
+
+func (e *Editor) Key(ev string) error {
+	evs := strings.Split(ev, " ")
+	for _, ev := range evs {
+		mod, key, ch, err := cbind.Decode(ev)
+		if err != nil {
+			return err
+		}
+		kev := tcell.NewEventKey(key, ch, mod)
+		err = e.HandleEvent(kev)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 var commands = []tclutil.Command{
 	{
 		"open",
@@ -146,5 +166,10 @@ var commands = []tclutil.Command{
 		"get",
 		(*Editor).Get,
 		"get <name>: return the value of option <name>",
+	},
+	{
+		"key",
+		(*Editor).Key,
+		"key <event>: execute <event> as if it had been typed in",
 	},
 }

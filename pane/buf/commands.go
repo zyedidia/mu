@@ -215,6 +215,16 @@ func (bp *BufPane) LineStart(from int) int {
 }
 
 func (bp *BufPane) LineEnd(from int) int {
+	for {
+		r, sz := bp.DecodeRuneAt(from)
+		if r == '\n' || sz == 0 {
+			return from
+		}
+		from += sz
+	}
+}
+
+func (bp *BufPane) LineEndChar(from int) int {
 	var last int
 	for {
 		r, sz := bp.DecodeRuneAt(from)
@@ -222,6 +232,16 @@ func (bp *BufPane) LineEnd(from int) int {
 			return from - last
 		}
 		last = sz
+		from += sz
+	}
+}
+
+func (bp *BufPane) NextLineStart(from int) int {
+	for {
+		r, sz := bp.DecodeRuneAt(from)
+		if r == '\n' || sz == 0 {
+			return from + 1
+		}
 		from += sz
 	}
 }
@@ -442,9 +462,19 @@ var commands = []tclutil.Command{
 		"line-start <pos>:",
 	},
 	{
+		"next-line-start",
+		(*BufPane).NextLineStart,
+		"next-line-start <pos>:",
+	},
+	{
 		"line-end",
 		(*BufPane).LineEnd,
 		"line-end <pos>:",
+	},
+	{
+		"line-end-char",
+		(*BufPane).LineEndChar,
+		"line-end-char <pos>:",
 	},
 	{
 		"find-char",
