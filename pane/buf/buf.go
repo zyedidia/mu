@@ -28,6 +28,12 @@ type BufPane struct {
 	scrollmargin       int
 	hscrollmargin      int
 
+	// Vertical is a bit of a hack for cursor movements to indicate
+	// that they are performing a purely vertical move. This signals
+	// that the editor should not recalculate the cursor's visual X
+	// which gives vertical cursor movement a more natural feel.
+	vertical bool
+
 	theme *theme.Theme
 
 	opts Options
@@ -57,6 +63,15 @@ func (bp *BufPane) Set(opt string, val interface{}) error {
 }
 func (bp *BufPane) Get(opt string) interface{} {
 	return bp.opts.Get(opt)
+}
+
+func (bp *BufPane) GetCursorAt(pos int) Cursor {
+	for _, c := range bp.cursors {
+		if c.Pos == pos {
+			return c
+		}
+	}
+	return SpawnCursorAt(pos)
 }
 
 func (bp *BufPane) Register(interp *tcl.Interp) {

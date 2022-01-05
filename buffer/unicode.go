@@ -84,3 +84,26 @@ func (b *Buffer) UnicodeLoc(line, col int) int {
 
 	return off
 }
+
+// VisualLoc converts a visual (line, col) pair to byte position where col is the visual
+// column to go to within the line, taking into account characters with large
+// widths.
+func (b *Buffer) VisualLoc(line, col int, displayer RuneVisualizer) int {
+	if line >= b.NumLines() {
+		return b.Len()
+	}
+
+	off := b.OffsetAt(line, 0)
+	n := 0
+
+	for n < col {
+		r, sz := b.DecodeRuneAt(off)
+		if r == '\n' || sz == 0 {
+			return off
+		}
+		off += sz
+		n += displayer.Size(r, n)
+	}
+
+	return off
+}

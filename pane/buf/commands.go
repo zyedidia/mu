@@ -82,32 +82,32 @@ func (bp *BufPane) FindUp(off int, regex string) ([]int, error) {
 // --- Movement ---
 
 func (bp *BufPane) Up(from int) int {
-	c := SpawnCursorAt(from).Up(bp.Buffer)
+	c := bp.GetCursorAt(from).Up(bp)
 	return c.Pos
 }
 
 func (bp *BufPane) Down(from int) int {
-	c := SpawnCursorAt(from).Down(bp.Buffer)
+	c := bp.GetCursorAt(from).Down(bp)
 	return c.Pos
 }
 
 func (bp *BufPane) Left(from int) int {
-	c := SpawnCursorAt(from).Left(bp.Buffer)
+	c := bp.GetCursorAt(from).Left(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) Right(from int) int {
-	c := SpawnCursorAt(from).Right(bp.Buffer)
+	c := bp.GetCursorAt(from).Right(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) LeftVim(from int) int {
-	c := SpawnCursorAt(from).LeftVim(bp.Buffer)
+	c := bp.GetCursorAt(from).LeftVim(bp.Buffer)
 	return c.Pos
 }
 
 func (bp *BufPane) RightVim(from int) int {
-	c := SpawnCursorAt(from).RightVim(bp.Buffer)
+	c := bp.GetCursorAt(from).RightVim(bp.Buffer)
 	return c.Pos
 }
 
@@ -119,32 +119,32 @@ func isNotSpace(r rune) bool {
 }
 
 func (bp *BufPane) WordLeft(from int) int {
-	c := SpawnCursorAt(from).WordLeft(bp.Buffer, isWord)
+	c := bp.GetCursorAt(from).WordLeft(bp.Buffer, isWord)
 	return c.Pos
 }
 
 func (bp *BufPane) WordRight(from int) int {
-	c := SpawnCursorAt(from).WordRight(bp.Buffer, isWord)
+	c := bp.GetCursorAt(from).WordRight(bp.Buffer, isWord)
 	return c.Pos
 }
 
 func (bp *BufPane) WordLeftWS(from int) int {
-	c := SpawnCursorAt(from).WordLeft(bp.Buffer, isNotSpace)
+	c := bp.GetCursorAt(from).WordLeft(bp.Buffer, isNotSpace)
 	return c.Pos
 }
 
 func (bp *BufPane) WordRightWS(from int) int {
-	c := SpawnCursorAt(from).WordRight(bp.Buffer, isNotSpace)
+	c := bp.GetCursorAt(from).WordRight(bp.Buffer, isNotSpace)
 	return c.Pos
 }
 
 func (bp *BufPane) WordEnd(from int) int {
-	c := SpawnCursorAt(from).WordEnd(bp.Buffer, isWord)
+	c := bp.GetCursorAt(from).WordEnd(bp.Buffer, isWord)
 	return c.Pos
 }
 
 func (bp *BufPane) WordEndWS(from int) int {
-	c := SpawnCursorAt(from).WordEnd(bp.Buffer, isNotSpace)
+	c := bp.GetCursorAt(from).WordEnd(bp.Buffer, isNotSpace)
 	return c.Pos
 }
 
@@ -251,11 +251,19 @@ func (bp *BufPane) NextLineStart(from int) int {
 func (bp *BufPane) MoveTo(pos int) {
 	c := bp.Cursor()
 	*c = c.MoveTo(pos)
+	if !bp.vertical {
+		c.RecalcVX(bp)
+	}
+	bp.vertical = false
 }
 
 func (bp *BufPane) SelectTo(pos int) {
 	c := bp.Cursor()
 	*c = c.SelectTo(pos)
+	if !bp.vertical {
+		c.RecalcVX(bp)
+	}
+	bp.vertical = false
 }
 
 func (bp *BufPane) SwitchCursor(idx int) error {
@@ -267,7 +275,7 @@ func (bp *BufPane) SwitchCursor(idx int) error {
 }
 
 func (bp *BufPane) SpawnCursor(at int) {
-	bp.cursors = append(bp.cursors, SpawnCursorAt(at))
+	bp.cursors = append(bp.cursors, bp.GetCursorAt(at))
 }
 
 func (bp *BufPane) RemoveCursor(idx int) error {

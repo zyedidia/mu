@@ -9,6 +9,8 @@ import (
 type Cursor struct {
 	Pos int
 
+	vx int
+
 	HasSel bool
 	Orig   [2]int
 	Sel    [2]int
@@ -123,17 +125,19 @@ func (c Cursor) LeftVim(b *buffer.Buffer) Cursor {
 }
 
 // TODO: need virtual cursors to handle visual x
-func (c Cursor) Up(b *buffer.Buffer) Cursor {
+func (c Cursor) Up(b *BufPane) Cursor {
 	c = c.Deselect(0)
-	line, col := b.LineColAt(c.Pos)
-	c.Pos = b.OffsetAt(line-1, col)
+	line, _ := b.LineColAt(c.Pos)
+	c.Pos = b.VisualLoc(line-1, c.vx, b.vis)
+	b.vertical = true
 	return c
 }
 
-func (c Cursor) Down(b *buffer.Buffer) Cursor {
+func (c Cursor) Down(b *BufPane) Cursor {
 	c.Deselect(1)
-	line, col := b.LineColAt(c.Pos)
-	c.Pos = b.OffsetAt(line+1, col)
+	line, _ := b.LineColAt(c.Pos)
+	c.Pos = b.VisualLoc(line+1, c.vx, b.vis)
+	b.vertical = true
 	return c
 }
 
@@ -217,6 +221,12 @@ func (c Cursor) WordEnd(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
 	}
 	c.Pos = p
 	return c
+}
+
+func (c *Cursor) RecalcVX(bp *BufPane) {
+	line, col := bp.Buffer.LineColAt(c.Pos)
+	vl := bp.bLoc2vLoc(bLoc{line: line, col: col})
+	c.vx = vl.col
 }
 
 func clamp(a, min, max int) int {
