@@ -4,6 +4,13 @@ import k "github.com/zyedidia/kbd"
 
 func VimNormal() k.Config {
 	any := k.Cap(k.AnyRune(), "$0")
+	num := k.Cap(
+		k.Seq(
+			k.RangeRune('1', '9'),
+			k.Star(k.RangeRune('0', '9')),
+		),
+		"$0",
+	)
 	numq := k.Cap(k.Opt(
 		k.Seq(
 			k.RangeRune('1', '9'),
@@ -29,6 +36,10 @@ func VimNormal() k.Config {
 	move := k.Alt(
 		k.Cap(k.MustLit("0"), "line-start [cursor-pos]"),
 		k.Cap(k.MustLit("$"), "line-end-char [cursor-pos]"),
+		k.Cap(k.MustLit("G"), "size"),
+		k.Cap(k.Seq(k.MustLit("g"), k.MustLit("g")), "concat 0"),
+		k.Cap(k.Seq(num, k.MustLit("G")), "offset [- $1 1] 0"),
+		k.Cap(k.Seq(num, k.MustLit("g"), k.MustLit("g")), "offset [- $1 1] 0"),
 		k.Cap(k.Seq(numq, rmove), "repeat-move $1 {$2}"),
 	)
 
@@ -39,9 +50,9 @@ func VimNormal() k.Config {
 	)
 
 	action := k.Alt(
-		k.Cap(move, "move-to [$1]"),
+		k.Cap(move, "move-to [$1]; relocate"),
 		k.Cap(k.MustLit("ctrl+q"), "quit"),
-		k.Cap(k.Seq(numq, raction), "repeat-fn $1 {$2}"),
+		k.Cap(k.Seq(numq, raction), "repeat-fn $1 {$2}; relocate"),
 		k.Cap(k.MustLit("i"), "opt mode vim-insert"),
 	)
 
@@ -57,7 +68,7 @@ func VimInsert() k.Config {
 		k.Cap(k.MustLit("up"), "up [cursor-pos]"),
 		k.Cap(k.MustLit("down"), "down [cursor-pos]"),
 		k.Cap(k.MustLit("ctrl+down"), "size"),
-		k.Cap(k.MustLit("ctrl+up"), "return 0"),
+		k.Cap(k.MustLit("ctrl+up"), "concat 0"),
 		k.Cap(k.MustLit("ctrl+left"), "word-left [cursor-pos]"),
 		k.Cap(k.MustLit("ctrl+right"), "word-right [cursor-pos]"),
 		k.Cap(k.MustLit("alt+right"), "ws-right [cursor-pos]"),
@@ -73,7 +84,7 @@ func VimInsert() k.Config {
 		k.Cap(k.MustLit("backspace"), "set char [left [cursor-pos]]; remove $char [cursor-pos]; move-to $char"),
 		k.Cap(k.MustLit("delete"), "set char [right [cursor-pos]]; remove [cursor-pos] $char"),
 		k.Cap(k.AnyRune(), "insert-at [cursor-pos] $0; move-to [right [cursor-pos]]"),
-		k.Cap(move, "move-to [$1]"),
+		k.Cap(move, "move-to [$1]; relocate"),
 	)
 
 	return k.Config{

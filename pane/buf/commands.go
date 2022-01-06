@@ -323,6 +323,13 @@ func (bp *BufPane) Size() int {
 	return int(bp.Buffer.Size())
 }
 
+// --- View ---
+
+func (b *BufPane) RelocateToCur() {
+	line, col := b.LineColAt(b.Cursor().Pos)
+	b.Relocate(bLoc{line, col})
+}
+
 // --- Options ---
 
 func (bp *BufPane) Filetype() string {
@@ -553,5 +560,10 @@ var commands = []tclutil.Command{
 		"cursor-selection",
 		(*BufPane).CursorSelection,
 		"cursor-selection: returns the text of the current cursor's selection",
+	},
+	{
+		"relocate",
+		(*BufPane).RelocateToCur,
+		"relocate:",
 	},
 }
