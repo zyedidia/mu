@@ -27,6 +27,8 @@ func VimNormal() k.Config {
 		k.Cap(k.MustLit("W"), "ws-right"),
 		k.Cap(k.MustLit("b"), "word-left"),
 		k.Cap(k.MustLit("B"), "ws-left"),
+		k.Cap(k.MustLit("e"), "word-end"),
+		k.Cap(k.MustLit("E"), "ws-end"),
 		k.Cap(k.Seq(k.MustLit("f"), any), "find-char $1"),
 		k.Cap(k.Seq(k.MustLit("F"), any), "find-char-back $1"),
 		k.Cap(k.Seq(k.MustLit("t"), any), "till-char $1"),
@@ -45,8 +47,11 @@ func VimNormal() k.Config {
 
 	raction := k.Alt(
 		k.Cap(k.Seq(k.MustLit("d"), move), "move-to [remove [cursor-pos] [$1]]"),
+		k.Cap(k.Seq(k.MustLit("c"), move), "move-to [remove [cursor-pos] [$1]]; opt mode vim-insert"),
 		k.Cap(k.MustLit("D"), "move-to [remove [cursor-pos] [line-end [cursor-pos]]]"),
+		k.Cap(k.MustLit("C"), "move-to [remove [cursor-pos] [line-end [cursor-pos]]]; opt mode vim-insert"),
 		k.Cap(k.Seq(k.MustLit("d"), k.MustLit("d")), "move-to [remove [line-start [cursor-pos]] [next-line-start [cursor-pos]]]"),
+		k.Cap(k.Seq(k.MustLit("c"), k.MustLit("c")), "move-to [remove [line-start [cursor-pos]] [line-end [cursor-pos]]]; opt mode vim-insert"),
 	)
 
 	action := k.Alt(
@@ -54,6 +59,9 @@ func VimNormal() k.Config {
 		k.Cap(k.MustLit("ctrl+q"), "quit"),
 		k.Cap(k.Seq(numq, raction), "repeat-fn $1 {$2}; relocate"),
 		k.Cap(k.MustLit("i"), "opt mode vim-insert"),
+		k.Cap(k.MustLit("a"), "move-to [right [cursor-pos]]; opt mode vim-insert"),
+		k.Cap(k.MustLit("o"), "key {$ a enter}"),
+		k.Cap(k.MustLit("O"), "key {0 i enter up}"),
 	)
 
 	return k.Config{
@@ -76,10 +84,11 @@ func VimInsert() k.Config {
 	)
 
 	bindings := k.Alt(
-		k.Cap(k.MustLit("escape"), "opt mode vim-normal"),
-		k.Cap(k.MustLit("ctrl+c"), "opt mode vim-normal"),
+		k.Cap(k.MustLit("escape"), "opt mode vim-normal; move-to [left [cursor-pos]]"),
+		k.Cap(k.MustLit("ctrl+c"), "opt mode vim-normal; move-to [left [cursor-pos]]"),
 		k.Cap(k.MustLit("ctrl+s"), "save"),
 		k.Cap(k.MustLit("ctrl+q"), "quit"),
+		k.Cap(k.MustLit("tab"), "insert-at [cursor-pos] \\t; move-to [right [cursor-pos]]"),
 		k.Cap(k.MustLit("enter"), "insert-at [cursor-pos] \"\\n\"; move-to [right [cursor-pos]]"),
 		k.Cap(k.MustLit("backspace"), "set char [left [cursor-pos]]; remove $char [cursor-pos]; move-to $char"),
 		k.Cap(k.MustLit("delete"), "set char [right [cursor-pos]]; remove [cursor-pos] $char"),

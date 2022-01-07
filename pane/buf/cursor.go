@@ -183,7 +183,6 @@ func (c Cursor) WordLeft(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
 	p := c.Pos
 	consume := func(s int, fn func(r rune) bool) int {
 		consumed := 0
-
 		for {
 			r, _, sz := b.DecodeGraphemeBefore(s - consumed)
 			if !fn(r) || sz == 0 {
@@ -212,13 +211,35 @@ func (c Cursor) WordLeft(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
 
 func (c Cursor) WordEnd(b *buffer.Buffer, wordc func(r rune) bool) Cursor {
 	p := c.Pos
-	for {
-		r, _, sz := b.DecodeGraphemeAt(c.Pos)
-		if !wordc(r) {
-			break
+	_, _, sz := b.DecodeGraphemeAt(p)
+	p += sz
+
+	consume := func(s int, fn func(r rune) bool) int {
+		consumed := 0
+
+		for {
+			r, _, sz := b.DecodeGraphemeAt(s + consumed)
+			if !fn(r) || sz == 0 {
+				break
+			}
+			consumed += sz
 		}
+		return consumed
+	}
+
+	var s int
+	s = consume(p, unicode.IsSpace)
+	p += s
+	s = consume(p, wordc)
+	if s != 0 {
+		p += s
+	} else {
+		_, _, sz := b.DecodeGraphemeAt(p)
 		p += sz
 	}
+	_, _, sz = b.DecodeGraphemeBefore(p)
+	p -= sz
+
 	c.Pos = p
 	return c
 }
