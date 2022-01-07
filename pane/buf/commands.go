@@ -101,16 +101,6 @@ func (bp *BufPane) Right(from int) int {
 	return c.Pos
 }
 
-func (bp *BufPane) LeftVim(from int) int {
-	c := bp.GetCursorAt(from).LeftVim(bp.Buffer)
-	return c.Pos
-}
-
-func (bp *BufPane) RightVim(from int) int {
-	c := bp.GetCursorAt(from).RightVim(bp.Buffer)
-	return c.Pos
-}
-
 func isWord(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
@@ -224,18 +214,6 @@ func (bp *BufPane) LineEnd(from int) int {
 	}
 }
 
-func (bp *BufPane) LineEndChar(from int) int {
-	var last int
-	for {
-		r, sz := bp.DecodeRuneAt(from)
-		if r == '\n' || sz == 0 {
-			return from - last
-		}
-		last = sz
-		from += sz
-	}
-}
-
 func (bp *BufPane) NextLineStart(from int) int {
 	for {
 		r, sz := bp.DecodeRuneAt(from)
@@ -244,6 +222,19 @@ func (bp *BufPane) NextLineStart(from int) int {
 		}
 		from += sz
 	}
+}
+
+func (bp *BufPane) VimClamp(from int) int {
+	r, sz := bp.DecodeRuneAt(from)
+	if r != '\n' || sz == 0 {
+		return from
+	} else {
+		b, sz := bp.DecodeRuneBefore(from)
+		if b == '\n' || sz == 0 {
+			return from
+		}
+	}
+	return from - 1
 }
 
 // --- Cursors ---
@@ -422,16 +413,6 @@ var commands = []tclutil.Command{
 		"right <pos>: returns the resulting position from moving a cursor at <pos> right one character",
 	},
 	{
-		"left-vim",
-		(*BufPane).LeftVim,
-		"left-vim <pos>: returns the resulting position from moving a cursor at <pos> left one character",
-	},
-	{
-		"right-vim",
-		(*BufPane).RightVim,
-		"right-vim <pos>: returns the resulting position from moving a cursor at <pos> right one character",
-	},
-	{
 		"up",
 		(*BufPane).Up,
 		"up <pos>: returns the resulting position from moving a cursor at <pos> up one line",
@@ -485,11 +466,6 @@ var commands = []tclutil.Command{
 		"line-end",
 		(*BufPane).LineEnd,
 		"line-end <pos>:",
-	},
-	{
-		"line-end-char",
-		(*BufPane).LineEndChar,
-		"line-end-char <pos>:",
 	},
 	{
 		"find-char",
@@ -565,5 +541,10 @@ var commands = []tclutil.Command{
 		"relocate",
 		(*BufPane).RelocateToCur,
 		"relocate:",
+	},
+	{
+		"vim-clamp",
+		(*BufPane).VimClamp,
+		"vim-clamp <pos>:",
 	},
 }

@@ -19,10 +19,10 @@ func VimNormal() k.Config {
 	), "$0")
 
 	rmove := k.Alt(
-		k.Cap(k.MustLit("h"), "left-vim"),
+		k.Cap(k.MustLit("h"), "left"),
 		k.Cap(k.MustLit("j"), "down"),
 		k.Cap(k.MustLit("k"), "up"),
-		k.Cap(k.MustLit("l"), "right-vim"),
+		k.Cap(k.MustLit("l"), "right"),
 		k.Cap(k.MustLit("w"), "word-right"),
 		k.Cap(k.MustLit("W"), "ws-right"),
 		k.Cap(k.MustLit("b"), "word-left"),
@@ -35,7 +35,7 @@ func VimNormal() k.Config {
 
 	move := k.Alt(
 		k.Cap(k.MustLit("0"), "line-start [cursor-pos]"),
-		k.Cap(k.MustLit("$"), "line-end-char [cursor-pos]"),
+		k.Cap(k.MustLit("$"), "line-end [cursor-pos]"),
 		k.Cap(k.MustLit("G"), "size"),
 		k.Cap(k.Seq(k.MustLit("g"), k.MustLit("g")), "concat 0"),
 		k.Cap(k.Seq(num, k.MustLit("G")), "offset [- $1 1] 0"),
@@ -50,7 +50,7 @@ func VimNormal() k.Config {
 	)
 
 	action := k.Alt(
-		k.Cap(move, "move-to [$1]; relocate"),
+		k.Cap(move, "move-to [vim-clamp [$1]]; relocate"),
 		k.Cap(k.MustLit("ctrl+q"), "quit"),
 		k.Cap(k.Seq(numq, raction), "repeat-fn $1 {$2}; relocate"),
 		k.Cap(k.MustLit("i"), "opt mode vim-insert"),
