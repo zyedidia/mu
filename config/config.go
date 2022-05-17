@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
+	"github.com/zyedidia/kbd"
+	"github.com/zyedidia/kbd/syntax"
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
@@ -80,6 +83,27 @@ func LoadTheme(name string) (*theme.Theme, error) {
 	return theme.LoadYAML(data)
 }
 
-// func LoadBindings(name string) kbd.Config {
-//
-// }
+func LoadBindings(name string) (kbd.Config, error) {
+	data, err := fs.ReadFile(cfs, filepath.Join(bindingsDir, name+".kbd"))
+	if err != nil {
+		return kbd.Config{}, err
+	}
+
+	prog, err := syntax.Compile(name, string(data))
+	if err != nil {
+		return kbd.Config{}, err
+	}
+
+	return kbd.Config{
+		Core: name,
+		VM:   kbd.NewVM(prog.Compile()),
+	}, nil
+}
+
+func MustLoadBindings(name string) kbd.Config {
+	b, err := LoadBindings(name)
+	if err != nil {
+		panic(fmt.Errorf("error loading internal bindings (%s): %v\n", name, err))
+	}
+	return b
+}

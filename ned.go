@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zyedidia/ned/bindings"
 	"github.com/micro-editor/tcell/v2"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/ned/buffer"
+	"github.com/zyedidia/ned/config"
 	"github.com/zyedidia/ned/pane"
 	"github.com/zyedidia/ned/pane/buf"
 	"github.com/zyedidia/ned/pkg/input"
@@ -45,13 +45,11 @@ func newEditor() *Editor {
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
-			"vim-normal": bindings.VimNormal(),
-			"vim-insert": bindings.VimInsert(),
-			"micro": bindings.Micro(),
+			"micro": config.MustLoadBindings("micro"),
 		},
 		opts: defaults,
 	}
-	e.SetMode("vim-normal")
+	e.SetMode("micro")
 	e.Register()
 	return e
 }
@@ -139,7 +137,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 		return err
 	}
 	e.panes[e.cur] = buf.NewBufPane(b, &Options{
-		ed: e,
+		ed:   e,
 		opts: copymap(e.opts),
 	})
 	e.panes[e.cur].Register(e.interp)

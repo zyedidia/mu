@@ -1,0 +1,62 @@
+bindings <- action
+          / { Num raction, 'repeat -n $1 $2' }
+
+action <- { 'Z' 'Z', 'save; quit' }
+        / { 'i',  'set mode vim-insert' }
+        / { 'v',  'set mode vim-visual' }
+        / { 'o',  'cursor-line-end; insert \\n; set mode vim-insert' }
+        / { 'O',  'cursor-line-start; insert \\n; cursor-up; set mode vim-insert' }
+        / { ':',  'command' }
+
+raction <- { Move         , 'cursor-to $pos+$1' }
+         / { 'd' TxtObj , 'delete-range $1[0] $1[1]' }
+         / { 'd' 'd'         , 'delete-line' }
+         / { 'd' Move   , 'delete-range $pos $pos+$1' }
+         / { 'D'          , 'exec "d$"' }
+
+Move <- { Num 'w'       , 'word-front -n $1' }
+      / { Num 'W'       , 'word-front-ws -n $1' }
+      / { Num 'b'       , 'word-back -n $1' }
+      / { Num 'B'       , 'word-back-ws -n $1' }
+      / { Num 'e'       , 'word-end -n $1' }
+      / { Num 'E'       , 'word-end-ws -n $1' }
+      / { Num 'f' Any , 'find-char -n $1 $2' }
+      / { Num 'F' Any , 'find-char-back -n $1 $2' }
+      / { Num 't' Any , 'find-till -n $1 $2' }
+      / { Num 'T' Any , 'find-till-back -n $1 $2' }
+      / { Num 'h'       , 'cursor-left -n $1' }
+      / { Num 'j'       , 'cursor-down -n $1' }
+      / { Num 'k'       , 'cursor-up -n $1' }
+      / { Num 'l'       , 'cursor-right -n $1' }
+      / { Num '$'       , 'line-end -n $1' }
+      / { Num '^'       , 'line-start -n $1' }
+      / { Num '0'       , 'line-start-char -n $1' }
+      / { 'g' 'g'          , 'cursor-start-buffer' }
+      / { 'G'           , 'cursor-end-buffer' }
+      / { Num 'g' 'g'      , 'cursor-line-to $1' }
+      / { Num 'G'       , 'cursor-line-to $1' }
+      / { '/'           , 'ifind' }
+
+TxtObj <- { 'i' 'e'  , 'inside-all' }
+        / { 'a' 'e'  , 'around-all' }
+        / { 'i' 'w'  , 'inside-word' }
+        / { 'a' 'w'  , 'around-word' }
+        / { 'i' '"'  , 'inside-dquote' }
+        / { 'a' '"'  , 'around-dquote' }
+        / { 'i' '\'' , 'inside-squote' }
+        / { 'a' '\'' , 'around-squote' }
+        / { 'i' '('  , 'inside-paren' }
+        / { 'a' '('  , 'around-paren' }
+        / { 'i' ')'  , 'inside-paren' }
+        / { 'a' ')'  , 'around-paren' }
+        / { 'i' '{'  , 'inside-curly' }
+        / { 'a' '{'  , 'around-curly' }
+        / { 'i' '}'  , 'inside-curly' }
+        / { 'a' '}'  , 'around-curly' }
+        / { 'i' '['  , 'inside-square' }
+        / { 'a' '['  , 'around-square' }
+        / { 'i' ']'  , 'inside-square' }
+        / { 'a' ']'  , 'around-square' }
+
+Num <- { [0-9]* , '$0' }
+Any <- { .      , '$0' }
