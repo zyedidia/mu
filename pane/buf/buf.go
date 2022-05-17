@@ -1,10 +1,12 @@
 package buf
 
 import (
+	"fmt"
 	"io"
 
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
+	"github.com/zyedidia/ned/config"
 	"github.com/zyedidia/ned/pkg/tclutil"
 	"github.com/zyedidia/ned/pkg/theme"
 )
@@ -40,6 +42,10 @@ type BufPane struct {
 }
 
 func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
+	monokai, err := config.LoadTheme("monokai")
+	if err != nil {
+		panic(fmt.Errorf("theme load error: %w\n", err))
+	}
 	return &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -53,7 +59,7 @@ func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		cursors:       []Cursor{SpawnCursorAt(0)},
-		theme:         theme.Monokai,
+		theme:         monokai,
 		opts:          opts,
 	}
 }

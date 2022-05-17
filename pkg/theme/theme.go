@@ -17,27 +17,30 @@ type Theme struct {
 	rules map[string]Style
 }
 
-func (t *Theme) LoadYAML(data []byte) error {
-	t.rules = make(map[string]Style)
+func LoadYAML(data []byte) (*Theme, error) {
+	t := &Theme{
+		rules: make(map[string]Style),
+	}
 
 	err := yaml.Unmarshal(data, &t.rules)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if s, ok := t.rules["default"]; ok {
 		t.def = s
 	} else {
-		return errors.New("no default style")
+		return nil, errors.New("no default style")
 	}
 
-	return nil
+	return t, nil
 }
 
-func (t *Theme) Load(def Style, rules map[string]Style) {
-	t.rules = make(map[string]Style)
-	t.rules = rules
-	t.def = def
+func Load(def Style, rules map[string]Style) *Theme {
+	return &Theme{
+		def:   def,
+		rules: rules,
+	}
 }
 
 func (t *Theme) Style(group string) Style {

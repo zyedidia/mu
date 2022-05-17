@@ -13,19 +13,20 @@ ifeq ($(DEBUG),1)
 LINKVARS += -X '$(BUILDPKG).Debug=ON'
 endif
 
-DETECT = buffer/ftdetect/detectors.dat
-DETECT_SRC = $(wildcard buffer/ftdetect/*.json) buffer/ftdetect/generate.go
 LDFLAGS = -ldflags "-s -w $(LINKVARS)"
 TAGS = -tags flare_custom,ftdetect_custom
 GOFLAGS = -trimpath $(LDFLAGS) $(TAGS)
 
 all: build
 
-install: $(DETECT)
+install:
 	go install $(GOFLAGS) ./cmd/vned
 
-build: $(DETECT)
+build:
 	go build $(GOFLAGS) ./cmd/vned
+
+ned:
+	go build $(GOFLAGS) ./cmd/ned
 
 test:
 	go test ./...
@@ -39,7 +40,4 @@ cover:
 cover-total: cover.out
 	go tool cover -func cover.out
 
-$(DETECT): $(DETECT_SRC)
-	go run buffer/ftdetect/generate.go -in $(dir $@) -out $@
-
-.PHONY: cover cover-total test build
+.PHONY: cover cover-total test build ned install

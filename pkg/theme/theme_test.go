@@ -17,8 +17,7 @@ constant:
     attr: ["bold", "underline"]
 `
 
-	colors := new(theme.Theme)
-	err := colors.LoadYAML([]byte(data))
+	colors, err := theme.LoadYAML([]byte(data))
 	if err != nil {
 		t.Fatal(err)
 	}

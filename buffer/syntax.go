@@ -2,14 +2,11 @@ package buffer
 
 import (
 	"context"
-	"embed"
-	"fmt"
-	"path/filepath"
 
-	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/gpeg/vm"
+	"github.com/zyedidia/ned/config"
 
 	_ "embed"
 )
@@ -17,25 +14,9 @@ import (
 // The set of detectors is global for all buffers and lazily initialized.
 var ds ftdetect.Detectors
 
-//go:embed ftdetect/detectors.dat
-var defaultDetectors []byte
-
 // LoadFtdetect returns a set of detectors for many programming languages.
 func LoadFtdetect() ftdetect.Detectors {
-	d, err := ftdetect.LoadDetectors(defaultDetectors)
-	if err != nil {
-		panic(fmt.Errorf("loading ft detectors failed: %w", err))
-	}
-	return d
-}
-
-//go:embed highlighters/*.lang
-var langs embed.FS
-
-func init() {
-	flare.SetLoader(func(name string) ([]byte, error) {
-		return langs.ReadFile(filepath.Join("highlighters", name+".lang"))
-	})
+	return config.LoadDetectors()
 }
 
 // DetectFiletype analyzes the buffer name/contents to determine the filetype
@@ -71,7 +52,7 @@ func (b *Buffer) LoadHighlighter() error {
 	}
 
 	b.syntbl = memo.NewTreeTable(512)
-	h, err := flare.LoadHighlighter(b.Filetype(), true)
+	h, err := config.LoadHighlighter(b.Filetype())
 	if err != nil {
 		return err
 	}
