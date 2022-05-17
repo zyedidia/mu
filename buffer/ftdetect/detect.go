@@ -93,6 +93,10 @@ type Detector struct {
 	Name   string
 }
 
+func (d *Detector) String() string {
+	return d.Name
+}
+
 // Detectors is a set of languages that are supported.
 type Detectors map[string][]*Detector
 
@@ -132,43 +136,36 @@ func (ds Detectors) RegisterDetector(d *Detector) {
 
 // Detect returns the language that was detected from the filename and file
 // header (first line of file), or nil if no matching language was found.
-func (ds Detectors) Detect(filename string, header []byte) *Detector {
+func (ds Detectors) Detect(filename string, header []byte) []*Detector {
 	ext := filepath.Ext(filename)
 	arr, ok := ds[filename]
 	if !ok {
+		// use extension if the direct filename does not match anything
 		arr, ok = ds[ext]
 	}
 	if ok {
+		// if there is only one match, return it
 		if len(arr) == 1 {
-			return arr[0]
+			return []*Detector{arr[0]}
 		}
 
-		var best *Detector
-		var bestMatch *Detector
+		var matches []*Detector
 		for _, d := range arr {
 			if d.File.MatchString(filename) || d.Header.Match(header) {
-				if bestMatch == nil {
-					bestMatch = d
-				}
-			}
-			if best == nil {
-				best = d
+				matches = append(matches, d)
 			}
 		}
-		if bestMatch != nil {
-			return bestMatch
-		}
-		return best
+		return matches
 	}
 
-	var best *Detector
+	var matches []*Detector
 	for _, arr := range ds {
 		for _, d := range arr {
-			if (d.File.MatchString(filename) || d.Header.Match(header)) && (best == nil) {
-				best = d
+			if d.File.MatchString(filename) || d.Header.Match(header) {
+				matches = append(matches, d)
 			}
 		}
 	}
 
-	return best
+	return matches
 }

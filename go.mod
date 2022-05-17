@@ -9,7 +9,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/micro-editor/tcell/v2 v2.2.3
 	github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d
-	github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071
 	github.com/zyedidia/generic v1.0.0
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20211222231648-7a7e978d89ea
