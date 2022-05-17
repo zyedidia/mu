@@ -6,7 +6,6 @@ import (
 
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/config"
 	"github.com/zyedidia/ned/pkg/tclutil"
 	"github.com/zyedidia/ned/pkg/theme"
 )
@@ -42,7 +41,7 @@ type BufPane struct {
 }
 
 func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
-	monokai, err := config.LoadTheme("monokai")
+	monokai, err := cfg.LoadTheme("monokai")
 	if err != nil {
 		panic(fmt.Errorf("theme load error: %w\n", err))
 	}

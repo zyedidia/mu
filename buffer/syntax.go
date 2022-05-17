@@ -3,20 +3,31 @@ package buffer
 import (
 	"context"
 
+	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/gpeg/vm"
-	"github.com/zyedidia/ned/config"
 
 	_ "embed"
 )
+
+type SyntaxConfig interface {
+	LoadDetectors() ftdetect.Detectors
+	LoadHighlighter(name string) (*flare.Highlighter, error)
+}
+
+var scfg SyntaxConfig
+
+func SetSyntaxConfig(s SyntaxConfig) {
+	scfg = s
+}
 
 // The set of detectors is global for all buffers and lazily initialized.
 var ds ftdetect.Detectors
 
 // LoadFtdetect returns a set of detectors for many programming languages.
 func LoadFtdetect() ftdetect.Detectors {
-	return config.LoadDetectors()
+	return scfg.LoadDetectors()
 }
 
 // DetectFiletype analyzes the buffer name/contents to determine the filetype
@@ -52,7 +63,7 @@ func (b *Buffer) LoadHighlighter() error {
 	}
 
 	b.syntbl = memo.NewTreeTable(512)
-	h, err := config.LoadHighlighter(b.Filetype())
+	h, err := scfg.LoadHighlighter(b.Filetype())
 	if err != nil {
 		return err
 	}

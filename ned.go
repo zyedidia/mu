@@ -37,6 +37,10 @@ type Editor struct {
 }
 
 func newEditor() *Editor {
+	cfg := config.NewConfigFS(config.DefaultConfigDir())
+	buffer.SetSyntaxConfig(cfg)
+	buf.SetConfig(cfg)
+
 	interp := tcl.NewInterp()
 	_, err := interp.EvalString(tclcore)
 	if err != nil {
@@ -45,7 +49,7 @@ func newEditor() *Editor {
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
-			"micro": config.MustLoadBindings("micro"),
+			"micro": cfg.MustLoadBindings("micro"),
 		},
 		opts: defaults,
 	}

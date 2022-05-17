@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,26 +20,7 @@ const (
 	detectorDir    = "detectors"
 )
 
-var cdir string
-var cfs *ConfigFS
-
-func init() {
-	cfs = &ConfigFS{
-		embed:  builtin,
-		config: nil,
-	}
-}
-
-func ConfigDir() string {
-	return cdir
-}
-
-func SetConfigDir(dir string) {
-	cdir = dir
-	cfs.config = os.DirFS(dir)
-}
-
-func LoadHighlighter(name string) (*flare.Highlighter, error) {
+func (cfs *ConfigFS) LoadHighlighter(name string) (*flare.Highlighter, error) {
 	data, err := fs.ReadFile(cfs, filepath.Join(highlighterDir, name+".lang"))
 	if err != nil {
 		return nil, err
@@ -48,7 +28,7 @@ func LoadHighlighter(name string) (*flare.Highlighter, error) {
 	return flare.LoadHighlighter(name, data, true)
 }
 
-func LoadDetectors() ftdetect.Detectors {
+func (cfs *ConfigFS) LoadDetectors() ftdetect.Detectors {
 	detectors := make(ftdetect.Detectors)
 	walkfn := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -75,7 +55,7 @@ func LoadDetectors() ftdetect.Detectors {
 	return detectors
 }
 
-func LoadTheme(name string) (*theme.Theme, error) {
+func (cfs *ConfigFS) LoadTheme(name string) (*theme.Theme, error) {
 	data, err := fs.ReadFile(cfs, filepath.Join(themeDir, name+".yaml"))
 	if err != nil {
 		return nil, err
@@ -83,7 +63,7 @@ func LoadTheme(name string) (*theme.Theme, error) {
 	return theme.LoadYAML(data)
 }
 
-func LoadBindings(name string) (kbd.Config, error) {
+func (cfs *ConfigFS) LoadBindings(name string) (kbd.Config, error) {
 	data, err := fs.ReadFile(cfs, filepath.Join(bindingsDir, name+".kbd"))
 	if err != nil {
 		return kbd.Config{}, err
@@ -100,8 +80,8 @@ func LoadBindings(name string) (kbd.Config, error) {
 	}, nil
 }
 
-func MustLoadBindings(name string) kbd.Config {
-	b, err := LoadBindings(name)
+func (cfs *ConfigFS) MustLoadBindings(name string) kbd.Config {
+	b, err := cfs.LoadBindings(name)
 	if err != nil {
 		panic(fmt.Errorf("error loading internal bindings (%s): %v\n", name, err))
 	}
