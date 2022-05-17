@@ -35,6 +35,8 @@ github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 h1:QldyIu/L63oPpyvQmHg
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778/go.mod h1:2MuV+tbUrU1zIOPMxZ5EncGwgmMJsa+9ucAQZXxsObs=
 github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d h1:ZEMg5WqEaETl7/8wxW91z7YpKte//bLd5bbhMf8DKlI=
 github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
+github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907 h1:GYeslvmxcRTlAbR4EyNwUmxNTuinpEwJTG1s8n2Jwb8=
+github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071 h1:duXV1Xc+9prQbY1jjAFjwv8iP6wW5XSuGabwnHDf1Ms=
 github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=

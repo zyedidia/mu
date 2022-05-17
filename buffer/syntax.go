@@ -2,7 +2,9 @@ package buffer
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"path/filepath"
 
 	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
@@ -25,6 +27,15 @@ func LoadFtdetect() ftdetect.Detectors {
 		panic(fmt.Errorf("loading ft detectors failed: %w", err))
 	}
 	return d
+}
+
+//go:embed highlighters/*.lang
+var langs embed.FS
+
+func init() {
+	flare.SetLoader(func(name string) ([]byte, error) {
+		return langs.ReadFile(filepath.Join("highlighters", name+".lang"))
+	})
 }
 
 // DetectFiletype analyzes the buffer name/contents to determine the filetype
