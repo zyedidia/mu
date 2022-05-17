@@ -2,22 +2,37 @@ package buffer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/zyedidia/flare"
+	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/gpeg/vm"
-	"github.com/zyedidia/ned/buffer/ftdetect"
+
+	_ "embed"
 )
 
 // The set of detectors is global for all buffers and lazily initialized.
 var ds ftdetect.Detectors
+
+//go:embed ftdetect/detectors.dat
+var defaultDetectors []byte
+
+// LoadFtdetect returns a set of detectors for many programming languages.
+func LoadFtdetect() ftdetect.Detectors {
+	d, err := ftdetect.LoadDetectors(defaultDetectors)
+	if err != nil {
+		panic(fmt.Errorf("loading ft detectors failed: %w", err))
+	}
+	return d
+}
 
 // DetectFiletype analyzes the buffer name/contents to determine the filetype
 // and returns the name and a boolean indicating if the it was able to guess
 // the filetype.
 func (b *Buffer) DetectFiletype() (string, bool) {
 	if ds == nil {
-		ds = ftdetect.LoadDefaultDetectors()
+		ds = LoadFtdetect()
 	}
 
 	d := ds.Detect(b.in.Name(), b.GetLine(0))
