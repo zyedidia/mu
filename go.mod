@@ -7,14 +7,14 @@ require (
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
 	github.com/klauspost/cpuid/v2 v2.0.9
-	github.com/micro-editor/tcell/v2 v2.2.2-0.20210627050507-71193250da58
+	github.com/micro-editor/tcell/v2 v2.2.3
 	github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d
 	github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071
-	github.com/zyedidia/generic v0.0.0-20211222002821-df59a340226d
+	github.com/zyedidia/generic v1.0.0
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20211222231648-7a7e978d89ea
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
-	github.com/zyedidia/kbd v0.0.0-20211222015115-9232bd3926b7
+	github.com/zyedidia/kbd v0.0.0-20220516230706-68a4f37d01f9
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
@@ -33,10 +33,7 @@ require (
 	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
-	golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4 // indirect
+	golang.org/x/exp v0.0.0-20220218215828-6cf2b201936e // indirect
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 )
-
-replace github.com/zyedidia/gotcl => ../gotcl
-
-replace github.com/zyedidia/kbd => ../kbd
