@@ -1,18 +1,25 @@
-// +build ignore
+//go:build ignore
 
 package main
 
 import (
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strings"
 
 	"github.com/zyedidia/ftdetect"
 )
 
+var in = flag.String("in", ".", "input directory")
+var out = flag.String("out", "detectors.dat", "output data file")
+
 func main() {
-	files, err := ioutil.ReadDir(".")
+	flag.Parse()
+
+	files, err := ioutil.ReadDir(*in)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -23,7 +30,7 @@ func main() {
 			continue
 		}
 
-		data, err := ioutil.ReadFile(f.Name())
+		data, err := ioutil.ReadFile(filepath.Join(*in, f.Name()))
 		if err != nil {
 			log.Printf("%s: read: %v\n", f.Name(), err)
 			continue
@@ -44,5 +51,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ioutil.WriteFile("detectors.dat", data, 0666)
+	ioutil.WriteFile(*out, data, 0666)
 }

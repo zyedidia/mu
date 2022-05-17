@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
@@ -26,7 +27,7 @@ func (m Map[K, V]) Put(k K, v V) {
 const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
-	f, err := os.Create("log.txt")
+	f, err := os.Create(filepath.Join(os.TempDir(), "vned.log"))
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 	}
