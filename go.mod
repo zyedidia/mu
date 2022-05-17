@@ -22,6 +22,7 @@ require (
 )
 
 require (
+	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect

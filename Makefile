@@ -1,3 +1,18 @@
+-include conf.mk
+
+VERSION = $(shell go run ./tools/build-version.go)
+DATE = $(shell go run ./tools/build-date.go)
+COMMIT = $(shell git rev-parse --short HEAD)
+BUILDPKG = github.com/zyedidia/ned/build
+
+ifneq ($(FASTBUILD),1)
+LINKVARS += -X '$(BUILDPKG).Version=$(VERSION)' -X '$(BUILDPKG).CompileDate=$(DATE)' -X '$(BUILDPKG).CommitHash=$(COMMIT)'
+endif
+
+ifeq ($(DEBUG),1)
+LINKVARS += -X '$(BUILDPKG).Debug=ON'
+endif
+
 DETECT = buffer/ftdetect/detectors.dat
 DETECT_SRC = $(wildcard buffer/ftdetect/*.json) buffer/ftdetect/generate.go
 LDFLAGS = -ldflags "-s -w $(LINKVARS)"
