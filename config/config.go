@@ -87,3 +87,13 @@ func (cfs *ConfigFS) MustLoadBindings(name string) kbd.Config {
 	}
 	return b
 }
+
+func (cfs *ConfigFS) GetBufferOptions(path string, ft string) map[string]interface{} {
+	return map[string]interface{}{
+		"encoding": nil,
+		"endings":  nil,
+		"filetype": nil,
+		"syntax":   false,
+		"theme":    "one-dark",
+	}
+}

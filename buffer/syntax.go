@@ -3,7 +3,6 @@ package buffer
 import (
 	"context"
 
-	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/gpeg/vm"
@@ -11,23 +10,12 @@ import (
 	_ "embed"
 )
 
-type SyntaxConfig interface {
-	LoadDetectors() ftdetect.Detectors
-	LoadHighlighter(name string) (*flare.Highlighter, error)
-}
-
-var scfg SyntaxConfig
-
-func SetSyntaxConfig(s SyntaxConfig) {
-	scfg = s
-}
-
 // The set of detectors is global for all buffers and lazily initialized.
 var ds ftdetect.Detectors
 
 // LoadFtdetect returns a set of detectors for many programming languages.
-func LoadFtdetect() ftdetect.Detectors {
-	return scfg.LoadDetectors()
+func (b *Buffer) LoadFtdetect() ftdetect.Detectors {
+	return b.cfg.LoadDetectors()
 }
 
 // DetectFiletype analyzes the buffer name/contents to determine the filetype
@@ -35,7 +23,7 @@ func LoadFtdetect() ftdetect.Detectors {
 // the filetype.
 func (b *Buffer) DetectFiletype() (string, bool) {
 	if ds == nil {
-		ds = LoadFtdetect()
+		ds = b.LoadFtdetect()
 	}
 
 	d := ds.Detect(b.in.Name(), b.GetLine(0))
@@ -45,25 +33,36 @@ func (b *Buffer) DetectFiletype() (string, bool) {
 	return d.Name, true
 }
 
+func detectFtEarly(cfg Config, in Input) (string, bool) {
+	if ds == nil {
+		ds = cfg.LoadDetectors()
+	}
+	d := ds.Detect(in.Name(), nil)
+	if d == nil {
+		return "", false
+	}
+	return d.Name, true
+}
+
 // Filetype returns this buffer's filetype.
 func (b *Buffer) Filetype() string {
-	if b.Opts.Filetype == nil {
-		return "unknown"
+	if ft, ok := b.GetStrOpt("filetype"); ok {
+		return ft
 	}
-	return *b.Opts.Filetype
+	return "unknown"
 }
 
 // LoadHighlighter initializes the syntax highlighting memoization table and
 // loads the current filetype's highlighter.
 func (b *Buffer) LoadHighlighter() error {
-	if !b.Opts.Syntax {
+	if !b.MustGetBoolOpt("syntax") {
 		b.highlighter = nil
 		b.syntbl = memo.NoneTable{}
 		return nil
 	}
 
 	b.syntbl = memo.NewTreeTable(512)
-	h, err := scfg.LoadHighlighter(b.Filetype())
+	h, err := b.cfg.LoadHighlighter(b.Filetype())
 	if err != nil {
 		return err
 	}

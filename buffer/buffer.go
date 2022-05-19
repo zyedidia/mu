@@ -9,8 +9,11 @@ import (
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/ned/buffer/diff"
 	"github.com/zyedidia/ned/buffer/text"
+	"github.com/zyedidia/ned/buffer/text/endings"
 	"github.com/zyedidia/ned/buffer/undo"
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/htmlindex"
 )
 
 const (
@@ -39,7 +42,8 @@ type Buffer struct {
 
 	refs int
 
-	Opts Options
+	cfg     Config
+	Options map[string]interface{}
 }
 
 type Input interface {
@@ -48,34 +52,43 @@ type Input interface {
 	Name() string
 }
 
-func NewBuffer(r Input, out Output, Opts Options) (*Buffer, error) {
+func NewBuffer(r Input, out Output, cfg Config) (*Buffer, error) {
 	data, err := r.Read()
 	if err != nil {
 		return nil, err
 	}
-	b, err := text.NewBuffer(data, Opts.Options)
+
+	ftdtct, ftok := detectFtEarly(cfg, r)
+	if !ftok {
+		ftdtct = "unknown"
+	}
+
+	opts := cfg.GetBufferOptions(r.Name(), ftdtct)
+	b, err := text.NewBuffer(data, getTextOpts(opts))
 	if err != nil {
 		return nil, err
 	}
 
 	buf := &Buffer{
-		Buffer: b,
-		in:     r,
-		out:    out,
-		Opts:   Opts,
-		Exited: make(chan bool),
-		hisem:  semaphore.NewWeighted(1),
-		refs:   1,
+		Buffer:  b,
+		in:      r,
+		out:     out,
+		cfg:     cfg,
+		Exited:  make(chan bool),
+		hisem:   semaphore.NewWeighted(1),
+		refs:    1,
+		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
 	}
-	buf.Opts.Syntax = true
 
 	buf.undo = undo.NewTree(buf, undo.NoCutoff)
 
 	buf.unmodified()
 
-	if buf.Opts.Filetype == nil {
-		if f, ok := buf.DetectFiletype(); ok {
-			buf.Opts.Filetype = &f
+	// if the filetype is not specified by the buffer options, use the detected
+	// one
+	if buf.Options["filetype"] == nil {
+		if ftok {
+			buf.Options["filetype"] = ftdtct
 		}
 	}
 
@@ -87,6 +100,35 @@ func NewBuffer(r Input, out Output, Opts Options) (*Buffer, error) {
 	go buf.InitialHighlight()
 
 	return buf, nil
+}
+
+func getTextOpts(opts map[string]interface{}) text.Options {
+	var charset *encoding.Encoding
+	if chopt, ok := GetOpt[string](opts, "encoding"); ok {
+		enc, err := htmlindex.Get(chopt)
+		if err != nil {
+			log.Printf("invalid charset (%s): %v\n", chopt, err)
+		} else {
+			charset = &enc
+		}
+	}
+	var ends *endings.Type
+	if endopt, ok := GetOpt[string](opts, "endings"); ok {
+		var endsv endings.Type
+		switch endopt {
+		case "crlf", "CRLF", "dos":
+			endsv = endings.LF
+			ends = &endsv
+		case "lf", "LF", "unix":
+			endsv = endings.CRLF
+			ends = &endsv
+		}
+	}
+
+	return text.Options{
+		Charset: charset,
+		Endings: ends,
+	}
 }
 
 // marks this buffer as unmodified
@@ -151,7 +193,7 @@ func (b *Buffer) Reload() error {
 	if err != nil {
 		return err
 	}
-	newb, err := text.NewBuffer(data, b.Opts.Options)
+	newb, err := text.NewBuffer(data, b.Opts)
 	if err != nil {
 		return err
 	}

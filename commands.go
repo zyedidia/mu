@@ -3,7 +3,6 @@ package ned
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/micro-editor/tcell/v2"
@@ -86,22 +85,22 @@ func (e *Editor) NewBuffer() {
 
 // --- Options ---
 
-func (e *Editor) Opt(name string, val string) error {
-	if v, err := strconv.Atoi(val); err == nil {
-		return e.panes[e.cur].Set(name, v)
-	} else if v, err := strconv.ParseBool(val); err == nil {
-		return e.panes[e.cur].Set(name, v)
-	}
-	return e.panes[e.cur].Set(name, val)
-}
-
-func (e *Editor) Get(name string) (string, error) {
-	v := e.panes[e.cur].Get(name)
-	if v == nil {
-		return "", fmt.Errorf("option %s not found", name)
-	}
-	return fmt.Sprintf("%v", v), nil
-}
+// func (e *Editor) Opt(name string, val string) error {
+// 	if v, err := strconv.Atoi(val); err == nil {
+// 		return e.panes[e.cur].Set(name, v)
+// 	} else if v, err := strconv.ParseBool(val); err == nil {
+// 		return e.panes[e.cur].Set(name, v)
+// 	}
+// 	return e.panes[e.cur].Set(name, val)
+// }
+//
+// func (e *Editor) Get(name string) (string, error) {
+// 	v := e.panes[e.cur].Get(name)
+// 	if v == nil {
+// 		return "", fmt.Errorf("option %s not found", name)
+// 	}
+// 	return fmt.Sprintf("%v", v), nil
+// }
 
 // --- Key events ---
 
@@ -157,16 +156,16 @@ var commands = []tclutil.Command{
 		(*Editor).NewBuffer,
 		"new-buffer: open a new empty buffer",
 	},
-	{
-		"opt",
-		(*Editor).Opt,
-		"opt <name> <val>: assign option <name> to <val>",
-	},
-	{
-		"get",
-		(*Editor).Get,
-		"get <name>: return the value of option <name>",
-	},
+	// {
+	// 	"opt",
+	// 	(*Editor).Opt,
+	// 	"opt <name> <val>: assign option <name> to <val>",
+	// },
+	// {
+	// 	"get",
+	// 	(*Editor).Get,
+	// 	"get <name>: return the value of option <name>",
+	// },
 	{
 		"key",
 		(*Editor).Key,

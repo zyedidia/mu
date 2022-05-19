@@ -13,9 +13,6 @@ type Pane interface {
 	Help(w io.Writer)
 	Name() string
 
-	Set(opt string, val interface{}) error
-	Get(opt string) interface{}
-
 	Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int))
 	Resize(w, h int)
 }

@@ -33,13 +33,11 @@ type Editor struct {
 	modes map[string]kbd.Config
 	mode  *kbd.Config
 
-	opts map[string]*Option
+	config *config.ConfigFS
 }
 
 func newEditor() *Editor {
 	cfg := config.NewConfigFS(config.DefaultConfigDir())
-	buffer.SetSyntaxConfig(cfg)
-	buf.SetConfig(cfg)
 
 	interp := tcl.NewInterp()
 	_, err := interp.EvalString(tclcore)
@@ -51,7 +49,7 @@ func newEditor() *Editor {
 		modes: map[string]kbd.Config{
 			"micro": cfg.MustLoadBindings("micro"),
 		},
-		opts: defaults,
+		config: cfg,
 	}
 	e.SetMode("micro")
 	e.Register()
@@ -136,14 +134,11 @@ func (e *Editor) MakePane() {
 }
 
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
-	b, err := buffer.NewBuffer(in, out, buffer.Options{})
+	b, err := buffer.NewBuffer(in, out, e.config)
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b, &Options{
-		ed:   e,
-		opts: copymap(e.opts),
-	})
+	e.panes[e.cur] = buf.NewBufPane(b, e.config)
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }
@@ -154,6 +149,9 @@ func (e *Editor) Resize(w, h int) {
 
 func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
 	e.panes[e.cur].Display(draw, cursor)
+}
+
+func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
 }
 
 func copymap(m map[string]*Option) map[string]*Option {

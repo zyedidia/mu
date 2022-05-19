@@ -1,7 +1,6 @@
 package buf
 
 import (
-	"fmt"
 	"io"
 
 	tcl "github.com/zyedidia/gotcl"
@@ -37,15 +36,11 @@ type BufPane struct {
 
 	theme *theme.Theme
 
-	opts Options
+	cfg Config
 }
 
-func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
-	monokai, err := cfg.LoadTheme("monokai")
-	if err != nil {
-		panic(fmt.Errorf("theme load error: %w\n", err))
-	}
-	return &BufPane{
+func NewBufPane(b *buffer.Buffer, cfg Config) *BufPane {
+	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
 			TabSize: 4,
@@ -58,16 +53,11 @@ func NewBufPane(b *buffer.Buffer, opts Options) *BufPane {
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		cursors:       []Cursor{SpawnCursorAt(0)},
-		theme:         monokai,
-		opts:          opts,
+		theme:         theme.Default,
+		cfg:           cfg,
 	}
-}
-
-func (bp *BufPane) Set(opt string, val interface{}) error {
-	return bp.opts.Set(opt, val)
-}
-func (bp *BufPane) Get(opt string) interface{} {
-	return bp.opts.Get(opt)
+	bp.InitOpts()
+	return bp
 }
 
 func (bp *BufPane) GetCursorAt(pos int) Cursor {
