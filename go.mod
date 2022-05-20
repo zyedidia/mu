@@ -8,6 +8,8 @@ require (
 	github.com/google/renameio v1.0.1
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/micro-editor/tcell/v2 v2.2.3
+	github.com/pelletier/go-toml v1.9.5
+	github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907
 	github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071
 	github.com/zyedidia/generic v1.0.0
 	github.com/zyedidia/go-runewidth v0.0.12
@@ -22,7 +24,6 @@ require (
 )
 
 require (
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
@@ -33,7 +34,6 @@ require (
 	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
-	github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907 // indirect
 	golang.org/x/exp v0.0.0-20220218215828-6cf2b201936e // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect

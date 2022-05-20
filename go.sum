@@ -1,5 +1,3 @@
-github.com/blang/semver v3.5.1+incompatible h1:cQNTCjp13qL8KC3Nbxr/y2Bqb63oX6wdnnjpJbkM4JQ=
-github.com/blang/semver v3.5.1+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/chzyer/logex v1.1.10 h1:Swpa1K6QvQznwJRcfTfQJmTE72DqScAa40E+fbHEXEE=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/test v0.0.0-20210722231415-061457976a23 h1:dZ0/VyGgQdVGAss6Ju0dt5P0QltE0SFY5Woh6hbIfiQ=
@@ -29,19 +27,14 @@ github.com/mattn/go-runewidth v0.0.10 h1:CoZ3S2P7pvtP45xOtBw+/mDL2z0RKI576gSkzRR
 github.com/mattn/go-runewidth v0.0.10/go.mod h1:RAqKPSqVFrSLVXbA8x7dzmKdmGzieGRCM46jaSJTDAk=
 github.com/micro-editor/tcell/v2 v2.2.3 h1:rjqzh01zjJtxBZvJotHCSsHCeIJu2Li2dUvGIJGpalI=
 github.com/micro-editor/tcell/v2 v2.2.3/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
+github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=
+github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/rivo/uniseg v0.1.0 h1:+2KBaVoUmb9XzDsrx/Ct0W/EYOSFf/nWTauy++DprtY=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/segmentio/fasthash v1.0.3 h1:EI9+KE1EwvMLBWwjpRDc+fEM+prwxDYbslddQGtrmhM=
 github.com/segmentio/fasthash v1.0.3/go.mod h1:waKX8l2N8yckOgmSsXJi7x1ZfdKZ4x7KRMzBtS3oedY=
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 h1:QldyIu/L63oPpyvQmHgvgickp1Yw510KJOqX7H24mg8=
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778/go.mod h1:2MuV+tbUrU1zIOPMxZ5EncGwgmMJsa+9ucAQZXxsObs=
-github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d h1:ZEMg5WqEaETl7/8wxW91z7YpKte//bLd5bbhMf8DKlI=
-github.com/zyedidia/flare v0.0.0-20211004025845-a22e920e3d7d/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
-github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907 h1:GYeslvmxcRTlAbR4EyNwUmxNTuinpEwJTG1s8n2Jwb8=
-github.com/zyedidia/flare v0.0.0-20220517055151-b38626f4f907/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
-github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
-github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071 h1:duXV1Xc+9prQbY1jjAFjwv8iP6wW5XSuGabwnHDf1Ms=
-github.com/zyedidia/ftdetect v0.0.0-20211004021815-c62c1c09e071/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/generic v1.0.0 h1:uZL4/2Pv014Cb8bJQuvh30toyaFZ9WpCPg6pIhPu47o=
 github.com/zyedidia/generic v1.0.0/go.mod h1:ly2RBz4mnz1yeuVbQA/VFwGjK3mnHGRj1JuoG336Bis=
 github.com/zyedidia/go-runewidth v0.0.12 h1:aHWj8qL3aH7caRzoPBJXe1pEaZBXHpKtfTuiBo5p74Q=
