@@ -67,6 +67,9 @@ func main() {
 	draw := func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
 		s.SetContent(vx, vy, mainc, combc, tcellStyle(style))
 	}
+	fill := func(x rune, style theme.Style) {
+		s.Fill(x, tcellStyle(style))
+	}
 
 	cursor := func(x, y int) {
 		s.ShowCursor(x, y)
@@ -83,7 +86,7 @@ func main() {
 			log.Println("Error:", err)
 		}
 
-		s.Clear()
+		ed.Clear(fill)
 		ed.Display(draw, cursor)
 		s.Show()
 	}

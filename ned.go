@@ -33,6 +33,7 @@ type Editor struct {
 	modes map[string]kbd.Config
 	mode  *kbd.Config
 
+	theme  *theme.Theme
 	config *config.ConfigFS
 }
 
@@ -44,12 +45,18 @@ func newEditor() *Editor {
 	if err != nil {
 		log.Println(err)
 	}
+	thname := cfg.GetGlobalOption("theme").(string)
+	th, err := cfg.LoadTheme(thname)
+	if err != nil {
+		log.Printf("error loading theme %s: %v\n", thname, err)
+	}
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
 			"micro": cfg.MustLoadBindings("micro"),
 		},
 		config: cfg,
+		theme:  th,
 	}
 	e.SetMode("micro")
 	e.Register()
@@ -148,10 +155,11 @@ func (e *Editor) Resize(w, h int) {
 }
 
 func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
-	e.panes[e.cur].Display(draw, cursor)
+	e.panes[e.cur].Display(draw, cursor, e.theme)
 }
 
 func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
+	fill(' ', e.theme.Default())
 }
 
 func copymap(m map[string]*Option) map[string]*Option {

@@ -93,7 +93,14 @@ func (cfs *ConfigFS) GetBufferOptions(path string, ft string) map[string]interfa
 		"encoding": nil,
 		"endings":  nil,
 		"filetype": nil,
-		"syntax":   false,
-		"theme":    "one-dark",
+		"syntax":   true,
 	}
+}
+
+var globalopts = map[string]interface{}{
+	"theme": "monokai",
+}
+
+func (cfs *ConfigFS) GetGlobalOption(name string) interface{} {
+	return globalopts[name]
 }

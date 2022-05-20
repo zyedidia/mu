@@ -6,7 +6,6 @@ import (
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pkg/tclutil"
-	"github.com/zyedidia/ned/pkg/theme"
 )
 
 type Options interface {
@@ -34,8 +33,6 @@ type BufPane struct {
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
 
-	theme *theme.Theme
-
 	cfg Config
 }
 
@@ -53,7 +50,6 @@ func NewBufPane(b *buffer.Buffer, cfg Config) *BufPane {
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		cursors:       []Cursor{SpawnCursorAt(0)},
-		theme:         theme.Default,
 		cfg:           cfg,
 	}
 	bp.InitOpts()
