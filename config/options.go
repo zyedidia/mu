@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml"
+	"github.com/zyedidia/glob"
 )
 
 var globals = map[string]bool{
@@ -45,7 +46,7 @@ func LoadOptions(data []byte) (*Options, error) {
 }
 
 func (o *Options) ToToml() ([]byte, error) {
-	var m map[string]interface{}
+	m := make(map[string]interface{})
 	for k, v := range o.top {
 		m[k] = v
 	}
@@ -65,9 +66,19 @@ func (o *Options) LocalOptions(path, ft string) map[string]interface{} {
 	}
 	for _, ftopts := range o.ft {
 		if strings.HasPrefix(ftopts.ft, "glob:") {
-			// TODO
-			log.Println("Glob unsupported (TODO)")
-			continue
+			globstr := ftopts.ft[5:]
+			if rgx, err := glob.Compile(globstr); err != nil {
+				log.Printf("error compiling glob %s: %v\n", globstr, err)
+				continue
+			} else if !rgx.MatchString(path) {
+				continue
+			}
+			// glob matches, fall through to copy the map into m
+		} else {
+			if ft != ftopts.ft {
+				continue
+			}
+			// fall through
 		}
 
 		for k, v := range ftopts.opts {

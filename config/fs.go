@@ -50,7 +50,22 @@ func NewConfigFS(dir string) *ConfigFS {
 		opts, _ = LoadOptions(data)
 	}
 	cfg.opts = opts
+	cfg.WriteOpts()
 	return cfg
+}
+
+func (c *ConfigFS) WriteOpts() {
+	if c.config != "" {
+		t, err := c.opts.ToToml()
+		if err != nil {
+			log.Printf("Could not write options.toml: %v\n", err)
+			return
+		}
+		err = c.config.WriteFile("options.toml", t, 0666)
+		if err != nil {
+			log.Printf("Could not write options.toml: %v\n", err)
+		}
+	}
 }
 
 func (c *ConfigFS) SetConfigDir(dir string) {
