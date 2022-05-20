@@ -45,7 +45,7 @@ func newEditor() *Editor {
 	if err != nil {
 		log.Println(err)
 	}
-	thname := cfg.GetGlobalOption("theme").(string)
+	thname := cfg.MustGlobalStrOpt("theme")
 	th, err := cfg.LoadTheme(thname)
 	if err != nil {
 		log.Printf("error loading theme %s: %v\n", thname, err)

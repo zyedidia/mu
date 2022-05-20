@@ -1,10 +1,10 @@
 bindings <- {'ctrl+s', 'save'}
           / {'ctrl+q', 'quit'}
-          / {'enter', 'insert-at [cursor-pos] \\n; move-to [right [cursor-pos]]'}
-          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; move-to $char'}
+          / {'enter', 'insert-at [cursor-pos] \\n; move-to [right [cursor-pos]]; relocate'}
+          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; move-to $char; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
-          / {., 'insert-at [cursor-pos] $0; move-to [right [cursor-pos]]'}
-          / { move, 'move-to [$1]' }
+          / {., 'insert-at [cursor-pos] $0; move-to [right [cursor-pos]]; relocate'}
+          / { move, 'move-to [$1]; relocate' }
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}

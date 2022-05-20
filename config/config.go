@@ -101,6 +101,33 @@ var globalopts = map[string]interface{}{
 	"theme": "monokai",
 }
 
-func (cfs *ConfigFS) GetGlobalOption(name string) interface{} {
-	return globalopts[name]
+func GlobalOpt[T any](cfs *ConfigFS, name string) (t T, v bool) {
+	if i, ok := globalopts[name]; ok {
+		if o, ok := i.(T); ok {
+			return o, true
+		}
+	}
+	return
+}
+
+func MustGlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
+	if i, ok := globalopts[name]; ok {
+		if o, ok := i.(T); ok {
+			return o
+		}
+	}
+	return
+}
+
+func (cfs *ConfigFS) GlobalOpt(name string) (interface{}, bool) {
+	opt, v := globalopts[name]
+	return opt, v
+}
+
+func (cfs *ConfigFS) GlobalStrOpt(name string) (string, bool) {
+	return GlobalOpt[string](cfs, name)
+}
+
+func (cfs *ConfigFS) MustGlobalStrOpt(name string) string {
+	return MustGlobalOpt[string](cfs, name)
 }
