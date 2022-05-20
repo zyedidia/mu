@@ -94,7 +94,7 @@ func (e *Editor) NewBuffer() {
 // 	return e.panes[e.cur].Set(name, val)
 // }
 //
-// func (e *Editor) Get(name string) (string, error) {
+// func (e *Editor) Show(name string) (string, error) {
 // 	v := e.panes[e.cur].Get(name)
 // 	if v == nil {
 // 		return "", fmt.Errorf("option %s not found", name)
@@ -162,9 +162,9 @@ var commands = []tclutil.Command{
 	// 	"opt <name> <val>: assign option <name> to <val>",
 	// },
 	// {
-	// 	"get",
-	// 	(*Editor).Get,
-	// 	"get <name>: return the value of option <name>",
+	// 	"show",
+	// 	(*Editor).Show,
+	// 	"show <name>: return the value of option <name>",
 	// },
 	{
 		"key",

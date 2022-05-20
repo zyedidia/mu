@@ -1,10 +1,15 @@
 package config
 
 import (
+	"log"
 	"strings"
 
 	"github.com/pelletier/go-toml"
 )
+
+var globals = map[string]bool{
+	"theme": true,
+}
 
 type ftopts struct {
 	ft   string
@@ -53,13 +58,23 @@ func (o *Options) ToToml() ([]byte, error) {
 func (o *Options) LocalOptions(path, ft string) map[string]interface{} {
 	m := make(map[string]interface{})
 	for k, v := range o.top {
+		if globals[k] {
+			continue
+		}
 		m[k] = v
 	}
 	for _, ftopts := range o.ft {
-		if strings.HasPrefix(ftopts.ft, "ft:") && ftopts.ft[3:] == ft {
-			for k, v := range ftopts.opts {
-				m[k] = v
+		if strings.HasPrefix(ftopts.ft, "glob:") {
+			// TODO
+			log.Println("Glob unsupported (TODO)")
+			continue
+		}
+
+		for k, v := range ftopts.opts {
+			if globals[k] {
+				continue
 			}
+			m[k] = v
 		}
 	}
 	return m

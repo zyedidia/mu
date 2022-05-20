@@ -89,20 +89,14 @@ func (cfs *ConfigFS) MustLoadBindings(name string) kbd.Config {
 }
 
 func (cfs *ConfigFS) GetBufferOptions(path, ft string) map[string]interface{} {
-	return map[string]interface{}{
-		"encoding": nil,
-		"endings":  nil,
-		"filetype": nil,
-		"syntax":   true,
-	}
-}
-
-var globalopts = map[string]interface{}{
-	"theme": "monokai",
+	return cfs.opts.LocalOptions(path, ft)
 }
 
 func GlobalOpt[T any](cfs *ConfigFS, name string) (t T, v bool) {
-	if i, ok := globalopts[name]; ok {
+	if !globals[name] {
+		return
+	}
+	if i, ok := cfs.opts.top[name]; ok {
 		if o, ok := i.(T); ok {
 			return o, true
 		}
@@ -111,7 +105,10 @@ func GlobalOpt[T any](cfs *ConfigFS, name string) (t T, v bool) {
 }
 
 func MustGlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
-	if i, ok := globalopts[name]; ok {
+	if !globals[name] {
+		return
+	}
+	if i, ok := cfs.opts.top[name]; ok {
 		if o, ok := i.(T); ok {
 			return o
 		}
@@ -120,7 +117,10 @@ func MustGlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
 }
 
 func (cfs *ConfigFS) GlobalOpt(name string) (interface{}, bool) {
-	opt, v := globalopts[name]
+	if !globals[name] {
+		return nil, false
+	}
+	opt, v := cfs.opts.top[name]
 	return opt, v
 }
 

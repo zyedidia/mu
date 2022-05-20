@@ -3,6 +3,6 @@ syntax = true
 tabsize = 4
 tabstospaces = true
 
-[ft:makefile]
+["ft:makefile"]
 
 tabstospaces = false

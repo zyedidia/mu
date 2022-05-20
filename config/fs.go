@@ -34,6 +34,7 @@ func (wr WriteFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 type ConfigFS struct {
 	embed  embed.FS
 	config WriteFS
+	opts   *Options
 }
 
 func NewConfigFS(dir string) *ConfigFS {
@@ -41,6 +42,14 @@ func NewConfigFS(dir string) *ConfigFS {
 		embed: builtin,
 	}
 	cfg.SetConfigDir(dir)
+	data, _ := fs.ReadFile(cfg, "options.toml")
+	opts, err := LoadOptions(data)
+	if err != nil {
+		log.Printf("error loading options.toml: %v\n", err)
+		data, _ = fs.ReadFile(cfg.embed, "options.toml")
+		opts, _ = LoadOptions(data)
+	}
+	cfg.opts = opts
 	return cfg
 }
 
