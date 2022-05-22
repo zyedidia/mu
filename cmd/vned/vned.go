@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/ned"
+	"github.com/zyedidia/ned/build"
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
@@ -27,13 +29,17 @@ func (m Map[K, V]) Put(k K, v V) {
 const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
-	f, err := os.Create(filepath.Join(os.TempDir(), "vned.log"))
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+	if build.Debug == "ON" {
+		f, err := os.Create(filepath.Join(os.TempDir(), "vned.log"))
+		if err != nil {
+			log.Fatalf("error opening file: %v", err)
+		} else {
+			defer f.Close()
+			log.SetOutput(f)
+		}
+	} else {
+		log.SetOutput(io.Discard)
 	}
-	defer f.Close()
-
-	log.SetOutput(f)
 
 	flag.Parse()
 
