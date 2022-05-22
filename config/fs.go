@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type WriteFS string
@@ -51,6 +52,9 @@ func NewConfigFS(dir string) *ConfigFS {
 	}
 	cfg.opts = opts
 	cfg.WriteOpts()
+	if _, err := os.Stat(filepath.Join(dir, "bindings")); os.IsNotExist(err) {
+		cfg.WriteDefaultBindings()
+	}
 	return cfg
 }
 
@@ -64,6 +68,26 @@ func (c *ConfigFS) WriteOpts() {
 		err = c.config.WriteFile("options.toml", t, 0666)
 		if err != nil {
 			log.Printf("Could not write options.toml: %v\n", err)
+		}
+	}
+}
+
+func (c *ConfigFS) WriteDefaultBindings() {
+	if c.config != "" {
+		os.Mkdir(filepath.Join(c.ConfigDir(), "bindings"), 0750)
+		err := fs.WalkDir(c.embed, filepath.Join("embed", "bindings"), func(path string, d fs.DirEntry, err error) error {
+			if strings.HasSuffix(path, ".kbd") {
+				name := filepath.Base(path)
+				data, _ := fs.ReadFile(c.embed, path)
+				err := c.config.WriteFile(filepath.Join("bindings", name), data, 0666)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			log.Printf("error writing bindings: %v\n", err)
 		}
 	}
 }
