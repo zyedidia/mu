@@ -92,6 +92,10 @@ func (cfs *ConfigFS) GetBufferOptions(path, ft string) map[string]interface{} {
 	return cfs.opts.LocalOptions(path, ft)
 }
 
+func (cfs *ConfigFS) IsGlobalOpt(name string) bool {
+	return globals[name]
+}
+
 func GlobalOpt[T any](cfs *ConfigFS, name string) (t T, v bool) {
 	if !globals[name] {
 		return
@@ -130,4 +134,14 @@ func (cfs *ConfigFS) GlobalStrOpt(name string) (string, bool) {
 
 func (cfs *ConfigFS) MustGlobalStrOpt(name string) string {
 	return MustGlobalOpt[string](cfs, name)
+}
+
+func (cfs *ConfigFS) MustGlobalOpt(name string) interface{} {
+	return cfs.opts.top[name]
+}
+
+func (cfs *ConfigFS) SetGlobalOpt(name string, val interface{}) error {
+	cfs.opts.top[name] = val
+	// TODO: give error if new value has different type from old value
+	return nil
 }

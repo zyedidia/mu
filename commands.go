@@ -3,6 +3,7 @@ package ned
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/micro-editor/tcell/v2"
@@ -85,22 +86,32 @@ func (e *Editor) NewBuffer() {
 
 // --- Options ---
 
-// func (e *Editor) Opt(name string, val string) error {
-// 	if v, err := strconv.Atoi(val); err == nil {
-// 		return e.panes[e.cur].Set(name, v)
-// 	} else if v, err := strconv.ParseBool(val); err == nil {
-// 		return e.panes[e.cur].Set(name, v)
-// 	}
-// 	return e.panes[e.cur].Set(name, val)
-// }
-//
-// func (e *Editor) Show(name string) (string, error) {
-// 	v := e.panes[e.cur].Get(name)
-// 	if v == nil {
-// 		return "", fmt.Errorf("option %s not found", name)
-// 	}
-// 	return fmt.Sprintf("%v", v), nil
-// }
+func (e *Editor) Opt(name string, val string) error {
+	if v, err := strconv.Atoi(val); err == nil {
+		return e.setOpt(name, v)
+	} else if v, err := strconv.ParseBool(val); err == nil {
+		return e.setOpt(name, v)
+	}
+	return e.setOpt(name, val)
+}
+
+func (e *Editor) setOpt(name string, val interface{}) error {
+	if e.config.IsGlobalOpt(name) {
+		return e.config.SetGlobalOpt(name, val)
+	}
+	return e.panes[e.cur].SetOpt(name, val)
+}
+
+func (e *Editor) Get(name string) (string, error) {
+	if e.config.IsGlobalOpt(name) {
+		return fmt.Sprintf("%v", e.config.MustGlobalOpt(name)), nil
+	}
+	v, ok := e.panes[e.cur].GetOpt(name)
+	if !ok {
+		return "", fmt.Errorf("option %s not found", name)
+	}
+	return fmt.Sprintf("%v", v), nil
+}
 
 // --- Key events ---
 
@@ -156,16 +167,16 @@ var commands = []tclutil.Command{
 		(*Editor).NewBuffer,
 		"new-buffer: open a new empty buffer",
 	},
-	// {
-	// 	"opt",
-	// 	(*Editor).Opt,
-	// 	"opt <name> <val>: assign option <name> to <val>",
-	// },
-	// {
-	// 	"show",
-	// 	(*Editor).Show,
-	// 	"show <name>: return the value of option <name>",
-	// },
+	{
+		"opt",
+		(*Editor).Opt,
+		"opt <name> <val>: assign option <name> to <val>",
+	},
+	{
+		"get",
+		(*Editor).Get,
+		"get <name>: return the value of option <name>",
+	},
 	{
 		"key",
 		(*Editor).Key,

@@ -34,6 +34,14 @@ func GetOpt[T any](opts map[string]interface{}, name string) (t T, v bool) {
 	return
 }
 
+func (b *Buffer) GetOpt(name string) (o interface{}, v bool) {
+	if opt, ok := b.Options[name]; ok {
+		return opt, true
+	}
+	log.Printf("error getting option %s: not found\n", name)
+	return
+}
+
 func (b *Buffer) GetStrOpt(name string) (o string, v bool) {
 	if opt, ok := b.Options[name]; ok {
 		if str, ok := opt.(string); ok {

@@ -161,12 +161,3 @@ func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style the
 func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
 	fill(' ', e.theme.Default())
 }
-
-func copymap(m map[string]*Option) map[string]*Option {
-	newm := make(map[string]*Option)
-	for k, v := range m {
-		nv := *v
-		newm[k] = &nv
-	}
-	return newm
-}

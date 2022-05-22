@@ -29,3 +29,7 @@ func (bp *BufPane) SetOpt(opt string, val interface{}) error {
 	}
 	return bp.Buffer.SetOpt(opt, val)
 }
+
+func (bp *BufPane) GetOpt(opt string) (interface{}, bool) {
+	return bp.Buffer.GetOpt(opt)
+}
