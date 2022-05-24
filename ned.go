@@ -38,7 +38,7 @@ type Editor struct {
 }
 
 func newEditor() *Editor {
-	cfg := config.NewConfigFS(config.DefaultConfigDir())
+	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
 	interp := tcl.NewInterp()
 	_, err := interp.EvalString(tclcore)

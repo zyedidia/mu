@@ -1,7 +1,6 @@
 package config
 
 import (
-	"embed"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -33,14 +32,14 @@ func (wr WriteFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 }
 
 type ConfigFS struct {
-	embed  embed.FS
+	embed  fs.FS
 	config WriteFS
 	opts   *Options
 }
 
-func NewConfigFS(dir string) *ConfigFS {
+func NewConfigFS(dir string, sys string) *ConfigFS {
 	cfg := &ConfigFS{
-		embed: builtin,
+		embed: GetSysFS(sys),
 	}
 	cfg.SetConfigDir(dir)
 	data, _ := fs.ReadFile(cfg, "options.toml")
@@ -75,7 +74,7 @@ func (c *ConfigFS) WriteOpts() {
 func (c *ConfigFS) WriteDefaultBindings() {
 	if c.config != "" {
 		os.Mkdir(filepath.Join(c.ConfigDir(), "bindings"), 0750)
-		err := fs.WalkDir(c.embed, filepath.Join("embed", "bindings"), func(path string, d fs.DirEntry, err error) error {
+		err := fs.WalkDir(c.embed, "bindings", func(path string, d fs.DirEntry, err error) error {
 			if strings.HasSuffix(path, ".kbd") {
 				name := filepath.Base(path)
 				data, _ := fs.ReadFile(c.embed, path)
@@ -110,7 +109,7 @@ func (c *ConfigFS) Open(name string) (f fs.File, err error) {
 			return f, nil
 		}
 	}
-	f, err = c.embed.Open(filepath.Join("embed", name))
+	f, err = c.embed.Open(name)
 	return f, err
 }
 
@@ -121,7 +120,7 @@ func (c *ConfigFS) WalkDir(root string, walkfn fs.WalkDirFunc) error {
 			log.Printf("config walkdir error (%s): %v", root, err)
 		}
 	}
-	err := fs.WalkDir(c.embed, filepath.Join("embed", root), walkfn)
+	err := fs.WalkDir(c.embed, root, walkfn)
 	if err != nil {
 		log.Printf("embed walkdir error (%s): %v", root, err)
 	}
