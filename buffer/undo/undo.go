@@ -16,11 +16,10 @@ import (
 
 // A Delta can perform and undo some event on the base structure provided to
 // the tree.
-// TODO: when Go gets generics, make the base a generic type instead of an
-// interface.
-type Delta interface {
-	Do(base interface{})
-	Undo(base interface{})
+type Delta[T, S any] interface {
+	Do(base T)
+	Undo(base T)
+	State() S
 }
 
 // EventPtr is a reference to an event. Since we want to support serializing
@@ -28,8 +27,8 @@ type Delta interface {
 // and index into the pool (essentially pointers).
 type EventPtr int
 
-type Event struct {
-	Deltas []Delta
+type Event[T, S any] struct {
+	Deltas []Delta[T, S]
 	Time   time.Time // time this edit was made
 	Count  int       // distance from the first event
 
@@ -37,29 +36,29 @@ type Event struct {
 	Prev EventPtr
 }
 
-type UndoTree struct {
+type UndoTree[T, S any] struct {
 	Root    EventPtr // root of tree
 	Current EventPtr // current state in tree
-	Events  []Event  // pool of events that have been applied
+	Events  []Event[T, S]  // pool of events that have been applied
 
 	// If the count distance between the root and current state exceeds the
 	// cutoff, the root will be advanced until this is no longer the case
 	// (meaning undo history will be deleted. If the cutoff is NoCutoff, the
 	// undo history will never be deleted.
 	cutoff  int
-	base    interface{}
+	base    T
 	barrier bool
 }
 
 const NoCutoff = -1
 
-func NewTree(base interface{}, cutoff int) *UndoTree {
-	u := &UndoTree{
+func NewTree[T, S any](base T, cutoff int) *UndoTree[T, S] {
+	u := &UndoTree[T, S]{
 		base:   base,
 		cutoff: cutoff,
-		Events: make([]Event, 0),
+		Events: make([]Event[T, S], 0),
 	}
-	root := u.newEvent(Event{
+	root := u.newEvent(Event[T, S]{
 		Time: time.Now(),
 		Prev: -1,
 	})
@@ -70,7 +69,7 @@ func NewTree(base interface{}, cutoff int) *UndoTree {
 
 // ToBytes serializes and compresses the tree into a byte stream that can be
 // saved to disk.
-func (u *UndoTree) ToBytes() ([]byte, error) {
+func (u *UndoTree[T, S]) ToBytes() ([]byte, error) {
 	var buf bytes.Buffer
 	fz := gzip.NewWriter(&buf)
 	enc := gob.NewEncoder(fz)
@@ -80,8 +79,8 @@ func (u *UndoTree) ToBytes() ([]byte, error) {
 }
 
 // FromBytes loads the undo tree from a serialized version.
-func FromBytes(b []byte, base interface{}, cutoff int) (*UndoTree, error) {
-	u := UndoTree{
+func FromBytes[T, S any](b []byte, base T, cutoff int) (*UndoTree[T, S], error) {
+	u := UndoTree[T, S]{
 		base:   base,
 		cutoff: cutoff,
 	}
@@ -96,7 +95,7 @@ func FromBytes(b []byte, base interface{}, cutoff int) (*UndoTree, error) {
 }
 
 // AdjustSize ensures that the cutoff is respected.
-func (u *UndoTree) AdjustSize() {
+func (u *UndoTree[T, S]) AdjustSize() {
 	if u.cutoff != NoCutoff {
 		for u.current().Count-u.root().Count > u.cutoff && len(u.root().Next) > 0 {
 			next := u.root().Next[0]
@@ -111,12 +110,12 @@ func (u *UndoTree) AdjustSize() {
 const coalesceTime = time.Second
 
 // Barrier prevents coalescing on the next event application.
-func (u *UndoTree) Barrier() {
+func (u *UndoTree[T, S]) Barrier() {
 	u.barrier = true
 }
 
 // Apply a delta to the tree at the current position.
-func (u *UndoTree) Apply(d Delta) {
+func (u *UndoTree[T, S]) Apply(d Delta[T, S]) {
 	d.Do(u.base)
 
 	// If it hasn't been enough time since the last event, coalesce this event
@@ -128,8 +127,8 @@ func (u *UndoTree) Apply(d Delta) {
 	}
 
 	// otherwise create a new event
-	e := u.newEvent(Event{
-		Deltas: []Delta{d},
+	e := u.newEvent(Event[T, S]{
+		Deltas: []Delta[T, S]{d},
 		Time:   time.Now(),
 		Count:  u.current().Count + 1,
 		Next:   nil,
@@ -150,7 +149,7 @@ func (u *UndoTree) Apply(d Delta) {
 }
 
 // Undo from the current position.
-func (u *UndoTree) Undo() {
+func (u *UndoTree[T, S]) Undo() {
 	if u.current().Prev != -1 {
 		// undo all events in reverse order
 		deltas := u.current().Deltas
@@ -164,7 +163,7 @@ func (u *UndoTree) Undo() {
 // Redo the given event from the current position. The pointer must refer to an
 // event in the current event's set of possible next steps (returned by
 // RedoChoices). If that is not the case nothing will happen.
-func (u *UndoTree) Redo(e EventPtr) {
+func (u *UndoTree[T, S]) Redo(e EventPtr) {
 	var found bool
 	for _, ne := range u.current().Next {
 		if ne == e {
@@ -188,12 +187,12 @@ func (u *UndoTree) Redo(e EventPtr) {
 // RedoChoices returns the events that could be redone from here (each
 // corresponding to a separate undo branch in the tree. The list of events
 // returned is sorted from least recent to most recent.
-func (u *UndoTree) RedoChoices() []EventPtr {
+func (u *UndoTree[T, S]) RedoChoices() []EventPtr {
 	return u.current().Next
 }
 
 // RedoMostRecent applies redo to the most recent available event.
-func (u *UndoTree) RedoMostRecent() {
+func (u *UndoTree[T, S]) RedoMostRecent() {
 	if len(u.current().Next) <= 0 {
 		return
 	}
@@ -203,19 +202,19 @@ func (u *UndoTree) RedoMostRecent() {
 }
 
 // Below are some utility functions for using the custom pointer system.
-func (u *UndoTree) newEvent(ev Event) EventPtr {
+func (u *UndoTree[T, S]) newEvent(ev Event[T, S]) EventPtr {
 	u.Events = append(u.Events, ev)
 	return u.Root + EventPtr(len(u.Events)-1)
 }
 
-func (u *UndoTree) event(p EventPtr) *Event {
+func (u *UndoTree[T, S]) event(p EventPtr) *Event[T, S] {
 	return &u.Events[p-u.Root]
 }
 
-func (u *UndoTree) current() *Event {
+func (u *UndoTree[T, S]) current() *Event[T, S] {
 	return u.event(u.Current)
 }
 
-func (u *UndoTree) root() *Event {
+func (u *UndoTree[T, S]) root() *Event[T, S] {
 	return u.event(u.Root)
 }

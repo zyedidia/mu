@@ -18,17 +18,21 @@ type Add struct {
 	Amt int
 }
 
-func (a Add) Undo(base interface{}) {
-	*(base.(*int)) -= a.Amt
+func (a Add) Undo(base *int) {
+	*base -= a.Amt
 }
 
-func (a Add) Do(base interface{}) {
-	*(base.(*int)) += a.Amt
+func (a Add) Do(base *int) {
+	*base += a.Amt
+}
+
+func (a Add) State() bool {
+	return false
 }
 
 func TestUndo(t *testing.T) {
 	base := 42
-	u := undo.NewTree(&base, undo.NoCutoff)
+	u := undo.NewTree[*int, bool](&base, undo.NoCutoff)
 	u.Barrier()
 	u.Apply(Add{Amt: 5})
 	check(base, 47, t)
@@ -51,7 +55,7 @@ func TestUndo(t *testing.T) {
 
 func TestCoalesce(t *testing.T) {
 	base := 42
-	u := undo.NewTree(&base, undo.NoCutoff)
+	u := undo.NewTree[*int, bool](&base, undo.NoCutoff)
 	u.Apply(Add{Amt: 5})
 	u.Apply(Add{Amt: 5})
 	u.Apply(Add{Amt: 5})
@@ -64,7 +68,7 @@ func TestSerialize(t *testing.T) {
 	gob.Register(Add{})
 
 	base := 42
-	u := undo.NewTree(&base, undo.NoCutoff)
+	u := undo.NewTree[*int, bool](&base, undo.NoCutoff)
 	u.Barrier()
 	u.Apply(Add{Amt: 5})
 	u.Barrier()
@@ -76,7 +80,7 @@ func TestSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err = undo.FromBytes(b, &base, undo.NoCutoff)
+	u, err = undo.FromBytes[*int, bool](b, &base, undo.NoCutoff)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +95,7 @@ func TestSerialize(t *testing.T) {
 
 func TestCutoff(t *testing.T) {
 	base := 42
-	u := undo.NewTree(&base, 1000)
+	u := undo.NewTree[*int, bool](&base, 1000)
 	for i := 0; i < 10000; i++ {
 		u.Barrier()
 		u.Apply(Add{Amt: 5})
