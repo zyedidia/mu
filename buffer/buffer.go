@@ -39,6 +39,7 @@ type BufferData struct {
 	hisem       *semaphore.Weighted
 	matches     *flare.Matches
 	minvalid    bool
+	redraw chan struct{}
 
 	refs int
 
@@ -60,7 +61,7 @@ type Input interface {
 	FullName() string
 }
 
-func NewBuffer(in Input, out Output, cfg Config, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
+func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
 	dat, c := share(in.FullName())
 	if dat != nil {
 		return &Buffer{
@@ -74,7 +75,7 @@ func NewBuffer(in Input, out Output, cfg Config, share func(name string) (*Buffe
 		cursors: []Cursor{c},
 		cur: 0,
 	}
-	dat, err = NewBufferData(in, out, cfg, b)
+	dat, err = NewBufferData(in, out, cfg, redraw, b)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func NewBuffer(in Input, out Output, cfg Config, share func(name string) (*Buffe
 	return b, nil
 }
 
-func NewBufferData(r Input, out Output, cfg Config, parent *Buffer) (*BufferData, error) {
+func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent *Buffer) (*BufferData, error) {
 	data, err := r.Read()
 	if err != nil {
 		return nil, err
@@ -108,6 +109,7 @@ func NewBufferData(r Input, out Output, cfg Config, parent *Buffer) (*BufferData
 		hisem:   semaphore.NewWeighted(1),
 		refs:    1,
 		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
+		redraw: redraw,
 	}
 
 	buf.undo = undo.NewTree[*Buffer, Cursor](parent, undo.NoCutoff)
