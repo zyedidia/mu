@@ -1,9 +1,11 @@
 bindings <- {'ctrl+s', 'save'}
           / {'ctrl+q', 'quit'}
-          / {'enter', 'insert-at [cursor-pos] \\n; move-to [right [cursor-pos]]; relocate'}
-          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; move-to $char; relocate'}
+          / {'ctrl+z', 'undo'}
+          / {'ctrl+y', 'redo'}
+          / {'enter', 'insert-at [cursor-pos] \\n; relocate'}
+          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
-          / {., 'insert-at [cursor-pos] $0; move-to [right [cursor-pos]]; relocate'}
+          / {., 'insert-at [cursor-pos] $0; relocate'}
           / { move, 'move-to [$1]; relocate' }
 
 move <- {'left', 'left [cursor-pos]'}
