@@ -35,6 +35,8 @@ type Editor struct {
 
 	theme  *theme.Theme
 	config *config.ConfigFS
+
+	redraw chan struct{}
 }
 
 func newEditor() *Editor {
@@ -57,6 +59,7 @@ func newEditor() *Editor {
 		},
 		config: cfg,
 		theme:  th,
+		redraw: make(chan struct{}),
 	}
 	e.SetMode("micro")
 	e.Register()
@@ -162,4 +165,8 @@ func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style the
 
 func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
 	fill(' ', e.theme.Default())
+}
+
+func (e *Editor) Redraw() chan struct{} {
+	return e.redraw
 }

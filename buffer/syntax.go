@@ -84,6 +84,4 @@ func (b *BufferData) InitialHighlight() {
 
 	b.highlighter.HighlightFunc(b.Buffer.Text(), b.syntbl, nil, &vm.Interval{})
 	b.hisem.Release(1)
-
-	Notify <- struct{}{}
 }

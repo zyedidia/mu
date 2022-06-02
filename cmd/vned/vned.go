@@ -6,7 +6,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
@@ -81,15 +83,41 @@ func main() {
 		s.ShowCursor(x, y)
 	}
 
-	for {
-		ev := s.PollEvent()
+	evs := make(chan tcell.Event)
 
-		err := ed.HandleEvent(ev)
-		if err == ned.ErrQuit {
+	go func() {
+		for {
+			evs <- s.PollEvent()
+		}
+	}()
+
+	// Set up a signal receiver so we can exit gracefully if the user/OS shuts
+	// us down (closing the screen, saving backups, etc.).
+	sigterm := make(chan os.Signal, 1)
+	quit := make(chan struct{})
+	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP)
+
+	go func() {
+		for {
+			<-sigterm
+			quit <- struct{}{}
+		}
+	}()
+
+	for {
+		select {
+		case ev := <-evs:
+			err := ed.HandleEvent(ev)
+			if err == ned.ErrQuit {
+				s.Fini()
+				os.Exit(0)
+			} else if err != nil {
+				log.Println("Error:", err)
+			}
+		case <-quit:
 			s.Fini()
 			os.Exit(0)
-		} else if err != nil {
-			log.Println("Error:", err)
+		case <-ed.Redraw():
 		}
 
 		ed.Clear(fill)
