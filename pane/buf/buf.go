@@ -17,9 +17,6 @@ type BufPane struct {
 	*buffer.Buffer
 	vis buffer.RuneVisualizer
 
-	cursors []Cursor
-	cur     int
-
 	stpos, stcol  int
 	width, height int
 
@@ -49,20 +46,10 @@ func NewBufPane(b *buffer.Buffer, cfg Config) *BufPane {
 		},
 		scrollmargin:  3,
 		hscrollmargin: 1,
-		cursors:       []Cursor{SpawnCursorAt(0)},
 		cfg:           cfg,
 	}
 	bp.InitOpts()
 	return bp
-}
-
-func (bp *BufPane) GetCursorAt(pos int) Cursor {
-	for _, c := range bp.cursors {
-		if c.Pos == pos {
-			return c
-		}
-	}
-	return SpawnCursorAt(pos)
 }
 
 func (bp *BufPane) Register(interp *tcl.Interp) {
@@ -82,8 +69,4 @@ func (bp *BufPane) Help(w io.Writer) {
 		w.Write([]byte(cmd.Doc))
 		w.Write([]byte{'\n'})
 	}
-}
-
-func (bp *BufPane) Cursor() *Cursor {
-	return &bp.cursors[bp.cur]
 }

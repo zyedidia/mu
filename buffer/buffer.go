@@ -21,9 +21,9 @@ const (
 	diffCutoff = 4096 * 64
 )
 
-type Buffer struct {
+type BufferData struct {
 	*text.Buffer
-	undo *undo.UndoTree
+	undo *undo.UndoTree[*Buffer, Cursor]
 
 	ModTime time.Time
 	// this channel will be closed when the buffer exits.
@@ -46,13 +46,43 @@ type Buffer struct {
 	Options map[string]interface{}
 }
 
+type Buffer struct {
+    *BufferData
+
+    cursors []Cursor
+    cur int
+}
+
 type Input interface {
 	Read() ([]byte, error)
 	ModTime() (time.Time, error)
 	Name() string
+	FullName() string
 }
 
-func NewBuffer(r Input, out Output, cfg Config) (*Buffer, error) {
+func NewBuffer(in Input, out Output, cfg Config, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
+	dat, c := share(in.FullName())
+	if dat != nil {
+		return &Buffer{
+			BufferData: dat,
+			cursors: []Cursor{c},
+			cur: 0,
+		}, nil
+	}
+	c = Cursor{}
+	b = &Buffer{
+		cursors: []Cursor{c},
+		cur: 0,
+	}
+	dat, err = NewBufferData(in, out, cfg, b)
+	if err != nil {
+		return nil, err
+	}
+	b.BufferData = dat
+	return b, nil
+}
+
+func NewBufferData(r Input, out Output, cfg Config, parent *Buffer) (*BufferData, error) {
 	data, err := r.Read()
 	if err != nil {
 		return nil, err
@@ -69,7 +99,7 @@ func NewBuffer(r Input, out Output, cfg Config) (*Buffer, error) {
 		return nil, err
 	}
 
-	buf := &Buffer{
+	buf := &BufferData{
 		Buffer:  b,
 		in:      r,
 		out:     out,
@@ -80,7 +110,7 @@ func NewBuffer(r Input, out Output, cfg Config) (*Buffer, error) {
 		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
 	}
 
-	buf.undo = undo.NewTree(buf, undo.NoCutoff)
+	buf.undo = undo.NewTree[*Buffer, Cursor](parent, undo.NoCutoff)
 
 	buf.unmodified()
 
@@ -132,7 +162,7 @@ func getTextOpts(opts map[string]interface{}) text.Options {
 }
 
 // marks this buffer as unmodified
-func (b *Buffer) unmodified() {
+func (b *BufferData) unmodified() {
 	b.ModTime = time.Now()
 	b.modified = false
 	if b.Len() < hashCutoff {
@@ -162,7 +192,7 @@ func (b *Buffer) SetContent(newb *text.Buffer) {
 	// buffer with the new one. Sadly all undo history will be lost.
 	if b.Len() >= diffCutoff || newb.Len() >= diffCutoff {
 		b.Buffer = newb
-		b.undo = undo.NewTree(b, undo.NoCutoff)
+		b.undo = undo.NewTree[*Buffer, Cursor](b, undo.NoCutoff)
 		b.modified = true
 		return
 	}

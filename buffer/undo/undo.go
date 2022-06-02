@@ -193,12 +193,33 @@ func (u *UndoTree[T, S]) RedoChoices() []EventPtr {
 
 // RedoMostRecent applies redo to the most recent available event.
 func (u *UndoTree[T, S]) RedoMostRecent() {
-	if len(u.current().Next) <= 0 {
+	e, ok := u.MostRecent()
+	if !ok {
 		return
+	}
+	u.Redo(e)
+}
+
+func (u *UndoTree[T, S]) MostRecent() (EventPtr, bool) {
+	if len(u.current().Next) <= 0 {
+		return 0, false
 	}
 
 	e := u.current().Next[len(u.current().Next)-1]
-	u.Redo(e)
+	return e, true
+}
+
+func (u *UndoTree[T, S]) PrevState() (s S, ok bool) {
+	if u.current().Prev == -1 {
+		return s, false
+	}
+	return u.current().Deltas[0].State(), true
+}
+
+// use with caution, does not check that ep is valid
+func (u *UndoTree[T, S]) NextState(ep EventPtr) (s S) {
+	e := u.event(ep)
+	return e.Deltas[0].State()
 }
 
 // Below are some utility functions for using the custom pointer system.

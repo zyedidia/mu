@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/zyedidia/ned/pkg/cpu"
@@ -21,6 +22,10 @@ type Input interface {
 	ModTime() (time.Time, error)
 	// Name returns the name of this input source
 	Name() string
+	// FullName returns the full name if possible of this input source. If
+	// there are multiple references to the same input source they should
+	// always have the same full name (for example, absolute file path).
+	FullName() string
 }
 
 // A File is an input source for a local file. If the file does not exist,
@@ -62,6 +67,11 @@ func (f *File) Name() string {
 	return f.Path
 }
 
+func (f *File) FullName() string {
+	p, _ := filepath.Abs(f.Path)
+	return p
+}
+
 // A Reader is a general input source that reads from a SizedReaderAt.
 type Reader struct {
 	rs   SizedReaderAt
@@ -98,6 +108,10 @@ func (r *Reader) Name() string {
 	return r.name
 }
 
+func (r *Reader) FullName() string {
+	return r.Name()
+}
+
 // If the SizedReaderAt supports the ModTime() function, that will be called,
 // otherwise the time of the creation of the Reader will be used.
 func (r *Reader) ModTime() (time.Time, error) {
@@ -127,4 +141,8 @@ func (s *Stdin) Name() string {
 
 func (s *Stdin) ModTime() (time.Time, error) {
 	return s.time, nil
+}
+
+func (s *Stdin) FullName() string {
+	return s.Name()
 }

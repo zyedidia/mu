@@ -34,7 +34,7 @@ func GetOpt[T any](opts map[string]interface{}, name string) (t T, v bool) {
 	return
 }
 
-func (b *Buffer) GetOpt(name string) (o interface{}, v bool) {
+func (b *BufferData) GetOpt(name string) (o interface{}, v bool) {
 	if opt, ok := b.Options[name]; ok {
 		return opt, true
 	}
@@ -42,7 +42,7 @@ func (b *Buffer) GetOpt(name string) (o interface{}, v bool) {
 	return
 }
 
-func (b *Buffer) GetStrOpt(name string) (o string, v bool) {
+func (b *BufferData) GetStrOpt(name string) (o string, v bool) {
 	if opt, ok := b.Options[name]; ok {
 		if str, ok := opt.(string); ok {
 			return str, true
@@ -54,7 +54,7 @@ func (b *Buffer) GetStrOpt(name string) (o string, v bool) {
 	return
 }
 
-func (b *Buffer) GetBoolOpt(name string) (o bool, v bool) {
+func (b *BufferData) GetBoolOpt(name string) (o bool, v bool) {
 	if opt, ok := b.Options[name]; ok {
 		if bl, ok := opt.(bool); ok {
 			return bl, true
@@ -68,7 +68,7 @@ func (b *Buffer) GetBoolOpt(name string) (o bool, v bool) {
 
 // MustGetBoolOpt is the same as GetBoolOpt but returns the default value if it
 // is not found
-func (b *Buffer) MustGetBoolOpt(name string) bool {
+func (b *BufferData) MustGetBoolOpt(name string) bool {
 	if opt, ok := b.Options[name]; ok {
 		if bl, ok := opt.(bool); ok {
 			return bl
@@ -77,7 +77,7 @@ func (b *Buffer) MustGetBoolOpt(name string) bool {
 	return false
 }
 
-func (b *Buffer) SetOpt(name string, val interface{}) error {
+func (b *BufferData) SetOpt(name string, val interface{}) error {
 	b.Options[name] = val
 	return nil
 }

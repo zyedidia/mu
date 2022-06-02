@@ -45,7 +45,7 @@ func detectFtEarly(cfg Config, in Input) (string, bool) {
 }
 
 // Filetype returns this buffer's filetype.
-func (b *Buffer) Filetype() string {
+func (b *BufferData) Filetype() string {
 	if ft, ok := b.GetStrOpt("filetype"); ok {
 		return ft
 	}
@@ -54,7 +54,7 @@ func (b *Buffer) Filetype() string {
 
 // LoadHighlighter initializes the syntax highlighting memoization table and
 // loads the current filetype's highlighter.
-func (b *Buffer) LoadHighlighter() error {
+func (b *BufferData) LoadHighlighter() error {
 	if !b.MustGetBoolOpt("syntax") {
 		b.highlighter = nil
 		b.syntbl = memo.NoneTable{}
@@ -76,7 +76,7 @@ func (b *Buffer) LoadHighlighter() error {
 // semaphore so that it can be safely run from a separate thread. Once complete
 // it sends a notification to the general notification channel so that a redraw
 // can occur when initial highlighting is complete.
-func (b *Buffer) InitialHighlight() {
+func (b *BufferData) InitialHighlight() {
 	b.hisem.Acquire(context.Background(), 1)
 	if b.highlighter == nil {
 		return

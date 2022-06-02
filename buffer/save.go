@@ -16,7 +16,7 @@ type Output interface {
 }
 
 // Hash performs an md5 hash on the buffer's contents.
-func (b *Buffer) Hash() []byte {
+func (b *BufferData) Hash() []byte {
 	hasher := md5.New()
 	b.WriteTo(hasher)
 	return hasher.Sum(nil)

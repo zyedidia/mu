@@ -11,37 +11,54 @@ type Edit struct {
 	Start, End int
 	Text       []byte
 	Sub        []byte
+	C          Cursor
 }
 
 func init() {
 	gob.Register(Edit{})
 }
 
+func (e *Edit) State() Cursor {
+	return e.C
+}
+
 // Do modifies the base text buffer to remove the deleted range and insert
 // text.
-func (e *Edit) Do(base interface{}) {
-	buf := base.(*Buffer)
+func (e *Edit) Do(buf *Buffer) {
 	e.Sub = buf.Buffer.Slice(e.Start, e.End)
-	buf.Buffer.Remove(e.Start, e.End)
-	buf.Buffer.Insert(e.Start, e.Text)
-
-	buf.syntbl.ApplyEdit(memo.Edit{
-		Start: e.Start,
-		End:   e.End,
-		Len:   len(e.Text),
-	})
+	buf.edit(e.Start, e.End, e.Text)
 }
 
 // Undo modifies the base text buffer to remove Text and insert the substring.
-func (e *Edit) Undo(base interface{}) {
-	buf := base.(*Buffer)
-	buf.Buffer.Remove(e.Start, e.Start+len(e.Text))
-	buf.Buffer.Insert(e.Start, e.Sub)
+func (e *Edit) Undo(buf *Buffer) {
+	buf.edit(e.Start, e.Start+len(e.Text), e.Sub)
+}
 
-	buf.syntbl.ApplyEdit(memo.Edit{
-		Start: e.Start,
-		End:   e.Start + len(e.Text),
-		Len:   len(e.Sub),
+func (b *Buffer) edit(start, end int, val []byte) {
+	b.Buffer.Remove(start, end)
+	b.Buffer.Insert(start, val)
+	b.modified = true
+	b.minvalid = true
+
+	for i, c := range b.cursors {
+		p := c.Pos
+		// move for deletion
+		if c.Pos >= start && c.Pos < end {
+			p = start
+		} else if c.Pos >= start {
+			p -= end - start
+		}
+		// move for insertion
+		if p >= start {
+			p += len(val)
+		}
+		b.cursors[i].Pos = p
+	}
+
+	b.syntbl.ApplyEdit(memo.Edit{
+		Start: start,
+		End:   end,
+		Len:   len(val),
 	})
 }
 
@@ -65,14 +82,17 @@ func (b *Buffer) Remove(start, end int) {
 
 // Edit applies the given edit to the buffer and undo tree.
 func (b *Buffer) Edit(e *Edit) {
+	e.C = *b.Cursor()
 	b.undo.Apply(e)
-	b.modified = true
-	b.minvalid = true
 }
 
 // Undo the previous modification.
 func (b *Buffer) Undo() {
+	c, ok := b.undo.PrevState()
 	b.undo.Undo()
+	if ok {
+		b.PutCursor(c)
+	}
 }
 
 // UndoBarrier records a barrier for the undo so that the next event will not
@@ -83,5 +103,8 @@ func (b *Buffer) UndoBarrier() {
 
 // Redo the most recent modification.
 func (b *Buffer) Redo() {
-	b.undo.RedoMostRecent()
+	if ep, ok := b.undo.MostRecent(); ok {
+		b.PutCursor(b.undo.NextState(ep))
+		b.undo.Redo(ep)
+	}
 }

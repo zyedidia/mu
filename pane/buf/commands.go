@@ -37,6 +37,14 @@ func (bp *BufPane) Remove(from, to int) int {
 	return from
 }
 
+func (bp *BufPane) Undo() {
+	bp.Buffer.Undo()
+}
+
+func (bp *BufPane) Redo() {
+	bp.Buffer.Redo()
+}
+
 // --- Reading ---
 
 func (bp *BufPane) Read(from, to int) string {
@@ -82,12 +90,12 @@ func (bp *BufPane) FindUp(off int, regex string) ([]int, error) {
 // --- Movement ---
 
 func (bp *BufPane) Up(from int) int {
-	c := bp.GetCursorAt(from).Up(bp)
+	c := bp.CursorUp(bp.GetCursorAt(from))
 	return c.Pos
 }
 
 func (bp *BufPane) Down(from int) int {
-	c := bp.GetCursorAt(from).Down(bp)
+	c := bp.CursorDown(bp.GetCursorAt(from))
 	return c.Pos
 }
 
@@ -243,7 +251,7 @@ func (bp *BufPane) MoveTo(pos int) {
 	c := bp.Cursor()
 	*c = c.MoveTo(pos)
 	if !bp.vertical {
-		c.RecalcVX(bp)
+		bp.RecalcVX(c)
 	}
 	bp.vertical = false
 }
@@ -252,34 +260,9 @@ func (bp *BufPane) SelectTo(pos int) {
 	c := bp.Cursor()
 	*c = c.SelectTo(pos)
 	if !bp.vertical {
-		c.RecalcVX(bp)
+		bp.RecalcVX(c)
 	}
 	bp.vertical = false
-}
-
-func (bp *BufPane) SwitchCursor(idx int) error {
-	if idx >= 0 && idx < len(bp.cursors) {
-		bp.cur = idx
-		return nil
-	}
-	return fmt.Errorf("invalid cursor: %d", idx)
-}
-
-func (bp *BufPane) SpawnCursor(at int) {
-	bp.cursors = append(bp.cursors, bp.GetCursorAt(at))
-}
-
-func (bp *BufPane) RemoveCursor(idx int) error {
-	if idx < 0 || idx >= len(bp.cursors) {
-		return fmt.Errorf("invalid cursor: %d", idx)
-	}
-	copy(bp.cursors[idx:], bp.cursors[idx+1:])
-	bp.cursors = bp.cursors[:len(bp.cursors)-1]
-	return nil
-}
-
-func (bp *BufPane) NumCursors() int {
-	return len(bp.cursors)
 }
 
 func (bp *BufPane) CursorPos() int {
@@ -546,5 +529,15 @@ var commands = []tclutil.Command{
 		"vim-clamp",
 		(*BufPane).VimClamp,
 		"vim-clamp <pos>:",
+	},
+	{
+		"undo",
+		(*BufPane).Undo,
+		"undo:",
+	},
+	{
+		"redo",
+		(*BufPane).Redo,
+		"redo:",
 	},
 }

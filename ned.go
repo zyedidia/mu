@@ -141,7 +141,9 @@ func (e *Editor) MakePane() {
 }
 
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
-	b, err := buffer.NewBuffer(in, out, e.config)
+	b, err := buffer.NewBuffer(in, out, e.config, func(name string) (*buffer.BufferData, buffer.Cursor) {
+		return nil, buffer.Cursor{}
+	})
 	if err != nil {
 		return err
 	}
