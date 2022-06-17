@@ -47,13 +47,6 @@ func main() {
 
 	args := flag.Args()
 
-	var ed *ned.Editor
-	if len(args) > 0 {
-		ed = ned.NewEditorFromPath(args[0])
-	} else {
-		ed = ned.NewEditor()
-	}
-
 	s, e := tcell.NewScreen()
 	if e != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", e)
@@ -62,6 +55,13 @@ func main() {
 	if e := s.Init(); e != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", e)
 		os.Exit(1)
+	}
+
+	var ed *ned.Editor
+	if len(args) > 0 {
+		ed = ned.NewEditorFromPath(args[0], s)
+	} else {
+		ed = ned.NewEditor(s)
 	}
 
 	defer func() {

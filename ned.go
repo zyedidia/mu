@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/micro-editor/tcell/v2"
+	"github.com/zyedidia/clipper"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/ned/buffer"
@@ -20,9 +21,9 @@ import (
 	"github.com/zyedidia/ned/pkg/theme"
 )
 
-type Store[K, V any] interface {
-	Get(k K) (V, bool)
-	Put(k K, v V)
+type TermClip interface {
+	SetClipboard(reg string, text []byte) error
+	GetClipboard(reg string) ([]byte, error)
 }
 
 type Editor struct {
@@ -36,10 +37,13 @@ type Editor struct {
 	theme  *theme.Theme
 	config *config.ConfigFS
 
+	clipboard clipper.Clipboard
+	termclip  TermClip
+
 	redraw chan struct{}
 }
 
-func newEditor() *Editor {
+func newEditor(clip TermClip) *Editor {
 	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
 	interp := tcl.NewInterp()
@@ -57,24 +61,25 @@ func newEditor() *Editor {
 		modes: map[string]kbd.Config{
 			"micro": cfg.MustLoadBindings("micro"),
 		},
-		config: cfg,
-		theme:  th,
-		redraw: make(chan struct{}),
+		config:   cfg,
+		theme:    th,
+		redraw:   make(chan struct{}),
+		termclip: clip,
 	}
 	e.SetMode("micro")
 	e.Register()
 	return e
 }
 
-func NewEditor() *Editor {
-	e := newEditor()
+func NewEditor(clip TermClip) *Editor {
+	e := newEditor(clip)
 	e.MakePane()
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 	return e
 }
 
-func NewEditorFromPath(path string) *Editor {
-	e := newEditor()
+func NewEditorFromPath(path string, clip TermClip) *Editor {
+	e := newEditor(clip)
 	e.MakePane()
 	e.Open(path)
 	return e
@@ -89,6 +94,45 @@ func init() {
 	sort.Slice(commands, func(i, j int) bool {
 		return commands[i].Name < commands[j].Name
 	})
+}
+
+func (e *Editor) initClipboard() {
+	switch e.config.MustGlobalStrOpt("clipboard") {
+	case "external":
+		c, err := clipper.GetClipboard(clipper.Clipboards...)
+		if err == nil {
+			e.clipboard = c
+			return
+		}
+		e.config.SetGlobalOpt("clipboard", "internal")
+		log.Printf("error loading external clipboard: %v\n", err)
+	case "terminal":
+		if e.termclip == nil {
+			e.config.SetGlobalOpt("clipboard", "internal")
+			log.Printf("terminal clipboard is unavailable")
+		}
+	}
+	c := &clipper.Internal{}
+	c.Init()
+	e.clipboard = c
+}
+
+func (e *Editor) GetClipboard(reg string) ([]byte, error) {
+	if e.config.MustGlobalStrOpt("clipboard") == "terminal" {
+		return e.termclip.GetClipboard(reg)
+	} else if e.clipboard != nil {
+		return e.clipboard.ReadAll(reg)
+	}
+	return nil, errors.New("clipboard is unavailable")
+}
+
+func (e *Editor) SetClipboard(reg string, text []byte) error {
+	if e.config.MustGlobalStrOpt("clipboard") == "terminal" {
+		return e.termclip.SetClipboard(reg, text)
+	} else if e.clipboard != nil {
+		return e.clipboard.WriteAll(reg, text)
+	}
+	return errors.New("clipboard is unavailable")
 }
 
 func (e *Editor) SetMode(m string) error {
@@ -150,7 +194,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b, e.config)
+	e.panes[e.cur] = buf.NewBufPane(b, e.termclip, e.config)
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }

@@ -13,6 +13,11 @@ type Options interface {
 	Get(name string) interface{}
 }
 
+type Clipboard interface {
+	SetClipboard(reg string, text []byte) error
+	GetClipboard(reg string) ([]byte, error)
+}
+
 type BufPane struct {
 	*buffer.Buffer
 	vis buffer.RuneVisualizer
@@ -30,10 +35,12 @@ type BufPane struct {
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
 
+	clipboard Clipboard
+
 	cfg Config
 }
 
-func NewBufPane(b *buffer.Buffer, cfg Config) *BufPane {
+func NewBufPane(b *buffer.Buffer, clip Clipboard, cfg Config) *BufPane {
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -47,6 +54,7 @@ func NewBufPane(b *buffer.Buffer, cfg Config) *BufPane {
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		cfg:           cfg,
+		clipboard:     clip,
 	}
 	bp.InitOpts()
 	return bp

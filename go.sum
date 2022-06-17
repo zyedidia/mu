@@ -29,6 +29,8 @@ github.com/mattn/go-runewidth v0.0.10 h1:CoZ3S2P7pvtP45xOtBw+/mDL2z0RKI576gSkzRR
 github.com/mattn/go-runewidth v0.0.10/go.mod h1:RAqKPSqVFrSLVXbA8x7dzmKdmGzieGRCM46jaSJTDAk=
 github.com/micro-editor/tcell/v2 v2.2.3 h1:rjqzh01zjJtxBZvJotHCSsHCeIJu2Li2dUvGIJGpalI=
 github.com/micro-editor/tcell/v2 v2.2.3/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
+github.com/micro-editor/tcell/v2 v2.2.4 h1:D1PTuWgI2v9FJyMd2klzYHiy7o/6fPW084iUb/M8p+Y=
+github.com/micro-editor/tcell/v2 v2.2.4/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
 github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=
 github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/rivo/uniseg v0.1.0 h1:+2KBaVoUmb9XzDsrx/Ct0W/EYOSFf/nWTauy++DprtY=
@@ -37,6 +39,8 @@ github.com/segmentio/fasthash v1.0.3 h1:EI9+KE1EwvMLBWwjpRDc+fEM+prwxDYbslddQGtr
 github.com/segmentio/fasthash v1.0.3/go.mod h1:waKX8l2N8yckOgmSsXJi7x1ZfdKZ4x7KRMzBtS3oedY=
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 h1:QldyIu/L63oPpyvQmHgvgickp1Yw510KJOqX7H24mg8=
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778/go.mod h1:2MuV+tbUrU1zIOPMxZ5EncGwgmMJsa+9ucAQZXxsObs=
+github.com/zyedidia/clipper v0.1.0 h1:e16nhM1RgL3HYcugcHRUpMya1K830TS5uo6LlPJHySg=
+github.com/zyedidia/clipper v0.1.0/go.mod h1:7YApPNiiTZTXdKKZG92G50qj6mnWEX975Sdu65J7YpQ=
 github.com/zyedidia/flare v0.1.0 h1:lOEuJKfSMP2yzWLvu4lA99NzkgR4vzEo0qMCIURpvl0=
 github.com/zyedidia/flare v0.1.0/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
