@@ -180,15 +180,12 @@ func (e *Editor) Active() pane.Pane {
 }
 
 func (e *Editor) valid() bool {
-	return e.cur >= 0 && e.cur < len(e.panes)
+	return e.cur >= 0 && e.cur < len(e.panes) && e.panes[e.cur] != nil
 }
 
 func (e *Editor) MakePane() {
-	if e.valid() {
-		e.panes[e.cur].Unregister(e.interp)
-	}
 	e.panes = append(e.panes, nil)
-	e.cur = len(e.panes) - 1
+	e.SetPane(len(e.panes) - 1)
 }
 
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
@@ -227,4 +224,14 @@ func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
 
 func (e *Editor) Redraw() chan struct{} {
 	return e.redraw
+}
+
+func (e *Editor) SetPane(i int) {
+	if e.valid() {
+		e.panes[e.cur].Unregister(e.interp)
+	}
+	if e.panes[i] != nil {
+		e.panes[i].Register(e.interp)
+	}
+	e.cur = i
 }

@@ -15,9 +15,9 @@ func main() {
 
 	var ed *ned.Editor
 	if len(args) > 0 {
-		ed = ned.NewEditorFromPath(args[0])
+		ed = ned.NewEditorFromPath(args[0], nil)
 	} else {
-		ed = ned.NewEditor()
+		ed = ned.NewEditor(nil)
 	}
 
 	rl, err := readline.New("> ")

@@ -40,7 +40,7 @@ func (e *Editor) Quit() {
 	e.panes[len(e.panes)-1] = nil
 	e.panes = e.panes[:len(e.panes)-1]
 	if !e.valid() {
-		e.cur = len(e.panes) - 1
+		e.SetPane(len(e.panes) - 1)
 	}
 }
 
@@ -64,7 +64,7 @@ func (e *Editor) ShowBuffers() {
 func (e *Editor) SetBuffer(name string) error {
 	for i, b := range e.panes {
 		if b.Name() == name {
-			e.cur = i
+			e.SetPane(i)
 			return nil
 		}
 	}
@@ -75,7 +75,7 @@ func (e *Editor) SetBufferIdx(idx int) error {
 	if idx < 0 || idx >= len(e.panes) {
 		return fmt.Errorf("invalid buffer index: %d", idx)
 	}
-	e.cur = idx
+	e.SetPane(idx)
 	return nil
 }
 
