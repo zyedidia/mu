@@ -32,7 +32,7 @@ const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
 	if build.Debug == "ON" {
-		f, err := os.Create(filepath.Join(os.TempDir(), "vned.log"))
+		f, err := os.Create(filepath.Join("/tmp", "vned.log"))
 		if err != nil {
 			log.Fatalf("error opening file: %v", err)
 		} else {

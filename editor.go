@@ -40,6 +40,9 @@ type Editor struct {
 	clipboard clipper.Clipboard
 	termclip  TermClip
 
+	w, h    int
+	infobar *InfoBar
+
 	redraw chan struct{}
 }
 
@@ -65,6 +68,7 @@ func newEditor(clip TermClip) *Editor {
 		theme:    th,
 		redraw:   make(chan struct{}),
 		termclip: clip,
+		infobar:  &InfoBar{},
 	}
 	e.SetMode("micro")
 	e.Register()
@@ -194,17 +198,27 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b, e.termclip, e.config)
+	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config)
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }
 
 func (e *Editor) Resize(w, h int) {
-	e.panes[e.cur].Resize(w, h)
+	e.w, e.h = w, h
+	e.panes[e.cur].Resize(w, h-1)
 }
 
 func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
 	e.panes[e.cur].Display(draw, cursor, e.theme)
+	e.infobar.Display(func(x, y int, mainc rune, combc []rune, err bool) {
+		st := e.theme.Default()
+		if err {
+			st = e.theme.Style("error")
+		}
+		draw(x, e.h-1+y, mainc, combc, st)
+	}, func(x, y int) {
+		cursor(x, e.h+y)
+	})
 }
 
 func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
