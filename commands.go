@@ -39,7 +39,7 @@ func (e *Editor) Quit() {
 	copy(e.panes[i:], e.panes[i+1:])
 	e.panes[len(e.panes)-1] = nil
 	e.panes = e.panes[:len(e.panes)-1]
-	if !e.valid() {
+	if !e.valid() && len(e.panes) > 0 {
 		e.SetPane(len(e.panes) - 1)
 	}
 }
