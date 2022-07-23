@@ -20,6 +20,11 @@ func (bp *BufPane) SaveAs(path string) error {
 	return bp.Save()
 }
 
+func (bp *BufPane) Command() error {
+	bp.messager.Prompt("> ")
+	return nil
+}
+
 // --- Editing ---
 
 func (bp *BufPane) InsertAt(pos int, val string) {
@@ -539,5 +544,10 @@ var commands = []tclutil.Command{
 		"redo",
 		(*BufPane).Redo,
 		"redo:",
+	},
+	{
+		"command",
+		(*BufPane).Command,
+		"command: open a command prompt",
 	},
 }

@@ -59,17 +59,19 @@ func newEditor(clip TermClip) *Editor {
 	if err != nil {
 		log.Printf("error loading theme %s: %v\n", thname, err)
 	}
+	redraw := make(chan struct{})
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
 			"micro": cfg.MustLoadBindings("micro"),
+			"cmd":   cfg.MustLoadBindings("cmd"),
 		},
 		config:   cfg,
 		theme:    th,
-		redraw:   make(chan struct{}),
+		redraw:   redraw,
 		termclip: clip,
-		infobar:  &InfoBar{},
 	}
+	e.infobar = NewInfoBar(interp, buffer.NewEmptyBuffer(cfg, redraw), e)
 	e.SetMode("micro")
 	e.Register()
 	return e
@@ -202,19 +204,18 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
-	e.panes[e.cur].Resize(w, h-1)
+	for _, p := range e.panes {
+		p.Resize(w, h-1)
+	}
+	e.infobar.Resize(w, 1)
 }
 
 func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
 	e.panes[e.cur].Display(draw, cursor, e.theme)
-	e.infobar.Display(func(x, y int, mainc rune, combc []rune, err bool) {
-		st := e.theme.Default()
-		if err {
-			st = e.theme.Style("error")
-		}
-		draw(x, e.h-1+y, mainc, combc, st)
+	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+		draw(x, e.h+y-1, mainc, combc, style)
 	}, func(x, y int) {
-		cursor(x, e.h+y)
+		cursor(x, e.h+y-1)
 	})
 }
 
@@ -227,7 +228,9 @@ func (e *Editor) Redraw() chan struct{} {
 }
 
 func (e *Editor) SetPane(i int) {
-	if e.valid() {
+	if e.infobar.active {
+		e.infobar.cmd.Unregister(e.interp)
+	} else if e.valid() {
 		e.panes[e.cur].Unregister(e.interp)
 	}
 	if e.panes[i] != nil {

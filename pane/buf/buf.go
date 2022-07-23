@@ -19,6 +19,7 @@ type Clipboard interface {
 }
 
 type Messager interface {
+	Prompt(p string)
 	Message(msg string)
 	Error(msg string)
 	Clear()

@@ -146,3 +146,29 @@ func (s *Stdin) ModTime() (time.Time, error) {
 func (s *Stdin) FullName() string {
 	return s.Name()
 }
+
+type Empty struct {
+	time time.Time
+}
+
+func NewEmpty() *Empty {
+	return &Empty{
+		time: time.Now(),
+	}
+}
+
+func (e *Empty) Read() ([]byte, error) {
+	return []byte{}, nil
+}
+
+func (e *Empty) Name() string {
+	return "empty"
+}
+
+func (e *Empty) ModTime() (time.Time, error) {
+	return e.time, nil
+}
+
+func (e *Empty) FullName() string {
+	return e.Name()
+}

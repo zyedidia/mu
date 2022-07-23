@@ -11,6 +11,8 @@ import (
 	"github.com/zyedidia/ned/buffer/text"
 	"github.com/zyedidia/ned/buffer/text/endings"
 	"github.com/zyedidia/ned/buffer/undo"
+	"github.com/zyedidia/ned/pkg/input"
+	"github.com/zyedidia/ned/pkg/output"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
@@ -39,7 +41,7 @@ type BufferData struct {
 	hisem       *semaphore.Weighted
 	matches     *flare.Matches
 	minvalid    bool
-	redraw chan struct{}
+	redraw      chan struct{}
 
 	refs int
 
@@ -48,10 +50,10 @@ type BufferData struct {
 }
 
 type Buffer struct {
-    *BufferData
+	*BufferData
 
-    cursors []Cursor
-    cur int
+	cursors []Cursor
+	cur     int
 }
 
 type Input interface {
@@ -62,25 +64,35 @@ type Input interface {
 }
 
 func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
-	dat, c := share(in.FullName())
-	if dat != nil {
-		return &Buffer{
-			BufferData: dat,
-			cursors: []Cursor{c},
-			cur: 0,
-		}, nil
+	if share != nil {
+		dat, c := share(in.FullName())
+		if dat != nil {
+			return &Buffer{
+				BufferData: dat,
+				cursors:    []Cursor{c},
+				cur:        0,
+			}, nil
+		}
 	}
-	c = Cursor{}
+	c := Cursor{}
 	b = &Buffer{
 		cursors: []Cursor{c},
-		cur: 0,
+		cur:     0,
 	}
-	dat, err = NewBufferData(in, out, cfg, redraw, b)
+	dat, err := NewBufferData(in, out, cfg, redraw, b)
 	if err != nil {
 		return nil, err
 	}
 	b.BufferData = dat
 	return b, nil
+}
+
+func NewEmptyBuffer(cfg Config, redraw chan struct{}) *Buffer {
+	b, err := NewBuffer(input.NewEmpty(), &output.Discard{}, cfg, redraw, nil)
+	if err != nil {
+		panic(fmt.Sprintf("opening an empty buffer caused an error: %v", err))
+	}
+	return b
 }
 
 func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent *Buffer) (*BufferData, error) {
@@ -109,7 +121,7 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 		hisem:   semaphore.NewWeighted(1),
 		refs:    1,
 		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
-		redraw: redraw,
+		redraw:  redraw,
 	}
 
 	buf.undo = undo.NewTree[*Buffer, Cursor](parent, undo.NoCutoff)
