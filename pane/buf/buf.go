@@ -39,6 +39,7 @@ type BufPane struct {
 	softwrap, wordwrap bool
 	scrollmargin       int
 	hscrollmargin      int
+	linenums           bool
 
 	// Vertical is a bit of a hack for cursor movements to indicate
 	// that they are performing a purely vertical move. This signals
@@ -65,6 +66,30 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 		},
 		scrollmargin:  3,
 		hscrollmargin: 1,
+		linenums:      true,
+		cfg:           cfg,
+		clipboard:     clip,
+		messager:      msger,
+		eval:          eval,
+	}
+	bp.InitOpts()
+	return bp
+}
+
+func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator, linenums bool) *BufPane {
+	bp := &BufPane{
+		Buffer: b,
+		vis: &buffer.Visualizer{
+			TabSize: 4,
+			CharMap: map[rune]string{
+				'\t': "|",
+				'\n': "\n",
+				' ':  " ",
+			},
+		},
+		scrollmargin:  3,
+		hscrollmargin: 1,
+		linenums:      linenums,
 		cfg:           cfg,
 		clipboard:     clip,
 		messager:      msger,

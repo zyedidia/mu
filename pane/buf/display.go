@@ -174,8 +174,12 @@ func (b *BufPane) Relocate(bl bLoc) {
 func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int), th *theme.Theme) {
 	c := b.Cursor()
 
-	linewid := b.lnumWidth()
 	lines := make([]int, b.height)
+
+	linewid := 0
+	if b.linenums {
+		linewid = b.lnumWidth()
+	}
 
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
@@ -193,21 +197,23 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		},
 	}, b.bufferWidth(), b.height, b.stpos, b.vis, b.softwrap, b.wordwrap, th)
 
-	strfmt := fmt.Sprintf("%%%dd ", linewid-1)
-	for i, l := range lines {
-		var ls string
-		if l == 0 {
-			return
-		} else if i != 0 && l == lines[i-1] {
-			ls = strings.Repeat(" ", linewid)
-		} else {
-			ls = fmt.Sprintf(strfmt, l)
-		}
+	if b.linenums {
+		strfmt := fmt.Sprintf("%%%dd ", linewid-1)
+		for i, l := range lines {
+			var ls string
+			if l == 0 {
+				return
+			} else if i != 0 && l == lines[i-1] {
+				ls = strings.Repeat(" ", linewid)
+			} else {
+				ls = fmt.Sprintf(strfmt, l)
+			}
 
-		x := 0
-		for _, c := range ls {
-			draw(x, i, c, nil, th.Style("line-number"))
-			x++
+			x := 0
+			for _, c := range ls {
+				draw(x, i, c, nil, th.Style("line-number"))
+				x++
+			}
 		}
 	}
 }

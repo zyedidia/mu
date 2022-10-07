@@ -16,7 +16,7 @@ type InfoPane struct {
 
 func NewInfoPane(interp *tcl.Interp, b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.Evaluator) *InfoPane {
 	return &InfoPane{
-		BufPane: buf.NewBufPane(b, msger, clip, cfg, eval),
+		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, eval, false),
 		interp:  interp,
 	}
 }
