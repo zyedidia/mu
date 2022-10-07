@@ -112,7 +112,7 @@ func main() {
 				s.Fini()
 				os.Exit(0)
 			} else if err != nil {
-				log.Println("Error:", err)
+				ed.Error(err.Error())
 			}
 		case <-quit:
 			s.Fini()

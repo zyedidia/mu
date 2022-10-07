@@ -197,7 +197,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config)
+	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config, e)
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }
@@ -237,4 +237,12 @@ func (e *Editor) SetPane(i int) {
 		e.panes[i].Register(e.interp)
 	}
 	e.cur = i
+}
+
+func (e *Editor) Error(msg string) {
+	e.infobar.Error(msg)
+}
+
+func (e *Editor) Message(msg string) {
+	e.infobar.Message(msg)
 }

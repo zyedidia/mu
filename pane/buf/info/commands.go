@@ -3,9 +3,9 @@ package info
 import "github.com/zyedidia/ned/pkg/tclutil"
 
 func (ip *InfoPane) Execute() error {
-	_, err := ip.interp.EvalString(string(ip.Bytes()))
-	ip.interp.ClearError()
-	return err
+	text := string(ip.Bytes())
+	ip.BufPane.Remove(0, ip.BufPane.Len())
+	return ip.done(text, false)
 }
 
 var commands = []tclutil.Command{

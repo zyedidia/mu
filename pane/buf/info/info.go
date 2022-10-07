@@ -10,13 +10,20 @@ import (
 type InfoPane struct {
 	*buf.BufPane
 	interp *tcl.Interp
+
+	done func(resp string, canceled bool) error
 }
 
-func NewInfoPane(interp *tcl.Interp, b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config) *InfoPane {
+func NewInfoPane(interp *tcl.Interp, b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.Evaluator) *InfoPane {
 	return &InfoPane{
-		BufPane: buf.NewBufPane(b, msger, clip, cfg),
+		BufPane: buf.NewBufPane(b, msger, clip, cfg, eval),
 		interp:  interp,
 	}
+}
+
+func (ip *InfoPane) Activate(interp *tcl.Interp, done func(resp string, canceled bool) error) {
+	ip.done = done
+	ip.Register(interp)
 }
 
 func (ip *InfoPane) Register(interp *tcl.Interp) {

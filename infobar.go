@@ -36,7 +36,7 @@ type InfoBar struct {
 
 func NewInfoBar(interp *tcl.Interp, b *buffer.Buffer, ed *Editor) *InfoBar {
 	return &InfoBar{
-		cmd: info.NewInfoPane(interp, b, nil, ed.termclip, ed.config),
+		cmd: info.NewInfoPane(interp, b, nil, ed.termclip, ed.config, ed),
 		ed:  ed,
 	}
 }
@@ -81,17 +81,26 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 	if i.active {
 		i.cmd.Display(func(bx, by int, mainc rune, combc []rune, style theme.Style) {
 			draw(x+bx, y+by, mainc, combc, style)
-		}, cursor, i.ed.theme)
+		}, func(bx, by int) {
+			cursor(x+bx, y+by)
+		}, i.ed.theme)
 		return
 	}
 }
 
-func (i *InfoBar) Prompt(msg string) {
+func (i *InfoBar) Prompt(msg string, done func(resp string, canceled bool) error) {
 	i.Message(msg)
 	log.Println(i.ed.SetMode("cmd"))
 	i.active = true
 	if i.ed.valid() {
 		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
 	}
-	i.cmd.Register(i.ed.interp)
+	i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
+		i.cmd.Unregister(i.ed.interp)
+		i.active = false
+		i.ed.panes[i.ed.cur].Register(i.ed.interp)
+		err := done(resp, canceled)
+		log.Println("ERROR", err)
+		return err
+	})
 }

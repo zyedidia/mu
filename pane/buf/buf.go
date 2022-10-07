@@ -19,10 +19,14 @@ type Clipboard interface {
 }
 
 type Messager interface {
-	Prompt(p string)
+	Prompt(p string, done func(resp string, canceled bool) error)
 	Message(msg string)
 	Error(msg string)
 	Clear()
+}
+
+type Evaluator interface {
+	Eval(cmd string) error
 }
 
 type BufPane struct {
@@ -45,9 +49,10 @@ type BufPane struct {
 	messager  Messager
 	clipboard Clipboard
 	cfg       Config
+	eval      Evaluator
 }
 
-func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config) *BufPane {
+func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator) *BufPane {
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -63,6 +68,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config) *B
 		cfg:           cfg,
 		clipboard:     clip,
 		messager:      msger,
+		eval:          eval,
 	}
 	bp.InitOpts()
 	return bp
