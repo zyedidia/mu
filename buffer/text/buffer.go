@@ -106,6 +106,11 @@ func (b *Buffer) Insert(pos int, val []byte) {
 	b.Liner.Invalidate()
 }
 
+func (b *Buffer) Write(p []byte) (int, error) {
+	b.Insert(b.Len(), p)
+	return len(p), nil
+}
+
 // Remove the range [start:end).
 func (b *Buffer) Remove(start, end int) {
 	b.lock.Lock()

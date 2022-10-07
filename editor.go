@@ -150,6 +150,10 @@ func (e *Editor) SetMode(m string) error {
 	return nil
 }
 
+func (e *Editor) GetMode() string {
+	return e.mode.Core
+}
+
 func (e *Editor) HandleEvent(ev tcell.Event) error {
 	if e.mode == nil {
 		return errors.New("no mode selected")

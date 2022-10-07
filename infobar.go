@@ -90,7 +90,8 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 
 func (i *InfoBar) Prompt(msg string, done func(resp string, canceled bool) error) {
 	i.Message(msg)
-	log.Println(i.ed.SetMode("cmd"))
+	m := i.ed.GetMode()
+	i.ed.SetMode("cmd")
 	i.active = true
 	if i.ed.valid() {
 		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
@@ -99,8 +100,8 @@ func (i *InfoBar) Prompt(msg string, done func(resp string, canceled bool) error
 		i.cmd.Unregister(i.ed.interp)
 		i.active = false
 		i.ed.panes[i.ed.cur].Register(i.ed.interp)
-		err := done(resp, canceled)
-		log.Println("ERROR", err)
-		return err
+		i.ed.SetMode(m)
+		i.Clear()
+		return done(resp, canceled)
 	})
 }
