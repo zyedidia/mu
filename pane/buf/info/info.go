@@ -15,6 +15,10 @@ type InfoResp struct {
 type InfoPane struct {
 	*buf.BufPane
 
+	// history of responses, 0 is oldest
+	history []string
+	histidx int
+
 	Done chan InfoResp
 }
 

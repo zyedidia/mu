@@ -103,13 +103,13 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
 	interp.SetCmd(name, cmd)
 }
 
-func Eval(interp *gotcl.Interp, cmd string) error {
-	_, err := interp.EvalString(cmd)
+func Eval(interp *gotcl.Interp, cmd string) (*gotcl.TclObj, error) {
+	obj, err := interp.EvalString(cmd)
 	interp.ClearError()
-	return err
+	return obj, err
 }
 
-func EvalWithVars(interp *gotcl.Interp, cmd string, vars []interface{}) error {
+func EvalWithVars(interp *gotcl.Interp, cmd string, vars []interface{}) (*gotcl.TclObj, error) {
 	for i, v := range vars {
 		name := strconv.Itoa(i)
 		switch v := v.(type) {

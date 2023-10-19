@@ -285,6 +285,14 @@ func (bp *BufPane) SelectTo(pos int) {
 func (bp *BufPane) CursorPos() int {
 	return bp.Cursor().Pos
 }
+func (bp *BufPane) CursorCol() int {
+	_, c := bp.LineColAt(bp.Cursor().Pos)
+	return c + 1
+}
+func (bp *BufPane) CursorLine() int {
+	l, _ := bp.LineColAt(bp.Cursor().Pos)
+	return l + 1
+}
 
 func (bp *BufPane) CursorRange() []int {
 	sel := bp.Cursor().Sel
@@ -331,7 +339,19 @@ func (bp *BufPane) Name() string {
 	return bp.Buffer.Name()
 }
 
+func (bp *BufPane) Modified() string {
+	if bp.Buffer.Modified() {
+		return "+ "
+	}
+	return ""
+}
+
 var commands = []tclutil.Command{
+	{
+		"modified",
+		(*BufPane).Modified,
+		"modified: returns a symbol indicating if the buffer is modified",
+	},
 	{
 		"save",
 		(*BufPane).Save,
@@ -521,6 +541,16 @@ var commands = []tclutil.Command{
 		"cursor-pos",
 		(*BufPane).CursorPos,
 		"cursor-pos: returns the position of the current cursor",
+	},
+	{
+		"cursor-col",
+		(*BufPane).CursorCol,
+		"cursor-col: returns the column number of the current cursor",
+	},
+	{
+		"cursor-line",
+		(*BufPane).CursorLine,
+		"cursor-line: returns the line number of the current cursor",
 	},
 	{
 		"cursor-range",

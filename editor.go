@@ -57,8 +57,9 @@ type Editor struct {
 
 	log *buffer.Buffer
 
-	w, h    int
-	infobar *InfoBar
+	w, h      int
+	infobar   *InfoBar
+	statusbar *StatusBar
 
 	Redraw chan struct{}
 	Errors chan error
@@ -77,7 +78,7 @@ func newEditor(clip TermClip) *Editor {
 	if err != nil {
 		log.Printf("error loading theme %s: %v\n", thname, err)
 	}
-	redraw := make(chan struct{})
+	redraw := make(chan struct{}, 16)
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
@@ -89,10 +90,11 @@ func newEditor(clip TermClip) *Editor {
 		theme:    th,
 		termclip: clip,
 		Redraw:   redraw,
-		Errors:   make(chan error),
+		Errors:   make(chan error, 16),
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 	}
-	e.infobar = NewInfoBar(buffer.NewEmptyBuffer(cfg, redraw), e)
+	e.statusbar = NewStatusBar(e, defLeft, defRight)
+	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
 	e.MustSetMode("micro")
 	e.Register()
 	return e
@@ -263,7 +265,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
 	for _, p := range e.panes {
-		p.Resize(w, h-1)
+		p.Resize(w, h-2)
 	}
 	e.infobar.Resize(w, 1)
 }
@@ -281,6 +283,9 @@ func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y in
 	}, func(x, y int) {
 		cursor(x, e.h+y-1)
 	})
+	e.statusbar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+		draw(x, e.h+y-2, mainc, combc, style)
+	}, e.w)
 }
 
 func (e *Editor) SetPane(i int) {

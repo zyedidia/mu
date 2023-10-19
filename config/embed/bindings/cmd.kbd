@@ -1,8 +1,8 @@
-bindings <- {'ctrl+s', 'save'}
-          / {'ctrl+z', 'undo'}
-          / {'ctrl+e', 'command'}
+bindings <- {'ctrl+z', 'undo'}
           / {'ctrl+y', 'redo'}
-          / {'enter', 'execute'}
+          / {'enter',  'execute'}
+          / {'up',     'history-prev'}
+          / {'down',   'history-next'}
           / {'ctrl+q', 'cancel'}
           / {'ctrl+c', 'cancel'}
           / {'escape', 'cancel'}
@@ -13,8 +13,6 @@ bindings <- {'ctrl+s', 'save'}
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}
-      / {'up', 'up [cursor-pos]'}
-      / {'down', 'down [cursor-pos]'}
       / {'ctrl+down', 'size'}
       / {'ctrl+up', 'return 0'}
       / {'ctrl+left', 'word-left [cursor-pos]'}
