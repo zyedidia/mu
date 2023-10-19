@@ -18,7 +18,7 @@ type InfoPane struct {
 	Done chan InfoResp
 }
 
-func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.CmdRunner) *InfoPane {
+func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.Evaluator) *InfoPane {
 	ip := &InfoPane{
 		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, eval, false),
 		Done:    make(chan InfoResp),

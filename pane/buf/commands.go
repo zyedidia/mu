@@ -33,7 +33,7 @@ func (bp *BufPane) Command() error {
 	if canceled {
 		return nil
 	}
-	err := bp.eval.RunCommand(out, nil)
+	err := bp.eval.Eval(out, nil)
 	return err
 }
 

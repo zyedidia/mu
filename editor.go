@@ -194,25 +194,14 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	if ok {
 		go func() {
 			e.displayLock.Lock()
-			err := e.RunCommand(action.Cmd, action.Vars)
+			err := e.Eval(action.Cmd, action.Vars)
 			if err != nil {
-				if err.Error() == ErrQuit.Error() {
-					err = ErrQuit
-				}
 				e.Errors <- err
 				e.Error(err.Error())
 			}
 			e.SendRedraw()
 		}()
 	}
-}
-
-func (e *Editor) RunCommand(cmd string, vars []interface{}) error {
-	err := e.Eval(cmd, vars)
-	if len(e.panes) == 0 {
-		return ErrQuit
-	}
-	return err
 }
 
 func (e *Editor) Register() {

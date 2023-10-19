@@ -41,5 +41,9 @@ var ErrQuit = errors.New("quit")
 
 func (e *Editor) Eval(cmd string, vars []interface{}) error {
 	interp := gotcl.NewInterpFrom(e.interp)
-	return tclutil.EvalWithVars(interp, cmd, vars)
+	err := tclutil.EvalWithVars(interp, cmd, vars)
+	if len(e.panes) == 0 {
+		return ErrQuit
+	}
+	return err
 }

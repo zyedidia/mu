@@ -29,8 +29,8 @@ type Messager interface {
 	Clear()
 }
 
-type CmdRunner interface {
-	RunCommand(cmd string, vars []interface{}) error
+type Evaluator interface {
+	Eval(cmd string, vars []interface{}) error
 }
 
 type BufPane struct {
@@ -54,10 +54,10 @@ type BufPane struct {
 	messager  Messager
 	clipboard Clipboard
 	cfg       Config
-	eval      CmdRunner
+	eval      Evaluator
 }
 
-func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval CmdRunner) *BufPane {
+func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator) *BufPane {
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -80,7 +80,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 	return bp
 }
 
-func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval CmdRunner, linenums bool) *BufPane {
+func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator, linenums bool) *BufPane {
 	bp := NewBufPane(b, msger, clip, cfg, eval)
 	bp.linenums = linenums
 	return bp
