@@ -8,6 +8,7 @@
 // obtained will now silently point to invalid memory.  Attempting to access
 // data in them will crash the application.
 
+//go:build windows
 // +build windows
 
 package gommap

@@ -4,35 +4,11 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/buffer/text"
+	"github.com/zyedidia/mu/pkg/input"
 )
-
-type inputstr struct {
-	str  []byte
-	time time.Time
-}
-
-func bslice(str []byte) *inputstr {
-	return &inputstr{
-		str:  str,
-		time: time.Now(),
-	}
-}
-
-func (i *inputstr) Read() ([]byte, error) {
-	return i.str, nil
-}
-
-func (i *inputstr) ModTime() (time.Time, error) {
-	return i.time, nil
-}
-
-func (i *inputstr) Name() string {
-	return "testdata"
-}
 
 var letters = []byte("\nabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
@@ -52,7 +28,7 @@ func check(want, got []byte, t *testing.T) {
 
 func TestUndo(t *testing.T) {
 	base := []byte("the quick brown fox")
-	b, err := buffer.NewBuffer(bslice(base), nil, buffer.Options{})
+	b, err := buffer.NewBuffer(input.NewReader(bytes.NewReader(base), ""), nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +72,12 @@ var (
 
 func TestDiff(t *testing.T) {
 	base := text1
-	b, err := buffer.NewBuffer(bslice(base), nil, buffer.Options{})
+	b, err := buffer.NewBuffer(input.NewReader(bytes.NewReader(base), ""), nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	b.SetContent(text.NewBufferFromUTF8(text2, b.Opts.Options))
+	b.SetContent(text.NewBufferFromUTF8(text2, text.Options{}))
 
 	check(text2, b.Bytes(), t)
 	b.Undo()

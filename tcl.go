@@ -2,7 +2,6 @@ package mu
 
 import (
 	"errors"
-	"reflect"
 
 	"github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/pkg/tclutil"
@@ -30,12 +29,6 @@ proc repeat-fn {n fn} {
 	}
 }
 `
-
-var errInterface reflect.Type
-
-func init() {
-	errInterface = reflect.TypeOf((*error)(nil)).Elem()
-}
 
 var ErrQuit = errors.New("quit")
 

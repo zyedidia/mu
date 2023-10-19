@@ -1,4 +1,5 @@
 // Atomic file saving is not possible on Windows.
+//go:build !windows
 // +build !windows
 
 package output

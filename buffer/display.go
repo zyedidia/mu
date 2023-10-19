@@ -212,13 +212,6 @@ loop:
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func (b *Buffer) wordSizeAt(vx, off int, wordchar func(r rune) bool, displayer RuneVisualizer) int {
 	vn := 0
 	r, _, sz := b.DecodeGraphemeAt(off)

@@ -37,9 +37,9 @@ type Event[T, S any] struct {
 }
 
 type UndoTree[T, S any] struct {
-	Root    EventPtr // root of tree
-	Current EventPtr // current state in tree
-	Events  []Event[T, S]  // pool of events that have been applied
+	Root    EventPtr      // root of tree
+	Current EventPtr      // current state in tree
+	Events  []Event[T, S] // pool of events that have been applied
 
 	// If the count distance between the root and current state exceeds the
 	// cutoff, the root will be advanced until this is no longer the case

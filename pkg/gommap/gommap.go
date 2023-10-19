@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // This package offers the MMap type that manipulates a memory mapped file or

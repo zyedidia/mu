@@ -83,7 +83,7 @@ func (cfs *ConfigFS) LoadBindings(name string) (kbd.Config, error) {
 func (cfs *ConfigFS) MustLoadBindings(name string) kbd.Config {
 	b, err := cfs.LoadBindings(name)
 	if err != nil {
-		panic(fmt.Errorf("error loading internal bindings (%s): %v\n", name, err))
+		panic(fmt.Errorf("error loading internal bindings (%s): %v", name, err))
 	}
 	return b
 }

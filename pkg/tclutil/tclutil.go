@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 )
 
@@ -103,13 +102,13 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
 	interp.SetCmd(name, cmd)
 }
 
-func Eval(interp *gotcl.Interp, cmd string) (*gotcl.TclObj, error) {
+func Eval(interp *tcl.Interp, cmd string) (*tcl.TclObj, error) {
 	obj, err := interp.EvalString(cmd)
 	interp.ClearError()
 	return obj, err
 }
 
-func EvalWithVars(interp *gotcl.Interp, cmd string, vars []interface{}) (*gotcl.TclObj, error) {
+func EvalWithVars(interp *tcl.Interp, cmd string, vars []interface{}) (*tcl.TclObj, error) {
 	for i, v := range vars {
 		name := strconv.Itoa(i)
 		switch v := v.(type) {

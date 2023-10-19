@@ -13,11 +13,11 @@ func main() {
 
 	args := flag.Args()
 
-	var ed *ned.Editor
+	var ed *mu.Editor
 	if len(args) > 0 {
-		ed = ned.NewEditorFromPath(args[0], nil)
+		ed = mu.NewEditorFromPath(args[0], nil)
 	} else {
-		ed = ned.NewEditor(nil)
+		ed = mu.NewEditor(nil)
 	}
 
 	rl, err := readline.New("> ")
@@ -31,8 +31,8 @@ func main() {
 		if err != nil { // io.EOF
 			break
 		}
-		err = ed.Eval(line)
-		if err == ned.ErrQuit {
+		err = ed.Eval(line, nil)
+		if err == mu.ErrQuit {
 			break
 		} else if err != nil {
 			fmt.Println("Error:", err)

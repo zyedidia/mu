@@ -1,3 +1,4 @@
+//go:build (darwin && amd64) || (linux && 386) || (linux && amd64) || (freebsd && amd64)
 // +build darwin,amd64 linux,386 linux,amd64 freebsd,amd64
 
 package input

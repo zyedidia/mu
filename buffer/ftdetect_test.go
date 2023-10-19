@@ -23,7 +23,7 @@ func TestFiletypeDetect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.fname, func(t *testing.T) {
 			in := input.NewReader(strings.NewReader(tt.content), tt.fname)
-			b, err := buffer.NewBuffer(in, nil, buffer.Options{})
+			b, err := buffer.NewBuffer(in, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
