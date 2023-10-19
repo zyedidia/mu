@@ -34,8 +34,9 @@ type Editor struct {
 	evalLock    sync.Mutex
 	displayLock sync.Mutex
 
-	modes map[string]kbd.Config
-	mode  *kbd.Config
+	modes    map[string]kbd.Config
+	mode     *kbd.Config
+	modeLock sync.Mutex
 
 	theme  *theme.Theme
 	config *config.ConfigFS
@@ -76,7 +77,7 @@ func newEditor(clip TermClip) *Editor {
 		Redraw:   redraw,
 		Errors:   make(chan error),
 	}
-	e.infobar = NewInfoBar(interp, buffer.NewEmptyBuffer(cfg, redraw), e)
+	e.infobar = NewInfoBar(buffer.NewEmptyBuffer(cfg, redraw), e)
 	e.SetMode("micro")
 	e.Register()
 	return e
@@ -147,6 +148,8 @@ func (e *Editor) SetClipboard(reg string, text []byte) error {
 }
 
 func (e *Editor) SetMode(m string) error {
+	e.modeLock.Lock()
+	defer e.modeLock.Unlock()
 	mode, ok := e.modes[m]
 	if !ok {
 		return fmt.Errorf("mode %s does not exist", m)
@@ -156,6 +159,8 @@ func (e *Editor) SetMode(m string) error {
 }
 
 func (e *Editor) GetMode() string {
+	e.modeLock.Lock()
+	defer e.modeLock.Unlock()
 	return e.mode.Core
 }
 
@@ -179,13 +184,19 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	if ok {
 		go func() {
 			e.displayLock.Lock()
-			err := e.Eval(action.Cmd, action.Vars)
-			if len(e.panes) == 0 {
-				e.Errors <- ErrQuit
-				return
-			}
-			if err != nil {
-				err = e.Active().Eval(action.Cmd, action.Vars)
+
+			var err error
+			if e.infobar.active {
+				err = e.infobar.cmd.Eval(action.Cmd, action.Vars)
+			} else {
+				err = e.Eval(action.Cmd, action.Vars)
+				if len(e.panes) == 0 {
+					e.Errors <- ErrQuit
+					return
+				}
+				if err != nil {
+					err = e.Active().Eval(action.Cmd, action.Vars)
+				}
 			}
 			if err != nil {
 				e.Error(err.Error())

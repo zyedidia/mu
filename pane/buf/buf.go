@@ -21,7 +21,7 @@ type Clipboard interface {
 }
 
 type Messager interface {
-	Prompt(p string, done func(resp string, canceled bool) error)
+	Prompt(p string) (string, bool)
 	Message(msg string)
 	Error(msg string)
 	Clear()

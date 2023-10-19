@@ -3,7 +3,6 @@ package ned
 import (
 	"log"
 
-	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pane/buf/info"
 	"github.com/zyedidia/ned/pkg/grapheme"
@@ -24,9 +23,9 @@ type InfoBar struct {
 	ed     *Editor
 }
 
-func NewInfoBar(interp *tcl.Interp, b *buffer.Buffer, ed *Editor) *InfoBar {
+func NewInfoBar(b *buffer.Buffer, ed *Editor) *InfoBar {
 	return &InfoBar{
-		cmd: info.NewInfoPane(interp, b, nil, ed.termclip, ed.config, ed),
+		cmd: info.NewInfoPane(b, nil, ed.termclip, ed.config, ed),
 		ed:  ed,
 	}
 }
@@ -78,38 +77,42 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 	}
 }
 
-func (i *InfoBar) Prompt(msg string, done func(resp string, canceled bool) error) {
+func (i *InfoBar) Prompt(msg string) (resp string, canceled bool) {
 	i.Message(msg)
 	m := i.ed.GetMode()
 	i.ed.SetMode("cmd")
 	i.active = true
-	if i.ed.valid() {
-		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
-	}
-	i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
-		i.cmd.Unregister(i.ed.interp)
-		i.active = false
-		i.ed.panes[i.ed.cur].Register(i.ed.interp)
-		i.ed.SetMode(m)
-		i.Clear()
-		return done(resp, canceled)
-	})
+	i.ed.SendRedraw()
+	r := <-i.cmd.Done
+	i.ed.displayLock.Lock()
+	i.ed.SetMode(m)
+	i.Clear()
+	i.active = false
+	return r.Resp, r.Canceled
+	// i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
+	// 	i.cmd.Unregister(i.ed.interp)
+	// 	i.active = false
+	// 	i.ed.panes[i.ed.cur].Register(i.ed.interp)
+	// 	i.ed.SetMode(m)
+	// 	i.Clear()
+	// 	return done(resp, canceled)
+	// })
 }
 
 func (i *InfoBar) CharPrompt(msg string, done func(resp string, canceled bool) error) {
-	i.Message(msg)
-	m := i.ed.GetMode()
-	i.ed.SetMode("charcmd")
-	i.active = true
-	if i.ed.valid() {
-		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
-	}
-	i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
-		i.cmd.Unregister(i.ed.interp)
-		i.active = false
-		i.ed.panes[i.ed.cur].Register(i.ed.interp)
-		i.ed.SetMode(m)
-		i.Clear()
-		return done(resp, canceled)
-	})
+	// i.Message(msg)
+	// m := i.ed.GetMode()
+	// i.ed.SetMode("charcmd")
+	// i.active = true
+	// if i.ed.valid() {
+	// 	i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
+	// }
+	// i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
+	// 	i.cmd.Unregister(i.ed.interp)
+	// 	i.active = false
+	// 	i.ed.panes[i.ed.cur].Register(i.ed.interp)
+	// 	i.ed.SetMode(m)
+	// 	i.Clear()
+	// 	return done(resp, canceled)
+	// })
 }

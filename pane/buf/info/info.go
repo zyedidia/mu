@@ -1,29 +1,48 @@
 package info
 
 import (
+	"sync"
+
+	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pane/buf"
 	"github.com/zyedidia/ned/pkg/tclutil"
 )
 
+type InfoResp struct {
+	Resp     string
+	Canceled bool
+}
+
 type InfoPane struct {
 	*buf.BufPane
 	interp *tcl.Interp
+	lock   sync.Mutex
 
-	done func(resp string, canceled bool) error
+	Done chan InfoResp
 }
 
-func NewInfoPane(interp *tcl.Interp, b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.Evaluator) *InfoPane {
-	return &InfoPane{
+func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, eval buf.Evaluator) *InfoPane {
+	interp := gotcl.NewInterp()
+	ip := &InfoPane{
 		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, eval, false),
 		interp:  interp,
+		Done:    make(chan InfoResp),
 	}
+	ip.Register(interp)
+	return ip
 }
 
-func (ip *InfoPane) Activate(interp *tcl.Interp, done func(resp string, canceled bool) error) {
-	ip.done = done
-	ip.Register(interp)
+func (ip *InfoPane) Eval(cmd string, vars []interface{}) error {
+	ip.lock.Lock()
+	defer ip.lock.Unlock()
+	interp := gotcl.NewInterpFrom(ip.interp)
+	err := tclutil.EvalWithVars(interp, cmd, vars)
+	if err != nil {
+		return ip.BufPane.Eval(cmd, vars)
+	}
+	return err
 }
 
 func (ip *InfoPane) Register(interp *tcl.Interp) {

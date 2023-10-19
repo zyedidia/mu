@@ -21,13 +21,18 @@ func (bp *BufPane) SaveAs(path string) error {
 }
 
 func (bp *BufPane) Command() error {
-	bp.messager.Prompt("> ", func(resp string, canceled bool) error {
-		if canceled {
-			return nil
-		}
-		return bp.eval.Eval(resp, nil)
-	})
+	out, canceled := bp.messager.Prompt("> ")
+	if !canceled {
+		bp.messager.Message(out)
+	}
 	return nil
+	// bp.messager.Prompt("> ", func(resp string, canceled bool) error {
+	// 	if canceled {
+	// 		return nil
+	// 	}
+	// 	return bp.eval.Eval(resp, nil)
+	// })
+	// return nil
 }
 
 // --- Editing ---

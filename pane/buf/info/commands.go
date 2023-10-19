@@ -1,21 +1,26 @@
 package info
 
-import "github.com/zyedidia/ned/pkg/tclutil"
+import (
+	"github.com/zyedidia/ned/pkg/tclutil"
+)
 
 func (ip *InfoPane) Execute() error {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
-	return ip.done(text, false)
+	ip.Done <- InfoResp{text, false}
+	return nil
 }
 
 func (ip *InfoPane) Cancel() error {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
-	return ip.done(text, true)
+	ip.Done <- InfoResp{text, true}
+	return nil
 }
 
 func (ip *InfoPane) EnterChar(char rune) error {
-	return ip.done(string(char), false)
+	ip.Done <- InfoResp{string(char), false}
+	return nil
 }
 
 var commands = []tclutil.Command{
