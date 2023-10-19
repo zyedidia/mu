@@ -65,6 +65,15 @@ func (bp *BufPane) Redo() {
 	bp.Buffer.Redo()
 }
 
+func (bp *BufPane) Paste() error {
+	b, err := bp.clip.GetClipboard("clipboard")
+	if err != nil {
+		return err
+	}
+	bp.Buffer.Insert(bp.Cursor().Pos, b)
+	return nil
+}
+
 // --- Reading ---
 
 func (bp *BufPane) Read(from, to int) string {
@@ -589,6 +598,11 @@ var commands = []tclutil.Command{
 		"redo",
 		(*BufPane).Redo,
 		"redo:",
+	},
+	{
+		"paste",
+		(*BufPane).Paste,
+		"paste: inserts the contents of the clipboard at the current cursor's position",
 	},
 	{
 		"command",

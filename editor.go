@@ -97,6 +97,7 @@ func newEditor(clip TermClip) *Editor {
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
 	e.MustSetMode("micro")
 	e.Register()
+	e.initClipboard()
 	return e
 }
 
@@ -257,7 +258,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	if err != nil {
 		return err
 	}
-	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config, e)
+	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e, e.config, e)
 	e.panes[e.cur].Register(e.interp)
 	return nil
 }

@@ -9,7 +9,8 @@ import (
 )
 
 var globals = map[string]bool{
-	"theme": true,
+	"theme":     true,
+	"clipboard": true,
 }
 
 type ftopts struct {

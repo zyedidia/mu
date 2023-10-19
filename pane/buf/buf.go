@@ -51,10 +51,10 @@ type BufPane struct {
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
 
-	messager  Messager
-	clipboard Clipboard
-	cfg       Config
-	eval      Evaluator
+	messager Messager
+	clip     Clipboard
+	cfg      Config
+	eval     Evaluator
 }
 
 func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator) *BufPane {
@@ -72,7 +72,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 		hscrollmargin: 1,
 		linenums:      true,
 		cfg:           cfg,
-		clipboard:     clip,
+		clip:          clip,
 		messager:      msger,
 		eval:          eval,
 	}

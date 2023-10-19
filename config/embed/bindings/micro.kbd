@@ -3,6 +3,7 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+z', 'undo'}
           / {'ctrl+e', 'command'}
           / {'ctrl+y', 'redo'}
+          / {'ctrl+v', 'paste'}
           / {'enter', 'insert-at [cursor-pos] \\n; relocate'}
           / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}

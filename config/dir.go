@@ -15,5 +15,5 @@ func DefaultConfigDir() string {
 		log.Printf("error finding user home dir: %v", err)
 		return ""
 	}
-	return filepath.Join(home, ".config", "vned")
+	return filepath.Join(home, ".config", "mu")
 }
