@@ -1,4 +1,4 @@
-package ned
+package mu
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	goerrors "github.com/go-errors/errors"
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/clipper"
@@ -25,6 +27,16 @@ import (
 type TermClip interface {
 	SetClipboard(reg string, text []byte) error
 	GetClipboard(reg string) ([]byte, error)
+}
+
+const errmsg = `Please report this issue online on GitHub.`
+
+type PanicErr struct {
+	trace string
+}
+
+func (e PanicErr) Error() string {
+	return fmt.Sprintf("%s\n%v\n%s\n", "panic! (recoverable)", e.trace, errmsg)
 }
 
 type Editor struct {
@@ -181,6 +193,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 	if rev, ok := ev.(*tcell.EventResize); ok {
 		e.displayLock.Lock()
+		defer e.displayLock.Unlock()
 		w, h := rev.Size()
 		e.Resize(w, h)
 		e.SendRedraw()
@@ -194,6 +207,14 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	if ok {
 		go func() {
 			e.displayLock.Lock()
+			defer e.displayLock.Unlock()
+
+			defer func() {
+				if err := recover(); err != nil {
+					e.Errors <- PanicErr{goerrors.Wrap(err, 2).ErrorStack()}
+				}
+			}()
+
 			err := e.Eval(action.Cmd, action.Vars)
 			if err != nil {
 				e.Errors <- err
@@ -211,7 +232,6 @@ func (e *Editor) Register() {
 }
 
 func (e *Editor) SendRedraw() {
-	e.displayLock.Unlock()
 	e.Redraw <- struct{}{}
 }
 

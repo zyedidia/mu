@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
 	if build.Debug == "ON" {
-		f, err := os.Create(filepath.Join("/tmp", "vned.log"))
+		f, err := os.Create(filepath.Join("/tmp", "mu.log"))
 		if err != nil {
 			log.Fatalf("error opening file: %v", err)
 		} else {
@@ -57,11 +58,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var ed *ned.Editor
+	var ed *mu.Editor
 	if len(args) > 0 {
-		ed = ned.NewEditorFromPath(args[0], s)
+		ed = mu.NewEditorFromPath(args[0], s)
 	} else {
-		ed = ned.NewEditor(s)
+		ed = mu.NewEditor(s)
 	}
 
 	defer func() {
@@ -109,12 +110,33 @@ func main() {
 	}()
 
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				s.Fini()
+				fmt.Printf("%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
+				os.Exit(1)
+			}
+		}()
+
 	loop:
 		for {
 			select {
 			case err := <-ed.Errors:
-				if errors.Is(err, ned.ErrQuit) {
+				if errors.Is(err, mu.ErrQuit) {
 					break loop
+				}
+				var pe mu.PanicErr
+				if errors.As(err, &pe) {
+					s.Suspend()
+					fmt.Println(err)
+
+					fmt.Print("Press enter to continue")
+					reader := bufio.NewReader(os.Stdin)
+					reader.ReadString('\n')
+
+					s.Resume()
+					ed.Display(fill, draw, cursor)
+					s.Show()
 				}
 			case <-ed.Redraw:
 				ed.Display(fill, draw, cursor)

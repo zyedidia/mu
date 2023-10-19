@@ -1,4 +1,4 @@
-package ned
+package mu
 
 import (
 	"log"
@@ -95,6 +95,7 @@ func (i *InfoBar) prompt(msg, mode string) (resp string, canceled bool) {
 	}
 	i.cmd.Register(i.ed.interp)
 	i.ed.SendRedraw()
+	i.ed.displayLock.Unlock()
 	r := <-i.cmd.Done
 	i.ed.displayLock.Lock()
 	i.ed.MustSetMode(m)
