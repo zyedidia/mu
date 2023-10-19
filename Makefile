@@ -3,7 +3,7 @@
 VERSION = $(shell go run ./tools/build-version.go)
 DATE = $(shell go run ./tools/build-date.go)
 COMMIT = $(shell git rev-parse --short HEAD)
-BUILDPKG = github.com/zyedidia/ned/build
+BUILDPKG = github.com/zyedidia/mu/build
 
 ifneq ($(FASTBUILD),1)
 LINKVARS += -X '$(BUILDPKG).Version=$(VERSION)' -X '$(BUILDPKG).CompileDate=$(DATE)' -X '$(BUILDPKG).CommitHash=$(COMMIT)'
@@ -20,13 +20,13 @@ GOFLAGS = -trimpath $(LDFLAGS) $(TAGS)
 all: build
 
 install:
-	go install $(GOFLAGS) ./cmd/vned
+	go install $(GOFLAGS) ./cmd/mu
 
 build:
-	go build $(GOFLAGS) ./cmd/vned
+	go build $(GOFLAGS) ./cmd/mu
 
-ned:
-	go build $(GOFLAGS) ./cmd/ned
+mutxt:
+	go build $(GOFLAGS) ./cmd/mutxt
 
 test:
 	go test ./...

@@ -3,10 +3,10 @@ package ned
 import (
 	"log"
 
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/pane/buf/info"
-	"github.com/zyedidia/ned/pkg/grapheme"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/pane/buf/info"
+	"github.com/zyedidia/mu/pkg/grapheme"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 type message struct {

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/zyedidia/ned"
+	"github.com/zyedidia/mu"
 	"gopkg.in/readline.v1"
 )
 

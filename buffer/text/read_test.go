@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/zyedidia/ned/buffer/text"
-	"github.com/zyedidia/ned/buffer/text/endings"
+	"github.com/zyedidia/mu/buffer/text"
+	"github.com/zyedidia/mu/buffer/text/endings"
 	"golang.org/x/text/encoding/htmlindex"
 )
 

@@ -11,9 +11,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/zyedidia/ned/pkg/cpu"
-	"github.com/zyedidia/ned/pkg/gommap"
-	"github.com/zyedidia/ned/pkg/input/parallel"
+	"github.com/zyedidia/mu/pkg/cpu"
+	"github.com/zyedidia/mu/pkg/gommap"
+	"github.com/zyedidia/mu/pkg/input/parallel"
 )
 
 // An MMapReadFile is a file that is read using mmap instead of read. The

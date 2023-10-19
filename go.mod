@@ -1,4 +1,4 @@
-module github.com/zyedidia/ned
+module github.com/zyedidia/mu
 
 go 1.18
 

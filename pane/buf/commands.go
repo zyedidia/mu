@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"unicode"
 
-	"github.com/zyedidia/ned/pkg/output"
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/pkg/output"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 func (bp *BufPane) Save() error {

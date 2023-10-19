@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
-	"github.com/zyedidia/ned"
-	"github.com/zyedidia/ned/build"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu"
+	"github.com/zyedidia/mu/build"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 type Map[K comparable, V any] map[K]V

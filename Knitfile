@@ -1,0 +1,52 @@
+knit = require("knit")
+
+version = "0.0.0-unknown"
+knit.knit("-C tools/version")
+version = knit.shell("./tools/version/version")
+knit.knit("-C tools/date")
+date = knit.shell("./tools/date/date")
+build = "github.com/zyedidia/mu/build"
+commit = knit.shell("git rev-parse --short HEAD")
+debug = tobool(cli.debug) or false
+
+linkvars := -X '$build.Version=$version' -X '$build.CompileDate=$date' -X '$build.CommitHash=$commit'
+
+if debug then
+    linkvars := $linkvars -X '$build.Debug=ON'
+end
+
+ldflags := -ldflags "-s -w $linkvars"
+tags := -tags flare_custom,ftdetect_custom
+race = tobool(cli.race) and "-race" or ""
+goflags := -trimpath $ldflags $tags $race
+
+return b{
+$ mu:B:
+    go build $goflags ./cmd/mu
+$ build:V: mu
+
+$ install:VB:
+    go install $goflags ./cmd/mu
+
+$ clean:VB:
+    knit :all -t clean
+    rm -rf knit-*
+
+$ test:VB:
+    go test $race
+
+$ check:VB:
+    if [ "$$(gofmt -s -l . | wc -l)" -gt 0 ]; then exit 1; fi
+    go vet ./...
+    staticcheck ./...
+    go test $race
+
+$ cover.out:B:
+    go test -coverpkg=$pkgs -coverprofile cover.out .
+
+$ cover:VB:
+    go test -coverpkg=$pkgs -cover .
+
+$ cover-html:VB: cover.out
+    go tool cover -html=cover.out
+}

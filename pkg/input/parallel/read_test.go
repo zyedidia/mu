@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/zyedidia/ned/pkg/input/parallel"
+	"github.com/zyedidia/mu/pkg/input/parallel"
 )
 
 var letters = []byte("\nabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

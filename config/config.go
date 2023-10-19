@@ -10,7 +10,7 @@ import (
 	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/kbd/syntax"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 const (

@@ -1,0 +1,4 @@
+return b{
+    $ date: date.go
+        go build -o $output $input
+}

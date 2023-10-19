@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	"github.com/zyedidia/gotcl"
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 var tclcore = `

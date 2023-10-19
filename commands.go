@@ -8,9 +8,9 @@ import (
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/kbd/cbind"
-	"github.com/zyedidia/ned/pkg/input"
-	"github.com/zyedidia/ned/pkg/output"
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/pkg/input"
+	"github.com/zyedidia/mu/pkg/output"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 // --- Basic ---

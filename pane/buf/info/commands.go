@@ -1,7 +1,7 @@
 package info
 
 import (
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 func (ip *InfoPane) Execute() error {

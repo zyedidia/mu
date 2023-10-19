@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/pkg/input"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/pkg/input"
 )
 
 func TestFiletypeDetect(t *testing.T) {

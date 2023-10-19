@@ -3,7 +3,7 @@ package buf
 import (
 	"log"
 
-	"github.com/zyedidia/ned/buffer"
+	"github.com/zyedidia/mu/buffer"
 )
 
 type Config interface {

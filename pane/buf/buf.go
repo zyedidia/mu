@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	tcl "github.com/zyedidia/gotcl"
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 type Options interface {

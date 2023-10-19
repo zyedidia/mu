@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/zyedidia/ned/buffer/text/linerope"
+	"github.com/zyedidia/mu/buffer/text/linerope"
 )
 
 func check(r *linerope.Node, b *basicText, t *testing.T) {

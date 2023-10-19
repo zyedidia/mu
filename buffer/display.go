@@ -8,7 +8,7 @@ import (
 
 	"github.com/zyedidia/go-runewidth"
 	"github.com/zyedidia/gpeg/vm"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 // A RenderTracker is a pair of functions that are used to act on results from

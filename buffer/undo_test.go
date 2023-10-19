@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/buffer/text"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/buffer/text"
 )
 
 type inputstr struct {

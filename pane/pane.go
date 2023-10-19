@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/zyedidia/gotcl"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 type Pane interface {

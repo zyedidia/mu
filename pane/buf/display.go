@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 func (bp *BufPane) Resize(w, h int) {

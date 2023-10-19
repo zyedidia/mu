@@ -1,5 +1,8 @@
-/ned
-/vned
+/mutxt
+/mu
 cover.out
 conf.mk
 todo.txt
+.knit
+tools/date/date
+tools/version/version

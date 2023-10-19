@@ -1,7 +1,7 @@
 package buf
 
 import (
-	"github.com/zyedidia/ned/buffer"
+	"github.com/zyedidia/mu/buffer"
 )
 
 // TODO: need virtual cursors to handle visual x

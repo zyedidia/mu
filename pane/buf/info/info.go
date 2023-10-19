@@ -2,9 +2,9 @@ package info
 
 import (
 	tcl "github.com/zyedidia/gotcl"
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/pane/buf"
-	"github.com/zyedidia/ned/pkg/tclutil"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/pane/buf"
+	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 type InfoResp struct {

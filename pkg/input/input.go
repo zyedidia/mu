@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/zyedidia/ned/pkg/cpu"
-	"github.com/zyedidia/ned/pkg/input/parallel"
+	"github.com/zyedidia/mu/pkg/cpu"
+	"github.com/zyedidia/mu/pkg/input/parallel"
 )
 
 // Input is an interface for defining sources of input data. This may include

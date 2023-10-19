@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zyedidia/ned/buffer/undo"
+	"github.com/zyedidia/mu/buffer/undo"
 )
 
 func check(got, want int, t *testing.T) {

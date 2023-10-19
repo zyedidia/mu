@@ -3,7 +3,7 @@ package theme_test
 import (
 	"testing"
 
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 func TestThemeYAML(t *testing.T) {

@@ -3,7 +3,7 @@
 # buffer
 
 ```go
-import "github.com/zyedidia/ned/buffer"
+import "github.com/zyedidia/mu/buffer"
 ```
 
 ## Index

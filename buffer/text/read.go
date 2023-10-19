@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/gogs/chardet"
-	"github.com/zyedidia/ned/buffer/text/endings"
+	"github.com/zyedidia/mu/buffer/text/endings"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/transform"
 )

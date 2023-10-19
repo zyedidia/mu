@@ -4,10 +4,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/zyedidia/ned/buffer/text/cache"
-	"github.com/zyedidia/ned/buffer/text/endings"
-	"github.com/zyedidia/ned/buffer/text/linecache"
-	"github.com/zyedidia/ned/buffer/text/linerope"
+	"github.com/zyedidia/mu/buffer/text/cache"
+	"github.com/zyedidia/mu/buffer/text/endings"
+	"github.com/zyedidia/mu/buffer/text/linecache"
+	"github.com/zyedidia/mu/buffer/text/linerope"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
 )

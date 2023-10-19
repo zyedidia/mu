@@ -12,14 +12,14 @@ import (
 	"github.com/zyedidia/clipper"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/kbd"
-	"github.com/zyedidia/ned/buffer"
-	"github.com/zyedidia/ned/config"
-	"github.com/zyedidia/ned/pane"
-	"github.com/zyedidia/ned/pane/buf"
-	"github.com/zyedidia/ned/pkg/input"
-	"github.com/zyedidia/ned/pkg/output"
-	"github.com/zyedidia/ned/pkg/tclutil"
-	"github.com/zyedidia/ned/pkg/theme"
+	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/config"
+	"github.com/zyedidia/mu/pane"
+	"github.com/zyedidia/mu/pane/buf"
+	"github.com/zyedidia/mu/pkg/input"
+	"github.com/zyedidia/mu/pkg/output"
+	"github.com/zyedidia/mu/pkg/tclutil"
+	"github.com/zyedidia/mu/pkg/theme"
 )
 
 type TermClip interface {
