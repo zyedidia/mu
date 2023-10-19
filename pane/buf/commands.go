@@ -1,6 +1,7 @@
 package buf
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"unicode"
@@ -10,6 +11,13 @@ import (
 )
 
 func (bp *BufPane) Save() error {
+	if !bp.HasOutput() {
+		path, canceled := bp.messager.Prompt("Filename: ")
+		if canceled {
+			return errors.New("save failed: no output file")
+		}
+		return bp.SaveAs(path)
+	}
 	return bp.Buffer.Save()
 }
 
@@ -17,22 +25,18 @@ func (bp *BufPane) SaveAs(path string) error {
 	bp.SetOutput(&output.File{
 		Path: path,
 	})
-	return bp.Save()
+	return bp.Buffer.Save()
 }
 
 func (bp *BufPane) Command() error {
 	out, canceled := bp.messager.Prompt("> ")
-	if !canceled {
-		bp.messager.Message(out)
+	if canceled {
+		return nil
 	}
-	return nil
-	// bp.messager.Prompt("> ", func(resp string, canceled bool) error {
-	// 	if canceled {
-	// 		return nil
-	// 	}
-	// 	return bp.eval.Eval(resp, nil)
-	// })
-	// return nil
+	bp.lock.Unlock()
+	err := bp.eval.RunCommand(out, nil)
+	bp.lock.Lock()
+	return err
 }
 
 // --- Editing ---

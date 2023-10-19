@@ -188,12 +188,12 @@ func (b *BufferData) unmodified() {
 
 // Name returns this buffer's name, indicating the output writer.
 func (b *Buffer) Name() string {
-	in := b.in.Name()
-	out := b.out.Name()
-	if in == out {
-		return in
-	}
-	return fmt.Sprintf("%s -> %s", in, out)
+	return b.in.Name()
+}
+
+func (b *Buffer) HasOutput() bool {
+	_, ok := b.out.(*output.Discard)
+	return !ok
 }
 
 // SetContent modifies the content of this buffer so that it is equivalent to

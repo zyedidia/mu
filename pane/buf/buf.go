@@ -1,7 +1,10 @@
 package buf
 
 import (
+	"errors"
+	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/zyedidia/gotcl"
@@ -22,13 +25,14 @@ type Clipboard interface {
 
 type Messager interface {
 	Prompt(p string) (string, bool)
+	CharPrompt(p string) (string, bool)
 	Message(msg string)
 	Error(msg string)
 	Clear()
 }
 
-type Evaluator interface {
-	Eval(cmd string, vars []interface{}) error
+type CmdRunner interface {
+	RunCommand(cmd string, vars []interface{}) error
 }
 
 type BufPane struct {
@@ -55,10 +59,10 @@ type BufPane struct {
 	messager  Messager
 	clipboard Clipboard
 	cfg       Config
-	eval      Evaluator
+	eval      CmdRunner
 }
 
-func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator) *BufPane {
+func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval CmdRunner) *BufPane {
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -83,7 +87,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 	return bp
 }
 
-func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator, linenums bool) *BufPane {
+func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval CmdRunner, linenums bool) *BufPane {
 	bp := NewBufPane(b, msger, clip, cfg, eval)
 	bp.linenums = linenums
 	return bp
@@ -116,8 +120,18 @@ func (bp *BufPane) Help(w io.Writer) {
 }
 
 func (bp *BufPane) Close() error {
-	// bp.messager.CharPrompt("Save changes to %s before closing? (y,n,esc)", func(resp string, canceled bool) {
-	//
-	// })
+	if bp.Buffer.Modified() {
+		resp, canceled := bp.messager.CharPrompt(fmt.Sprintf("Save changes to %s before closing? (y,n,esc)", bp.Buffer.Name()))
+		resp = strings.ToLower(resp)
+		if canceled {
+			return errors.New("close failed: unsaved changes")
+		}
+		if resp != "y" && resp != "n" {
+			return errors.New("closed failed: invalid response")
+		}
+		if strings.ToLower(resp) == "y" {
+			return bp.Save()
+		}
+	}
 	return nil
 }

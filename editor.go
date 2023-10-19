@@ -68,8 +68,9 @@ func newEditor(clip TermClip) *Editor {
 	e := &Editor{
 		interp: interp,
 		modes: map[string]kbd.Config{
-			"micro": cfg.MustLoadBindings("micro"),
-			"cmd":   cfg.MustLoadBindings("cmd"),
+			"micro":   cfg.MustLoadBindings("micro"),
+			"cmd":     cfg.MustLoadBindings("cmd"),
+			"charcmd": cfg.MustLoadBindings("charcmd"),
 		},
 		config:   cfg,
 		theme:    th,
@@ -78,7 +79,7 @@ func newEditor(clip TermClip) *Editor {
 		Errors:   make(chan error),
 	}
 	e.infobar = NewInfoBar(buffer.NewEmptyBuffer(cfg, redraw), e)
-	e.SetMode("micro")
+	e.MustSetMode("micro")
 	e.Register()
 	return e
 }
@@ -147,6 +148,13 @@ func (e *Editor) SetClipboard(reg string, text []byte) error {
 	return errors.New("clipboard is unavailable")
 }
 
+func (e *Editor) MustSetMode(m string) {
+	err := e.SetMode(m)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (e *Editor) SetMode(m string) error {
 	e.modeLock.Lock()
 	defer e.modeLock.Unlock()
@@ -184,27 +192,34 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	if ok {
 		go func() {
 			e.displayLock.Lock()
-
-			var err error
-			if e.infobar.active {
-				err = e.infobar.cmd.Eval(action.Cmd, action.Vars)
-			} else {
-				err = e.Eval(action.Cmd, action.Vars)
-				if len(e.panes) == 0 {
-					e.Errors <- ErrQuit
-					return
-				}
-				if err != nil {
-					err = e.Active().Eval(action.Cmd, action.Vars)
-				}
-			}
+			err := e.RunCommand(action.Cmd, action.Vars)
 			if err != nil {
-				e.Error(err.Error())
+				if err.Error() == ErrQuit.Error() {
+					err = ErrQuit
+				}
 				e.Errors <- err
+				e.Error(err.Error())
 			}
 			e.SendRedraw()
 		}()
 	}
+}
+
+func (e *Editor) RunCommand(cmd string, vars []interface{}) error {
+	var err error
+	if e.infobar.active {
+		err = e.infobar.cmd.Eval(cmd, vars)
+	} else {
+		err = e.Eval(cmd, vars)
+		if len(e.panes) == 0 {
+			return ErrQuit
+		}
+		// try again if command was not found in top-level editor
+		if err != nil && strings.HasPrefix(err.Error(), "command not found") {
+			err = e.Active().Eval(cmd, vars)
+		}
+	}
+	return err
 }
 
 func (e *Editor) Register() {
@@ -255,7 +270,9 @@ func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y in
 	defer e.displayLock.Unlock()
 
 	fill(' ', e.theme.Default())
-	e.panes[e.cur].Display(draw, cursor, e.theme)
+	if e.cur >= 0 && e.cur < len(e.panes) {
+		e.panes[e.cur].Display(draw, cursor, e.theme)
+	}
 	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-1, mainc, combc, style)
 	}, func(x, y int) {

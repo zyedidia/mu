@@ -113,7 +113,7 @@ func main() {
 		for {
 			select {
 			case err := <-ed.Errors:
-				if err == ned.ErrQuit {
+				if errors.Is(err, ned.ErrQuit) {
 					break loop
 				}
 			case <-ed.Redraw:

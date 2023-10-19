@@ -33,7 +33,11 @@ func (e *Editor) Open(path string) error {
 	return e.open(in, out)
 }
 
-func (e *Editor) Quit() {
+func (e *Editor) Quit() error {
+	if err := e.Active().Close(); err != nil {
+		return err
+	}
+
 	i := e.cur
 	copy(e.panes[i:], e.panes[i+1:])
 	e.panes[len(e.panes)-1] = nil
@@ -41,6 +45,7 @@ func (e *Editor) Quit() {
 	if !e.valid() && len(e.panes) > 0 {
 		e.SetPane(len(e.panes) - 1)
 	}
+	return nil
 }
 
 func (e *Editor) QuitAll() {
