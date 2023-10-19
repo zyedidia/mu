@@ -133,7 +133,18 @@ func (e *Editor) Key(ev string) error {
 	return nil
 }
 
+// --- Information ---
+
+func (e *Editor) Mode() string {
+	return e.GetMode()
+}
+
 var commands = []tclutil.Command{
+	{
+		"mode",
+		(*Editor).Mode,
+		"mode: return the current mode",
+	},
 	{
 		"open",
 		(*Editor).Open,

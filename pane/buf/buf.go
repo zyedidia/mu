@@ -30,7 +30,7 @@ type Messager interface {
 }
 
 type Evaluator interface {
-	Eval(cmd string, vars []interface{}) error
+	EvalRet(cmd string, vars []interface{}) (string, error)
 }
 
 type BufPane struct {

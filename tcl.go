@@ -47,3 +47,15 @@ func (e *Editor) Eval(cmd string, vars []interface{}) error {
 	}
 	return err
 }
+
+func (e *Editor) EvalRet(cmd string, vars []interface{}) (string, error) {
+	interp := gotcl.NewInterpFrom(e.interp)
+	obj, err := tclutil.EvalWithVars(interp, cmd, vars)
+	if len(e.panes) == 0 {
+		return "", ErrQuit
+	}
+	if obj != nil && err == nil {
+		return obj.AsString(), nil
+	}
+	return "", err
+}
