@@ -3,21 +3,12 @@ package ned
 import (
 	"log"
 
-	"github.com/micro-editor/tcell/v2"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pane/buf/info"
 	"github.com/zyedidia/ned/pkg/grapheme"
 	"github.com/zyedidia/ned/pkg/theme"
 )
-
-type Screen interface {
-	PollEvent() tcell.Event
-	Clear()
-	Draw(x, y int, mainc rune, combc []rune, style theme.Style)
-	ShowCursor(x, y int)
-	Show()
-}
 
 type message struct {
 	data string
@@ -31,7 +22,6 @@ type InfoBar struct {
 	cmd    *info.InfoPane
 	active bool
 	ed     *Editor
-	// screen Screen
 }
 
 func NewInfoBar(interp *tcl.Interp, b *buffer.Buffer, ed *Editor) *InfoBar {
@@ -92,6 +82,24 @@ func (i *InfoBar) Prompt(msg string, done func(resp string, canceled bool) error
 	i.Message(msg)
 	m := i.ed.GetMode()
 	i.ed.SetMode("cmd")
+	i.active = true
+	if i.ed.valid() {
+		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)
+	}
+	i.cmd.Activate(i.ed.interp, func(resp string, canceled bool) error {
+		i.cmd.Unregister(i.ed.interp)
+		i.active = false
+		i.ed.panes[i.ed.cur].Register(i.ed.interp)
+		i.ed.SetMode(m)
+		i.Clear()
+		return done(resp, canceled)
+	})
+}
+
+func (i *InfoBar) CharPrompt(msg string, done func(resp string, canceled bool) error) {
+	i.Message(msg)
+	m := i.ed.GetMode()
+	i.ed.SetMode("charcmd")
 	i.active = true
 	if i.ed.valid() {
 		i.ed.panes[i.ed.cur].Unregister(i.ed.interp)

@@ -35,7 +35,6 @@ func (e *Editor) Open(path string) error {
 
 func (e *Editor) Quit() {
 	i := e.cur
-	e.panes[i].Unregister(e.interp)
 	copy(e.panes[i:], e.panes[i+1:])
 	e.panes[len(e.panes)-1] = nil
 	e.panes = e.panes[:len(e.panes)-1]
@@ -123,10 +122,7 @@ func (e *Editor) Key(ev string) error {
 			return err
 		}
 		kev := tcell.NewEventKey(key, ch, mod)
-		err = e.HandleEvent(kev)
-		if err != nil {
-			return err
-		}
+		e.HandleEvent(kev)
 	}
 	return nil
 }

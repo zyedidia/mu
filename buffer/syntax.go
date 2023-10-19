@@ -55,7 +55,7 @@ func (b *BufferData) Filetype() string {
 // LoadHighlighter initializes the syntax highlighting memoization table and
 // loads the current filetype's highlighter.
 func (b *BufferData) LoadHighlighter() error {
-	if !b.MustGetBoolOpt("syntax") {
+	if !b.DefGetBoolOpt("syntax") {
 		b.highlighter = nil
 		b.syntbl = memo.NoneTable{}
 		return nil

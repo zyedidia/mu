@@ -85,6 +85,9 @@ func main() {
 
 	evs := make(chan tcell.Event)
 
+	ed.Display(fill, draw, cursor)
+	s.Show()
+
 	go func() {
 		for {
 			evs <- s.PollEvent()
@@ -95,6 +98,7 @@ func main() {
 	// us down (closing the screen, saving backups, etc.).
 	sigterm := make(chan os.Signal, 1)
 	quit := make(chan struct{})
+	terminate := make(chan int)
 	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP)
 
 	go func() {
@@ -104,25 +108,32 @@ func main() {
 		}
 	}()
 
+	go func() {
+	loop:
+		for {
+			select {
+			case err := <-ed.Errors:
+				if err == ned.ErrQuit {
+					break loop
+				}
+			case <-ed.Redraw:
+				ed.Display(fill, draw, cursor)
+				s.Show()
+			case <-quit:
+				break loop
+			}
+		}
+		s.Fini()
+		terminate <- 0
+	}()
+
 	for {
 		select {
 		case ev := <-evs:
-			err := ed.HandleEvent(ev)
-			if err == ned.ErrQuit {
-				s.Fini()
-				os.Exit(0)
-			} else if err != nil {
-				ed.Error(err.Error())
-			}
-		case <-quit:
-			s.Fini()
-			os.Exit(0)
-		case <-ed.Redraw():
+			ed.HandleEvent(ev)
+		case code := <-terminate:
+			os.Exit(code)
 		}
-
-		ed.Clear(fill)
-		ed.Display(draw, cursor)
-		s.Show()
 	}
 }
 

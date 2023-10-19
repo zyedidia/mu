@@ -41,3 +41,5 @@ require (
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 )
+
+replace github.com/zyedidia/gotcl => ../gotcl

@@ -2,7 +2,9 @@ package buf
 
 import (
 	"io"
+	"sync"
 
+	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pkg/tclutil"
@@ -26,7 +28,7 @@ type Messager interface {
 }
 
 type Evaluator interface {
-	Eval(cmd string) error
+	Eval(cmd string, vars []interface{}) error
 }
 
 type BufPane struct {
@@ -46,6 +48,9 @@ type BufPane struct {
 	// that the editor should not recalculate the cursor's visual X
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
+
+	interp *gotcl.Interp
+	lock   sync.Mutex
 
 	messager  Messager
 	clipboard Clipboard
@@ -71,32 +76,24 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 		clipboard:     clip,
 		messager:      msger,
 		eval:          eval,
+		interp:        gotcl.NewInterp(),
 	}
+	bp.Register(bp.interp)
 	bp.InitOpts()
 	return bp
 }
 
 func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator, linenums bool) *BufPane {
-	bp := &BufPane{
-		Buffer: b,
-		vis: &buffer.Visualizer{
-			TabSize: 4,
-			CharMap: map[rune]string{
-				'\t': "|",
-				'\n': "\n",
-				' ':  " ",
-			},
-		},
-		scrollmargin:  3,
-		hscrollmargin: 1,
-		linenums:      linenums,
-		cfg:           cfg,
-		clipboard:     clip,
-		messager:      msger,
-		eval:          eval,
-	}
-	bp.InitOpts()
+	bp := NewBufPane(b, msger, clip, cfg, eval)
+	bp.linenums = linenums
 	return bp
+}
+
+func (bp *BufPane) Eval(cmd string, vars []interface{}) error {
+	bp.lock.Lock()
+	defer bp.lock.Unlock()
+	interp := gotcl.NewInterpFrom(bp.interp)
+	return tclutil.EvalWithVars(interp, cmd, vars)
 }
 
 func (bp *BufPane) Register(interp *tcl.Interp) {
@@ -116,4 +113,11 @@ func (bp *BufPane) Help(w io.Writer) {
 		w.Write([]byte(cmd.Doc))
 		w.Write([]byte{'\n'})
 	}
+}
+
+func (bp *BufPane) Close() error {
+	// bp.messager.CharPrompt("Save changes to %s before closing? (y,n,esc)", func(resp string, canceled bool) {
+	//
+	// })
+	return nil
 }

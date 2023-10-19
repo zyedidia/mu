@@ -66,9 +66,9 @@ func (b *BufferData) GetBoolOpt(name string) (o bool, v bool) {
 	return
 }
 
-// MustGetBoolOpt is the same as GetBoolOpt but returns the default value if it
+// DefGetBoolOpt is the same as GetBoolOpt but returns the default value if it
 // is not found
-func (b *BufferData) MustGetBoolOpt(name string) bool {
+func (b *BufferData) DefGetBoolOpt(name string) bool {
 	if opt, ok := b.Options[name]; ok {
 		if bl, ok := opt.(bool); ok {
 			return bl

@@ -3,8 +3,10 @@ package tclutil
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"unicode/utf8"
 
+	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 )
 
@@ -99,4 +101,23 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
 		return 0
 	}
 	interp.SetCmd(name, cmd)
+}
+
+func Eval(interp *gotcl.Interp, cmd string) error {
+	_, err := interp.EvalString(cmd)
+	interp.ClearError()
+	return err
+}
+
+func EvalWithVars(interp *gotcl.Interp, cmd string, vars []interface{}) error {
+	for i, v := range vars {
+		name := strconv.Itoa(i)
+		switch v := v.(type) {
+		case string:
+			interp.SetVarRaw(name, tcl.FromStr(v))
+		case int:
+			interp.SetVarRaw(name, tcl.FromInt(v))
+		}
+	}
+	return Eval(interp, cmd)
 }

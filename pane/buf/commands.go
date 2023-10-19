@@ -25,7 +25,7 @@ func (bp *BufPane) Command() error {
 		if canceled {
 			return nil
 		}
-		return bp.eval.Eval(resp)
+		return bp.eval.Eval(resp, nil)
 	})
 	return nil
 }

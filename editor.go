@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/clipper"
@@ -27,9 +28,11 @@ type TermClip interface {
 }
 
 type Editor struct {
-	panes  []pane.Pane
-	cur    int
-	interp *tcl.Interp
+	panes       []pane.Pane
+	cur         int
+	interp      *tcl.Interp
+	evalLock    sync.Mutex
+	displayLock sync.Mutex
 
 	modes map[string]kbd.Config
 	mode  *kbd.Config
@@ -43,7 +46,8 @@ type Editor struct {
 	w, h    int
 	infobar *InfoBar
 
-	redraw chan struct{}
+	Redraw chan struct{}
+	Errors chan error
 }
 
 func newEditor(clip TermClip) *Editor {
@@ -68,8 +72,9 @@ func newEditor(clip TermClip) *Editor {
 		},
 		config:   cfg,
 		theme:    th,
-		redraw:   redraw,
 		termclip: clip,
+		Redraw:   redraw,
+		Errors:   make(chan error),
 	}
 	e.infobar = NewInfoBar(interp, buffer.NewEmptyBuffer(cfg, redraw), e)
 	e.SetMode("micro")
@@ -154,15 +159,17 @@ func (e *Editor) GetMode() string {
 	return e.mode.Core
 }
 
-func (e *Editor) HandleEvent(ev tcell.Event) error {
+func (e *Editor) HandleEvent(ev tcell.Event) {
 	if e.mode == nil {
-		return errors.New("no mode selected")
+		return
 	}
 
 	if rev, ok := ev.(*tcell.EventResize); ok {
+		e.displayLock.Lock()
 		w, h := rev.Size()
 		e.Resize(w, h)
-		return nil
+		e.SendRedraw()
+		return
 	}
 
 	action, ok, more := e.mode.VM.Exec(ev)
@@ -170,15 +177,34 @@ func (e *Editor) HandleEvent(ev tcell.Event) error {
 		e.mode.VM.Reset()
 	}
 	if ok {
-		return e.EvalWithVars(action.Cmd, action.Vars)
+		go func() {
+			e.displayLock.Lock()
+			err := e.Eval(action.Cmd, action.Vars)
+			if len(e.panes) == 0 {
+				e.Errors <- ErrQuit
+				return
+			}
+			if err != nil {
+				err = e.Active().Eval(action.Cmd, action.Vars)
+			}
+			if err != nil {
+				e.Error(err.Error())
+				e.Errors <- err
+			}
+			e.SendRedraw()
+		}()
 	}
-	return nil
 }
 
 func (e *Editor) Register() {
 	for _, c := range commands {
 		tclutil.Register(e.interp, c.Name, c.Fn, e)
 	}
+}
+
+func (e *Editor) SendRedraw() {
+	e.displayLock.Unlock()
+	e.Redraw <- struct{}{}
 }
 
 func (e *Editor) Active() pane.Pane {
@@ -195,14 +221,13 @@ func (e *Editor) MakePane() {
 }
 
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
-	b, err := buffer.NewBuffer(in, out, e.config, e.redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
+	b, err := buffer.NewBuffer(in, out, e.config, e.Redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
 		return nil, buffer.Cursor{}
 	})
 	if err != nil {
 		return err
 	}
 	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config, e)
-	e.panes[e.cur].Register(e.interp)
 	return nil
 }
 
@@ -214,7 +239,11 @@ func (e *Editor) Resize(w, h int) {
 	e.infobar.Resize(w, 1)
 }
 
-func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
+func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
+	e.displayLock.Lock()
+	defer e.displayLock.Unlock()
+
+	fill(' ', e.theme.Default())
 	e.panes[e.cur].Display(draw, cursor, e.theme)
 	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-1, mainc, combc, style)
@@ -223,23 +252,7 @@ func (e *Editor) Display(draw func(x, y int, mainc rune, combc []rune, style the
 	})
 }
 
-func (e *Editor) Clear(fill func(x rune, style theme.Style)) {
-	fill(' ', e.theme.Default())
-}
-
-func (e *Editor) Redraw() chan struct{} {
-	return e.redraw
-}
-
 func (e *Editor) SetPane(i int) {
-	if e.infobar.active {
-		e.infobar.cmd.Unregister(e.interp)
-	} else if e.valid() {
-		e.panes[e.cur].Unregister(e.interp)
-	}
-	if e.panes[i] != nil {
-		e.panes[i].Register(e.interp)
-	}
 	e.cur = i
 }
 

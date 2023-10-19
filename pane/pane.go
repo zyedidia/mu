@@ -18,4 +18,8 @@ type Pane interface {
 
 	SetOpt(name string, val interface{}) error
 	GetOpt(name string) (interface{}, bool)
+
+	Eval(cmd string, vars []interface{}) error
+
+	Close() error
 }

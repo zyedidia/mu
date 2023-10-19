@@ -3,9 +3,9 @@ package ned
 import (
 	"errors"
 	"reflect"
-	"strconv"
 
-	tcl "github.com/zyedidia/gotcl"
+	"github.com/zyedidia/gotcl"
+	"github.com/zyedidia/ned/pkg/tclutil"
 )
 
 var tclcore = `
@@ -39,26 +39,9 @@ func init() {
 
 var ErrQuit = errors.New("quit")
 
-func (e *Editor) Eval(cmd string) error {
-	_, err := e.interp.EvalString(cmd)
-	e.interp.ClearError()
-
-	if len(e.panes) == 0 {
-		return ErrQuit
-	}
-
-	return err
-}
-
-func (e *Editor) EvalWithVars(cmd string, vars []interface{}) error {
-	for i, v := range vars {
-		name := strconv.Itoa(i)
-		switch v := v.(type) {
-		case string:
-			e.interp.SetVarRaw(name, tcl.FromStr(v))
-		case int:
-			e.interp.SetVarRaw(name, tcl.FromInt(v))
-		}
-	}
-	return e.Eval(cmd)
+func (e *Editor) Eval(cmd string, vars []interface{}) error {
+	e.evalLock.Lock()
+	defer e.evalLock.Unlock()
+	interp := gotcl.NewInterpFrom(e.interp)
+	return tclutil.EvalWithVars(interp, cmd, vars)
 }
