@@ -3,6 +3,7 @@ package buffer
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/zyedidia/flare"
@@ -89,6 +90,17 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share fun
 
 func NewEmptyBuffer(cfg Config, redraw chan struct{}) *Buffer {
 	b, err := NewBuffer(input.NewEmpty(), &output.Discard{}, cfg, redraw, nil)
+	if err != nil {
+		panic(fmt.Sprintf("opening an empty buffer caused an error: %v", err))
+	}
+	return b
+}
+
+func NewNamedEmptyBuffer(name string, cfg Config, redraw chan struct{}) *Buffer {
+	b, err := NewBuffer(
+		input.NewReader(strings.NewReader(""), name), &output.Discard{},
+		cfg, redraw, nil,
+	)
 	if err != nil {
 		panic(fmt.Sprintf("opening an empty buffer caused an error: %v", err))
 	}

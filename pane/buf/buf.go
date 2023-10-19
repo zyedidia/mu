@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 
-	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/ned/buffer"
 	"github.com/zyedidia/ned/pkg/tclutil"
@@ -53,9 +51,6 @@ type BufPane struct {
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
 
-	interp *gotcl.Interp
-	lock   sync.Mutex
-
 	messager  Messager
 	clipboard Clipboard
 	cfg       Config
@@ -80,9 +75,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 		clipboard:     clip,
 		messager:      msger,
 		eval:          eval,
-		interp:        gotcl.NewInterp(),
 	}
-	bp.Register(bp.interp)
 	bp.InitOpts()
 	return bp
 }
@@ -91,13 +84,6 @@ func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config
 	bp := NewBufPane(b, msger, clip, cfg, eval)
 	bp.linenums = linenums
 	return bp
-}
-
-func (bp *BufPane) Eval(cmd string, vars []interface{}) error {
-	bp.lock.Lock()
-	defer bp.lock.Unlock()
-	interp := gotcl.NewInterpFrom(bp.interp)
-	return tclutil.EvalWithVars(interp, cmd, vars)
 }
 
 func (bp *BufPane) Register(interp *tcl.Interp) {

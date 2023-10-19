@@ -78,28 +78,28 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 }
 
 func (i *InfoBar) Prompt(msg string) (resp string, canceled bool) {
-	i.Message(msg)
-	m := i.ed.GetMode()
-	i.ed.MustSetMode("cmd")
-	i.active = true
-	i.ed.SendRedraw()
-	r := <-i.cmd.Done
-	i.ed.displayLock.Lock()
-	i.ed.MustSetMode(m)
-	i.Clear()
-	i.active = false
-	return r.Resp, r.Canceled
+	return i.prompt(msg, "cmd")
 }
 
 func (i *InfoBar) CharPrompt(msg string) (resp string, canceled bool) {
+	return i.prompt(msg, "charcmd")
+}
+
+func (i *InfoBar) prompt(msg, mode string) (resp string, canceled bool) {
 	i.Message(msg)
 	m := i.ed.GetMode()
-	i.ed.MustSetMode("charcmd")
+	i.ed.MustSetMode(mode)
 	i.active = true
+	if i.ed.valid() {
+		i.ed.Active().Unregister(i.ed.interp)
+	}
+	i.cmd.Register(i.ed.interp)
 	i.ed.SendRedraw()
 	r := <-i.cmd.Done
 	i.ed.displayLock.Lock()
 	i.ed.MustSetMode(m)
+	i.cmd.Unregister(i.ed.interp)
+	i.ed.Active().Register(i.ed.interp)
 	i.Clear()
 	i.active = false
 	return r.Resp, r.Canceled

@@ -16,7 +16,7 @@ import (
 // --- Basic ---
 func (e *Editor) Help() {
 	for _, cmd := range commands {
-		fmt.Println(cmd.Doc)
+		fmt.Fprintln(e.log, cmd.Doc)
 	}
 	e.Active().Help(os.Stdout)
 }
@@ -39,6 +39,7 @@ func (e *Editor) Quit() error {
 	}
 
 	i := e.cur
+	e.panes[i].Unregister(e.interp)
 	copy(e.panes[i:], e.panes[i+1:])
 	e.panes[len(e.panes)-1] = nil
 	e.panes = e.panes[:len(e.panes)-1]
@@ -58,9 +59,9 @@ func (e *Editor) QuitAll() {
 func (e *Editor) ShowBuffers() {
 	for i, b := range e.panes {
 		if e.cur == i {
-			fmt.Printf("[%d: %v]\n", i, b.Name())
+			fmt.Fprintf(e.log, "[%d: %v]\n", i, b.Name())
 		} else {
-			fmt.Printf("%d: %v\n", i, b.Name())
+			fmt.Fprintf(e.log, "%d: %v\n", i, b.Name())
 		}
 	}
 }

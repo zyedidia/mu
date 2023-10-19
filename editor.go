@@ -31,7 +31,6 @@ type Editor struct {
 	panes       []pane.Pane
 	cur         int
 	interp      *tcl.Interp
-	evalLock    sync.Mutex
 	displayLock sync.Mutex
 
 	modes    map[string]kbd.Config
@@ -43,6 +42,8 @@ type Editor struct {
 
 	clipboard clipper.Clipboard
 	termclip  TermClip
+
+	log *buffer.Buffer
 
 	w, h    int
 	infobar *InfoBar
@@ -77,6 +78,7 @@ func newEditor(clip TermClip) *Editor {
 		termclip: clip,
 		Redraw:   redraw,
 		Errors:   make(chan error),
+		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 	}
 	e.infobar = NewInfoBar(buffer.NewEmptyBuffer(cfg, redraw), e)
 	e.MustSetMode("micro")
@@ -206,18 +208,9 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 }
 
 func (e *Editor) RunCommand(cmd string, vars []interface{}) error {
-	var err error
-	if e.infobar.active {
-		err = e.infobar.cmd.Eval(cmd, vars)
-	} else {
-		err = e.Eval(cmd, vars)
-		if len(e.panes) == 0 {
-			return ErrQuit
-		}
-		// try again if command was not found in top-level editor
-		if err != nil && strings.HasPrefix(err.Error(), "command not found") {
-			err = e.Active().Eval(cmd, vars)
-		}
+	err := e.Eval(cmd, vars)
+	if len(e.panes) == 0 {
+		return ErrQuit
 	}
 	return err
 }
@@ -254,6 +247,7 @@ func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 		return err
 	}
 	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e.termclip, e.config, e)
+	e.panes[e.cur].Register(e.interp)
 	return nil
 }
 
@@ -281,6 +275,14 @@ func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y in
 }
 
 func (e *Editor) SetPane(i int) {
+	if e.infobar.active {
+		e.infobar.cmd.Unregister(e.interp)
+	} else if e.valid() {
+		e.panes[e.cur].Unregister(e.interp)
+	}
+	if e.panes[i] != nil {
+		e.panes[i].Register(e.interp)
+	}
 	e.cur = i
 }
 

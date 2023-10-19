@@ -33,9 +33,7 @@ func (bp *BufPane) Command() error {
 	if canceled {
 		return nil
 	}
-	bp.lock.Unlock()
 	err := bp.eval.RunCommand(out, nil)
-	bp.lock.Lock()
 	return err
 }
 

@@ -40,8 +40,6 @@ func init() {
 var ErrQuit = errors.New("quit")
 
 func (e *Editor) Eval(cmd string, vars []interface{}) error {
-	e.evalLock.Lock()
-	defer e.evalLock.Unlock()
 	interp := gotcl.NewInterpFrom(e.interp)
 	return tclutil.EvalWithVars(interp, cmd, vars)
 }
