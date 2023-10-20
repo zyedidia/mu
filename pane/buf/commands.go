@@ -10,7 +10,11 @@ import (
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
-func (bp *BufPane) Save() error {
+func (bp *BufPane) Save(args []string) error {
+	if len(args) >= 1 {
+		return bp.SaveAs(args[0])
+	}
+
 	if !bp.HasOutput() {
 		path, canceled := bp.messager.Prompt("Filename: ")
 		if canceled {
@@ -355,7 +359,7 @@ var commands = []tclutil.Command{
 	{
 		"save",
 		(*BufPane).Save,
-		"save: save the current buffer",
+		"save [path]: save the current buffer",
 	},
 	{
 		"save-as",
