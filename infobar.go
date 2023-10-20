@@ -45,10 +45,6 @@ func (i *InfoBar) Clear() {
 	log.Println("clear info")
 }
 
-// func (i *InfoBar) Prompt(msg string, update func(user string)) (string, bool) {
-// 	return "", false
-// }
-
 func (i *InfoBar) Resize(w, h int) {
 	i.w, i.h = w, h
 	i.cmd.Resize(w, h)

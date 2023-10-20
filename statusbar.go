@@ -1,6 +1,7 @@
 package mu
 
 import (
+	"github.com/mattn/go-runewidth"
 	"github.com/zyedidia/mu/pkg/expand"
 	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
@@ -8,7 +9,7 @@ import (
 
 const (
 	defLeft  = "$name $modified($(cursor-line),$(cursor-col)) | ft:$filetype"
-	defRight = ""
+	defRight = "$mode"
 )
 
 type StatusBar struct {
@@ -40,6 +41,7 @@ func NewStatusBar(ed *Editor, left, right string) *StatusBar {
 
 func (s *StatusBar) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), w int) {
 	left, _ := expand.Expand(s.left, s.resolve, s.resolve)
+	right, _ := expand.Expand(s.right, s.resolve, s.resolve)
 
 	style := s.ed.theme.Default().Add(theme.AttrReverse)
 	x := 0
@@ -50,8 +52,17 @@ func (s *StatusBar) Display(draw func(x, y int, mainc rune, combc []rune, style 
 		x++
 	}
 
-	for x < w {
+	rw := runewidth.StringWidth(right)
+
+	for x < w-rw {
 		draw(x, 0, ' ', nil, style)
+		x++
+	}
+
+	for len(right) > 0 && x < w {
+		r, combc, size := grapheme.DecodeInString(right)
+		draw(x, 0, r, combc, style)
+		right = right[size:]
 		x++
 	}
 }
