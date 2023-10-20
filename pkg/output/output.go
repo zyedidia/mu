@@ -42,7 +42,20 @@ type File struct {
 // Open the file for writing. Creates the file if it does not exist, or
 // truncates it.
 func (fo *File) Open() (io.Writer, error) {
-	return os.Create(fo.Path)
+	f, err := os.Create(fo.Path)
+	if err != nil {
+		return nil, err
+	}
+	return &WriterCloser{
+		Wr: f,
+		CloseFn: func() error {
+			err := f.Sync()
+			if err != nil {
+				return err
+			}
+			return f.Close()
+		},
+	}, nil
 }
 
 func (fo *File) Name() string {
