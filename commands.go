@@ -10,10 +10,12 @@ import (
 	"github.com/zyedidia/kbd/cbind"
 	"github.com/zyedidia/mu/pkg/input"
 	"github.com/zyedidia/mu/pkg/output"
+	"github.com/zyedidia/mu/pkg/shell"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 // --- Basic ---
+
 func (e *Editor) Help() {
 	for _, cmd := range commands {
 		fmt.Fprintln(e.log, cmd.Doc)
@@ -87,6 +89,34 @@ func (e *Editor) SetBufferIdx(idx int) error {
 func (e *Editor) NewBuffer() {
 	e.MakePane()
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
+}
+
+// --- Commands ---
+
+func (e *Editor) Command() error {
+	out, canceled := e.infobar.Prompt("> ")
+	if canceled {
+		return nil
+	}
+	s, err := e.EvalRet(out, nil)
+	if err == nil {
+		e.infobar.Message(s)
+	}
+	return err
+}
+
+func (e *Editor) Shell() {
+	cmd, cancel := e.infobar.Prompt("$ ")
+	if cancel {
+		return
+	}
+	run := func() {
+		err := shell.Run(cmd)
+		if err != nil {
+			e.infobar.Error(err.Error())
+		}
+	}
+	e.Suspend <- run
 }
 
 // --- Options ---
@@ -194,5 +224,15 @@ var commands = []tclutil.Command{
 		"key",
 		(*Editor).Key,
 		"key <event>: execute <event> as if it had been typed in",
+	},
+	{
+		"command",
+		(*Editor).Command,
+		"command: open a command prompt",
+	},
+	{
+		"shell",
+		(*Editor).Shell,
+		"shell: open a shell prompt",
 	},
 }

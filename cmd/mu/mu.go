@@ -29,6 +29,12 @@ func (m Map[K, V]) Put(k K, v V) {
 	m[k] = v
 }
 
+func EnterToContinue() {
+	fmt.Print("Press enter to continue")
+	reader := bufio.NewReader(os.Stdin)
+	reader.ReadString('\n')
+}
+
 const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
@@ -130,14 +136,19 @@ func main() {
 					s.Suspend()
 					fmt.Println(err)
 
-					fmt.Print("Press enter to continue")
-					reader := bufio.NewReader(os.Stdin)
-					reader.ReadString('\n')
+					EnterToContinue()
 
 					s.Resume()
 					ed.Display(fill, draw, cursor)
 					s.Show()
 				}
+			case f := <-ed.Suspend:
+				s.Suspend()
+				f()
+				EnterToContinue()
+				s.Resume()
+				ed.Display(fill, draw, cursor)
+				s.Show()
 			case <-ed.Redraw:
 				ed.Display(fill, draw, cursor)
 				s.Show()

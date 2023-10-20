@@ -61,8 +61,9 @@ type Editor struct {
 	infobar   *InfoBar
 	statusbar *StatusBar
 
-	Redraw chan struct{}
-	Errors chan error
+	Redraw  chan struct{}
+	Errors  chan error
+	Suspend chan func()
 }
 
 func newEditor(clip TermClip) *Editor {
@@ -91,6 +92,7 @@ func newEditor(clip TermClip) *Editor {
 		termclip: clip,
 		Redraw:   redraw,
 		Errors:   make(chan error, 16),
+		Suspend:  make(chan func(), 16),
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 	}
 	e.statusbar = NewStatusBar(e, defLeft, defRight)

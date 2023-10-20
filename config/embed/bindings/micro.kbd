@@ -2,6 +2,7 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+q', 'quit'}
           / {'ctrl+z', 'undo'}
           / {'ctrl+e', 'command'}
+          / {'ctrl+b', 'shell'}
           / {'ctrl+y', 'redo'}
           / {'ctrl+v', 'paste'}
           / {'enter', 'insert-at [cursor-pos] \\n; relocate'}

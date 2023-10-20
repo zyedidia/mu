@@ -28,18 +28,6 @@ func (bp *BufPane) SaveAs(path string) error {
 	return bp.Buffer.Save()
 }
 
-func (bp *BufPane) Command() error {
-	out, canceled := bp.messager.Prompt("> ")
-	if canceled {
-		return nil
-	}
-	s, err := bp.eval.EvalRet(out, nil)
-	if err == nil {
-		bp.messager.Message(s)
-	}
-	return err
-}
-
 // --- Editing ---
 
 func (bp *BufPane) InsertAt(pos int, val string) {
@@ -603,10 +591,5 @@ var commands = []tclutil.Command{
 		"paste",
 		(*BufPane).Paste,
 		"paste: inserts the contents of the clipboard at the current cursor's position",
-	},
-	{
-		"command",
-		(*BufPane).Command,
-		"command: open a command prompt",
 	},
 }
