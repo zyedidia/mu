@@ -5,12 +5,14 @@
 package output
 
 import (
+	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 
 	"github.com/google/renameio"
+	"github.com/zyedidia/mu/pkg/shell"
 )
 
 const (
@@ -62,6 +64,8 @@ func (afo *AtomicFile) Name() string {
 type RootFile struct {
 	RootCmd string
 	Path    string
+	Suspend chan func()
+	Resume  chan struct{}
 }
 
 // Open starts the 'dd' process writing to the output path with root
@@ -77,6 +81,8 @@ func (rf *RootFile) Open() (io.Writer, error) {
 
 	// initialize the 'dd' process with 'sudo' (or whatever the value of 'RootCmd' is).
 	cmd := exec.Command(rf.RootCmd, "dd", "bs=4k", "of="+rf.Path)
+	cmd.Stdout = log.Writer()
+	cmd.Stderr = log.Writer()
 
 	// get dd's stdin to write the buffer contents to.
 	stdin, err := cmd.StdinPipe()
@@ -84,25 +90,19 @@ func (rf *RootFile) Open() (io.Writer, error) {
 		return nil, err
 	}
 
-	// signal handler to catch a possible interrupt while the user is
-	// interacting with the password prompt.
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		s := <-c
-		// this channel might have closed, so make sure the received value is
-		// the interrupt signal. The process might be nil if the interrupt is
-		// received before the command is started (very unlikely).
-		if cmd.Process != nil && s == os.Interrupt {
-			cmd.Process.Kill()
-		}
-	}()
+	started := make(chan struct{})
 
-	// start the command
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
+	rf.Suspend <- func() {
+		// start the command
+		err = cmd.Start()
+		started <- struct{}{}
+		if err != nil {
+			fmt.Println("error saving RootFile:", err)
+			shell.EnterToContinue()
+		}
 	}
+
+	<-started
 
 	// we wrap stdin with a special close function that closes the interrupt
 	// signal channel so that the next interrupt is not accidentally caught
@@ -110,10 +110,9 @@ func (rf *RootFile) Open() (io.Writer, error) {
 	return &WriterCloser{
 		Wr: stdin,
 		CloseFn: func() error {
-			err = cmd.Wait()
-			signal.Stop(c)
-			close(c)
 			stdin.Close()
+			err = cmd.Wait()
+			rf.Resume <- struct{}{}
 			return err
 		},
 	}, nil

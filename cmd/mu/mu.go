@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +14,6 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/mu"
-	"github.com/zyedidia/mu/build"
 	"github.com/zyedidia/mu/pkg/theme"
 )
 
@@ -39,16 +37,12 @@ func EnterToContinue() {
 const errmsg = `Please report this issue online on GitHub.`
 
 func main() {
-	if build.Debug == "ON" {
-		f, err := os.Create(filepath.Join("/tmp", "mu.log"))
-		if err != nil {
-			log.Fatalf("error opening file: %v", err)
-		} else {
-			defer f.Close()
-			log.SetOutput(f)
-		}
+	f, err := os.Create(filepath.Join("/tmp", "mu.log"))
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
 	} else {
-		log.SetOutput(io.Discard)
+		defer f.Close()
+		log.SetOutput(f)
 	}
 
 	flag.Parse()
@@ -157,7 +151,8 @@ func main() {
 			case f := <-ed.Suspend:
 				s.Suspend()
 				f()
-				EnterToContinue()
+				<-ed.Resume
+				log.Println("resuming")
 				s.Resume()
 				ed.Display(fill, draw, cursor)
 				s.Show()

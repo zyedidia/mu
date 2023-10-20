@@ -29,8 +29,11 @@ func (e *Editor) Open(path string) error {
 	in := &input.File{
 		Path: path,
 	}
-	out := &output.File{
-		Path: path,
+	out := &output.RootFile{
+		Suspend: e.Suspend,
+		Resume:  e.Resume,
+		RootCmd: "sudo",
+		Path:    path,
 	}
 	return e.open(in, out)
 }
@@ -121,8 +124,10 @@ func (e *Editor) Shell() {
 		if err != nil {
 			e.infobar.Error(err.Error())
 		}
+		shell.EnterToContinue()
 	}
 	e.Suspend <- run
+	e.Resume <- struct{}{}
 }
 
 func (e *Editor) Run(args []string) error {

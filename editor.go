@@ -64,6 +64,7 @@ type Editor struct {
 	Redraw  chan struct{}
 	Errors  chan error
 	Suspend chan func()
+	Resume  chan struct{}
 }
 
 type FillFn func(r rune, style theme.Style)
@@ -97,6 +98,7 @@ func newEditor(clip TermClip) *Editor {
 		Redraw:   redraw,
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
+		Resume:   make(chan struct{}),
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 	}
 	e.statusbar = NewStatusBar(e, defLeft, defRight)

@@ -1,8 +1,9 @@
 package shell
 
 import (
+	"bufio"
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -21,15 +22,14 @@ func RunWith(command string, stdin io.Reader, stdout, stderr io.Writer, interact
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
+	c := make(chan os.Signal, 1)
+
 	if interactive {
 		// signal handler to catch a possible interrupt while the user is
 		// interacting with the password prompt.
-		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		go func() {
-			log.Println("waiting for interrupt")
 			s := <-c
-			log.Println("interrupt signal received")
 			// this channel might have closed, so make sure the received value is
 			// the interrupt signal. The process might be nil if the interrupt is
 			// received before the command is started (very unlikely).
@@ -39,5 +39,17 @@ func RunWith(command string, stdin io.Reader, stdout, stderr io.Writer, interact
 		}()
 	}
 
-	return cmd.Run()
+	err := cmd.Run()
+
+	if interactive {
+		signal.Stop(c)
+	}
+	close(c)
+	return err
+}
+
+func EnterToContinue() {
+	fmt.Print("Press enter to continue")
+	reader := bufio.NewReader(os.Stdin)
+	reader.ReadString('\n')
 }

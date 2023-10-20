@@ -38,21 +38,24 @@ func (b *Buffer) SetOutput(o Output) {
 	b.out = o
 }
 
-func (b *Buffer) writeout(o Output) error {
+func (b *Buffer) writeout(o Output) (err error) {
 	w, err := o.Open()
 	if err != nil {
-		return fmt.Errorf("save: %w", err)
+		return fmt.Errorf("save failed: %w", err)
 	}
 	defer func() {
 		if w, ok := w.(io.Closer); ok {
-			w.Close()
+			e := w.Close()
+			if e != nil {
+				err = fmt.Errorf("save failed: %w", e)
+			}
 		}
 	}()
 
 	bw := bufio.NewWriter(w)
 	_, err = b.WriteTo(bw)
 	if err != nil {
-		return fmt.Errorf("save: %w", err)
+		return fmt.Errorf("save failed: %w", err)
 	}
 	return bw.Flush()
 }
