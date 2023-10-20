@@ -344,3 +344,7 @@ func (e *Editor) Error(msg string) {
 func (e *Editor) Message(msg string) {
 	e.infobar.Message(msg)
 }
+
+func (e *Editor) SuspendResume() (chan func(), chan struct{}) {
+	return e.Suspend, e.Resume
+}

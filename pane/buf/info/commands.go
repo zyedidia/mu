@@ -17,8 +17,6 @@ func (ip *InfoPane) Execute() {
 func (ip *InfoPane) Cancel() {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
-	ip.history = append(ip.history, text)
-	ip.histidx = len(ip.history)
 	ip.Done <- InfoResp{text, true}
 }
 

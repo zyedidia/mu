@@ -29,8 +29,9 @@ type Messager interface {
 	Clear()
 }
 
-type Evaluator interface {
+type Editor interface {
 	EvalRet(cmd string, vars []interface{}) (string, error)
+	SuspendResume() (chan func(), chan struct{})
 }
 
 type BufPane struct {
@@ -54,10 +55,10 @@ type BufPane struct {
 	messager Messager
 	clip     Clipboard
 	cfg      Config
-	eval     Evaluator
+	editor   Editor
 }
 
-func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator) *BufPane {
+func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor) *BufPane {
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
@@ -74,14 +75,14 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ev
 		cfg:           cfg,
 		clip:          clip,
 		messager:      msger,
-		eval:          eval,
+		editor:        editor,
 	}
 	bp.InitOpts()
 	return bp
 }
 
-func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, eval Evaluator, linenums bool) *BufPane {
-	bp := NewBufPane(b, msger, clip, cfg, eval)
+func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor, linenums bool) *BufPane {
+	bp := NewBufPane(b, msger, clip, cfg, editor)
 	bp.linenums = linenums
 	return bp
 }

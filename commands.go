@@ -29,11 +29,8 @@ func (e *Editor) Open(path string) error {
 	in := &input.File{
 		Path: path,
 	}
-	out := &output.RootFile{
-		Suspend: e.Suspend,
-		Resume:  e.Resume,
-		RootCmd: "sudo",
-		Path:    path,
+	out := &output.File{
+		Path: path,
 	}
 	return e.open(in, out)
 }

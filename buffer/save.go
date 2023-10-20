@@ -6,6 +6,8 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+
+	"github.com/zyedidia/mu/pkg/output"
 )
 
 // An Output represents a device that can be opened for writing, and has a
@@ -36,6 +38,14 @@ func (b *Buffer) Modified() bool {
 // SetOutput changes the target output for saving this buffer.
 func (b *Buffer) SetOutput(o Output) {
 	b.out = o
+}
+
+// FileOutput returns nil if the output is not a file.
+func (b *Buffer) FileOutput() *output.File {
+	if f, ok := b.out.(*output.File); ok {
+		return f
+	}
+	return nil
 }
 
 func (b *Buffer) writeout(o Output) (err error) {

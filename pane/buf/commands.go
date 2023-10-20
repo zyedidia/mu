@@ -3,6 +3,7 @@ package buf
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"unicode"
 
@@ -22,14 +23,46 @@ func (bp *BufPane) Save(args []string) error {
 		}
 		return bp.SaveAs(path)
 	}
-	return bp.Buffer.Save()
+	err := bp.Buffer.Save()
+	if errors.Is(err, os.ErrPermission) {
+		if ok, err := bp.saveWithSudo(); ok {
+			return err
+		}
+	}
+	return err
 }
 
 func (bp *BufPane) SaveAs(path string) error {
 	bp.SetOutput(&output.File{
 		Path: path,
 	})
-	return bp.Buffer.Save()
+	err := bp.Buffer.Save()
+	if errors.Is(err, os.ErrPermission) {
+		if ok, err := bp.saveWithSudo(); ok {
+			return err
+		}
+	}
+	return err
+}
+
+func (bp *BufPane) saveWithSudo() (bool, error) {
+	if f := bp.FileOutput(); f != nil && output.HasRootFile {
+		choice, cancel := bp.messager.CharPrompt("File cannot be written, save with sudo? (y,n,esc)")
+		if cancel {
+			return false, nil
+		}
+		if choice == "y" {
+			suspend, resume := bp.editor.SuspendResume()
+			bp.SetOutput(&output.RootFile{
+				Suspend: suspend,
+				Resume:  resume,
+				RootCmd: "sudo",
+				Path:    f.Path,
+			})
+			return true, bp.Save(nil)
+		}
+	}
+	return false, nil
 }
 
 // --- Editing ---
