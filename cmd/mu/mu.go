@@ -105,21 +105,27 @@ func main() {
 	// Set up a signal receiver so we can exit gracefully if the user/OS shuts
 	// us down (closing the screen, saving backups, etc.).
 	sigterm := make(chan os.Signal, 1)
+	sigint := make(chan os.Signal, 1)
 	quit := make(chan struct{}, 1)
 	terminate := make(chan int, 1)
-	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGABRT)
+	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGABRT)
+	signal.Notify(sigint, syscall.SIGINT)
 
 	go func() {
 		for {
-			<-sigterm
-			log.Println("received kill signal")
-			quit <- struct{}{}
+			select {
+			case <-sigterm:
+				log.Println("received kill signal")
+				quit <- struct{}{}
 
-			// if editor does not gracefully shut down in 1 second then we kill
-			// ourselves from this goroutine
-			time.Sleep(1 * time.Second)
-			log.Println("force killing self")
-			os.Exit(1)
+				// if editor does not gracefully shut down in 1 second then we kill
+				// ourselves from this goroutine
+				time.Sleep(1 * time.Second)
+				log.Println("force killing self")
+				os.Exit(1)
+			case <-sigint:
+				// do nothing
+			}
 		}
 	}()
 
@@ -143,9 +149,7 @@ func main() {
 				if errors.As(err, &pe) {
 					s.Suspend()
 					fmt.Println(err)
-
 					EnterToContinue()
-
 					s.Resume()
 					ed.Display(fill, draw, cursor)
 					s.Show()

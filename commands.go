@@ -117,7 +117,7 @@ func (e *Editor) Shell() {
 		return
 	}
 	run := func() {
-		err := shell.Run(cmd)
+		err := shell.Run(cmd, true)
 		if err != nil {
 			e.infobar.Error(err.Error())
 		}
@@ -129,7 +129,7 @@ func (e *Editor) Run(args []string) error {
 	// TODO: use selection as stdin?
 	cmd := strings.Join(args, " ")
 	go func() {
-		err := shell.RunWith(cmd, os.Stdin, e.log, e.log)
+		err := shell.RunWith(cmd, os.Stdin, e.log, e.log, false)
 		e.displayLock.Lock()
 		defer e.SendRedraw()
 		defer e.displayLock.Unlock()
