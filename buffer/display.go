@@ -96,7 +96,7 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 				end := b.OffsetAt(l+height, 0)
 				// highlight if the range is not in the matches
 				if b.matches == nil || b.minvalid || !b.matches.InRange(off) || !b.matches.InRange(end-1) {
-					b.matches = b.highlighter.HighlightMatches(b.Buffer.Text(), b.syntbl, &vm.Interval{off, end})
+					b.matches = b.highlighter.HighlightMatches(b.Buffer.Reader, b.syntbl, &vm.Interval{off, end})
 					b.minvalid = false
 				}
 			}

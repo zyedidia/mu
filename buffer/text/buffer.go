@@ -23,11 +23,6 @@ type Buffer struct {
 
 	Opts Options
 
-	// currently this lock protects writes from Insert/Remove and reads from
-	// WriteTo from colliding. This is because the only code running from a
-	// separate thread at the moment is the backup, which calls WriteTo. In the
-	// future, we may need to use this lock to protect ReadAt and Slice as
-	// well.
 	lock sync.Mutex
 }
 
@@ -144,12 +139,6 @@ func (b *Buffer) Bytes() []byte {
 	buf := make([]byte, b.Len())
 	n, _ := b.text.ReadAt(buf, 0)
 	return buf[:n]
-}
-
-// Text returns the uncached rope underlying this buffer.
-// TODO: remove this function.
-func (b *Buffer) Text() *linerope.Node {
-	return b.text
 }
 
 // Len returns the number of bytes in this buffer.

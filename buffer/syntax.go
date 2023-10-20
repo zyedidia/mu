@@ -82,7 +82,7 @@ func (b *BufferData) InitialHighlight() {
 		return
 	}
 
-	b.highlighter.HighlightFunc(b.Buffer.Text(), b.syntbl, nil, &vm.Interval{})
+	b.highlighter.HighlightFunc(b.Buffer.Reader, b.syntbl, nil, &vm.Interval{})
 	b.hisem.Release(1)
 	b.redraw <- struct{}{}
 }
