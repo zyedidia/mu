@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
@@ -104,14 +105,21 @@ func main() {
 	// Set up a signal receiver so we can exit gracefully if the user/OS shuts
 	// us down (closing the screen, saving backups, etc.).
 	sigterm := make(chan os.Signal, 1)
-	quit := make(chan struct{})
-	terminate := make(chan int)
-	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP)
+	quit := make(chan struct{}, 1)
+	terminate := make(chan int, 1)
+	signal.Notify(sigterm, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGABRT)
 
 	go func() {
 		for {
 			<-sigterm
+			log.Println("received kill signal")
 			quit <- struct{}{}
+
+			// if editor does not gracefully shut down in 1 second then we kill
+			// ourselves from this goroutine
+			time.Sleep(1 * time.Second)
+			log.Println("force killing self")
+			os.Exit(1)
 		}
 	}()
 

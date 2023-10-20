@@ -91,8 +91,8 @@ func (i *InfoBar) prompt(msg, mode string) (resp string, canceled bool) {
 		i.ed.Active().Unregister(i.ed.interp)
 	}
 	i.cmd.Register(i.ed.interp)
-	i.ed.SendRedraw()
 	i.ed.displayLock.Unlock()
+	i.ed.SendRedraw()
 	r := <-i.cmd.Done
 	i.ed.displayLock.Lock()
 	i.ed.MustSetMode(m)

@@ -191,17 +191,23 @@ func (e *Editor) GetMode() string {
 	return e.mode.Core
 }
 
+func (e *Editor) HasMode() bool {
+	e.modeLock.Lock()
+	defer e.modeLock.Unlock()
+	return e.mode != nil
+}
+
 func (e *Editor) HandleEvent(ev tcell.Event) {
-	if e.mode == nil {
+	if !e.HasMode() {
 		return
 	}
 
 	if rev, ok := ev.(*tcell.EventResize); ok {
 		e.displayLock.Lock()
+		defer e.SendRedraw()
 		defer e.displayLock.Unlock()
 		w, h := rev.Size()
 		e.Resize(w, h)
-		e.SendRedraw()
 		return
 	}
 
@@ -212,6 +218,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	if ok {
 		go func() {
 			e.displayLock.Lock()
+			defer e.SendRedraw()
 			defer e.displayLock.Unlock()
 
 			defer func() {
@@ -225,7 +232,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 				e.Errors <- err
 				e.Error(err.Error())
 			}
-			e.SendRedraw()
 		}()
 	}
 }

@@ -131,13 +131,13 @@ func (e *Editor) Run(args []string) error {
 	go func() {
 		err := shell.RunWith(cmd, os.Stdin, e.log, e.log)
 		e.displayLock.Lock()
+		defer e.SendRedraw()
 		defer e.displayLock.Unlock()
 		if err != nil {
 			e.Error(err.Error())
 		} else {
 			e.Message("completed: " + cmd)
 		}
-		e.SendRedraw()
 	}()
 	return nil
 }
