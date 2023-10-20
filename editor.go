@@ -66,6 +66,10 @@ type Editor struct {
 	Suspend chan func()
 }
 
+type FillFn func(r rune, style theme.Style)
+type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
+type CursorFn func(x, y int)
+
 func newEditor(clip TermClip) *Editor {
 	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
@@ -259,6 +263,24 @@ func (e *Editor) MakePane() {
 	e.SetPane(len(e.panes) - 1)
 }
 
+func (e *Editor) NewEmptyBufPane() *buf.BufPane {
+	b, err := e.NewBufPane(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func (e *Editor) NewBufPane(in buffer.Input, out buffer.Output) (*buf.BufPane, error) {
+	b, err := buffer.NewBuffer(in, out, e.config, e.Redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
+		return nil, buffer.Cursor{}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return buf.NewBufPane(b, e.infobar, e, e.config, e), nil
+}
+
 func (e *Editor) open(in buffer.Input, out buffer.Output) error {
 	b, err := buffer.NewBuffer(in, out, e.config, e.Redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
 		return nil, buffer.Cursor{}
@@ -279,7 +301,7 @@ func (e *Editor) Resize(w, h int) {
 	e.infobar.Resize(w, 1)
 }
 
-func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
+func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	e.displayLock.Lock()
 	defer e.displayLock.Unlock()
 
@@ -298,15 +320,19 @@ func (e *Editor) Display(fill func(x rune, style theme.Style), draw func(x, y in
 }
 
 func (e *Editor) SetPane(i int) {
+	e.ActivatePane(e.panes[i])
+	e.cur = i
+}
+
+func (e *Editor) ActivatePane(pane pane.Pane) {
 	if e.infobar.active {
 		e.infobar.cmd.Unregister(e.interp)
 	} else if e.valid() {
-		e.panes[e.cur].Unregister(e.interp)
+		e.Active().Unregister(e.interp)
 	}
-	if e.panes[i] != nil {
-		e.panes[i].Register(e.interp)
+	if pane != nil {
+		pane.Register(e.interp)
 	}
-	e.cur = i
 }
 
 func (e *Editor) Error(msg string) {
