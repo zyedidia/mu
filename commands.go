@@ -91,6 +91,12 @@ func (e *Editor) NewBuffer() {
 	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
 }
 
+// --- Display ---
+
+func (e *Editor) Refresh() {
+	e.infobar.Clear()
+}
+
 // --- Commands ---
 
 func (e *Editor) Command() error {
@@ -256,5 +262,10 @@ var commands = []tclutil.Command{
 		"run",
 		(*Editor).Run,
 		"run: run a shell command in the background",
+	},
+	{
+		"refresh",
+		(*Editor).Refresh,
+		"refresh: refresh the display",
 	},
 }
