@@ -99,7 +99,7 @@ func (e *Editor) Command() error {
 		return nil
 	}
 	s, err := e.EvalRet(out, nil)
-	if err == nil {
+	if s != "" && err == nil {
 		e.infobar.Message(s)
 	}
 	return err
@@ -117,6 +117,23 @@ func (e *Editor) Shell() {
 		}
 	}
 	e.Suspend <- run
+}
+
+func (e *Editor) Run(args []string) error {
+	// TODO: use selection as stdin?
+	cmd := strings.Join(args, " ")
+	go func() {
+		err := shell.RunWith(cmd, os.Stdin, e.log, e.log)
+		e.displayLock.Lock()
+		defer e.displayLock.Unlock()
+		if err != nil {
+			e.Error(err.Error())
+		} else {
+			e.Message("completed: " + cmd)
+		}
+		e.SendRedraw()
+	}()
+	return nil
 }
 
 // --- Options ---
@@ -234,5 +251,10 @@ var commands = []tclutil.Command{
 		"shell",
 		(*Editor).Shell,
 		"shell: open a shell prompt",
+	},
+	{
+		"run",
+		(*Editor).Run,
+		"run: run a shell command in the background",
 	},
 }

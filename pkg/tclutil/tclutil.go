@@ -30,30 +30,40 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
 	t := v.Type()
 
 	cmd := func(itp *tcl.Interp, args []*tcl.TclObj) tcl.TclStatus {
-		if len(args) != t.NumIn()-1 {
-			return itp.Fail(fmt.Errorf("invalid number of arguments. got: %v, want %v", len(args), t.NumIn()-1))
-		}
-
 		argv := make([]reflect.Value, 0, len(args))
 		argv = append(argv, reflect.ValueOf(arg0))
 
-		for i := range args {
-			switch t.In(i + 1).Kind() {
-			case reflect.String:
-				argv = append(argv, reflect.ValueOf(args[i].AsString()))
-			case reflect.Int:
-				num, err := args[i].AsInt()
-				if err != nil {
-					return itp.Fail(fmt.Errorf("expected 'int' for argument %d (parse error %w)", i+1, err))
-				}
-				argv = append(argv, reflect.ValueOf(num))
-			case reflect.Int32: // rune
-				// ignore size
-				r, _ := utf8.DecodeRuneInString(args[i].AsString())
-				argv = append(argv, reflect.ValueOf(r))
+		var ret []reflect.Value
+		if t.NumIn() == 2 && t.In(1).Kind() == reflect.Slice && t.In(1).Elem().Kind() == reflect.String {
+			slice := make([]string, 0, len(args))
+			for i := range args {
+				slice = append(slice, args[i].AsString())
 			}
+			argv = append(argv, reflect.ValueOf(slice))
+			ret = v.Call(argv)
+		} else {
+			if len(args) != t.NumIn()-1 {
+				return itp.Fail(fmt.Errorf("invalid number of arguments. got: %v, want %v", len(args), t.NumIn()-1))
+			}
+
+			for i := range args {
+				switch t.In(i + 1).Kind() {
+				case reflect.String:
+					argv = append(argv, reflect.ValueOf(args[i].AsString()))
+				case reflect.Int:
+					num, err := args[i].AsInt()
+					if err != nil {
+						return itp.Fail(fmt.Errorf("expected 'int' for argument %d (parse error %w)", i+1, err))
+					}
+					argv = append(argv, reflect.ValueOf(num))
+				case reflect.Int32: // rune
+					// ignore size
+					r, _ := utf8.DecodeRuneInString(args[i].AsString())
+					argv = append(argv, reflect.ValueOf(r))
+				}
+			}
+			ret = v.Call(argv)
 		}
-		ret := v.Call(argv)
 
 		if len(ret) == 0 {
 			return 0

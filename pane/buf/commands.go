@@ -360,7 +360,7 @@ var commands = []tclutil.Command{
 	{
 		"save-as",
 		(*BufPane).SaveAs,
-		"save-as: change the current buffer's output and save",
+		"save-as <path>: change the current buffer's output and save",
 	},
 	{
 		"insert-at",

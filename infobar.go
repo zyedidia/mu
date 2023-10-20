@@ -42,6 +42,7 @@ func (i *InfoBar) Error(msg string) {
 
 func (i *InfoBar) Clear() {
 	i.msg = message{"", false}
+	log.Println("clear info")
 }
 
 // func (i *InfoBar) Prompt(msg string, update func(user string)) (string, bool) {

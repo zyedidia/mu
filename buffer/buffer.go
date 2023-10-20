@@ -200,6 +200,9 @@ func (b *BufferData) unmodified() {
 
 // Name returns this buffer's name, indicating the output writer.
 func (b *Buffer) Name() string {
+	if b.HasOutput() {
+		return b.out.Name()
+	}
 	return b.in.Name()
 }
 
