@@ -24,35 +24,37 @@ func (e *Edit) State() Cursor {
 
 // Do modifies the base text buffer to remove the deleted range and insert
 // text.
-func (e *Edit) Do(buf *Buffer) {
+func (e *Edit) Do(buf *BufferData) {
 	e.Sub = buf.Buffer.Slice(e.Start, e.End)
 	buf.edit(e.Start, e.End, e.Text)
 }
 
 // Undo modifies the base text buffer to remove Text and insert the substring.
-func (e *Edit) Undo(buf *Buffer) {
+func (e *Edit) Undo(buf *BufferData) {
 	buf.edit(e.Start, e.Start+len(e.Text), e.Sub)
 }
 
-func (b *Buffer) edit(start, end int, val []byte) {
+func (b *BufferData) edit(start, end int, val []byte) {
 	b.Buffer.Remove(start, end)
 	b.Buffer.Insert(start, val)
 	b.modified = true
 	b.minvalid = true
 
-	for i, c := range b.cursors {
-		p := c.Pos
-		// move for deletion
-		if c.Pos >= start && c.Pos < end {
-			p = start
-		} else if c.Pos >= start {
-			p -= end - start
+	for _, pb := range b.parents {
+		for i, c := range pb.cursors {
+			p := c.Pos
+			// move for deletion
+			if c.Pos >= start && c.Pos < end {
+				p = start
+			} else if c.Pos >= start {
+				p -= end - start
+			}
+			// move for insertion
+			if p >= start {
+				p += len(val)
+			}
+			pb.cursors[i].Pos = p
 		}
-		// move for insertion
-		if p >= start {
-			p += len(val)
-		}
-		b.cursors[i].Pos = p
 	}
 
 	b.syntbl.ApplyEdit(memo.Edit{

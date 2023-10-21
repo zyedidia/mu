@@ -26,7 +26,8 @@ const (
 
 type BufferData struct {
 	*text.Buffer
-	undo *undo.UndoTree[*Buffer, Cursor]
+	undo    *undo.UndoTree[*BufferData, Cursor]
+	parents []*Buffer
 
 	ModTime time.Time
 	// this channel will be closed when the buffer exits.
@@ -68,11 +69,13 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share fun
 	if share != nil {
 		dat, c := share(in.FullName())
 		if dat != nil {
-			return &Buffer{
+			b := &Buffer{
 				BufferData: dat,
 				cursors:    []Cursor{c},
 				cur:        0,
-			}, nil
+			}
+			dat.parents = append(dat.parents, b)
+			return b, nil
 		}
 	}
 	c := Cursor{}
@@ -134,9 +137,10 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 		refs:    1,
 		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
 		redraw:  redraw,
+		parents: []*Buffer{parent},
 	}
 
-	buf.undo = undo.NewTree[*Buffer, Cursor](parent, undo.NoCutoff)
+	buf.undo = undo.NewTree[*BufferData, Cursor](buf, undo.NoCutoff)
 
 	buf.unmodified()
 
@@ -228,7 +232,7 @@ func (b *Buffer) SetContent(newb *text.Buffer) {
 	// buffer with the new one. Sadly all undo history will be lost.
 	if b.Len() >= diffCutoff || newb.Len() >= diffCutoff {
 		b.Buffer = newb
-		b.undo = undo.NewTree[*Buffer, Cursor](b, undo.NoCutoff)
+		b.undo = undo.NewTree[*BufferData, Cursor](b.BufferData, undo.NoCutoff)
 		b.modified = true
 		return
 	}
