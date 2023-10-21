@@ -87,9 +87,9 @@ func (i *InfoBar) prompt(msg, mode string) (resp string, canceled bool) {
 	m := i.ed.GetMode()
 	i.ed.MustSetMode(mode)
 	i.active = true
-	if i.ed.valid() {
-		i.ed.Active().Unregister(i.ed.interp)
-	}
+	// if i.ed.valid() {
+	i.ed.ActivePane().Unregister(i.ed.interp)
+	// }
 	i.cmd.Register(i.ed.interp)
 	i.ed.displayLock.Unlock()
 	i.ed.SendRedraw()
@@ -97,7 +97,7 @@ func (i *InfoBar) prompt(msg, mode string) (resp string, canceled bool) {
 	i.ed.displayLock.Lock()
 	i.ed.MustSetMode(m)
 	i.cmd.Unregister(i.ed.interp)
-	i.ed.Active().Register(i.ed.interp)
+	i.ed.ActivePane().Register(i.ed.interp)
 	i.Clear()
 	i.active = false
 	return r.Resp, r.Canceled

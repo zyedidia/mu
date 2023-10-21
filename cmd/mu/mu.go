@@ -59,11 +59,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	w, h := s.Size()
+
 	var ed *mu.Editor
 	if len(args) > 0 {
-		ed = mu.NewEditorFromPath(args[0], s)
+		ed, err = mu.NewEditorFromPath(args[0], w, h, s)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	} else {
-		ed = mu.NewEditor(s)
+		ed = mu.NewEditor(w, h, s)
 	}
 
 	defer func() {

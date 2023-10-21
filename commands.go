@@ -20,7 +20,7 @@ func (e *Editor) Help() {
 	for _, cmd := range commands {
 		fmt.Fprintln(e.log, cmd.Doc)
 	}
-	e.Active().Help(os.Stdout)
+	e.ActivePane().Help(os.Stdout)
 }
 
 // --- Buffer management ---
@@ -32,63 +32,91 @@ func (e *Editor) Open(path string) error {
 	out := &output.File{
 		Path: path,
 	}
-	return e.open(in, out)
+	bp, err := e.NewBufPane(in, out)
+	if err != nil {
+		return err
+	}
+	e.ActiveTab().Open(e, bp)
+	return nil
+}
+
+func (e *Editor) Tab(path string) error {
+	bp, err := e.NewBufPaneFromPath(path)
+	if err != nil {
+		return err
+	}
+	e.OpenTabPane(bp)
+	return nil
+}
+
+func (e *Editor) TabNext() {
+	if e.curtab < len(e.tabs)-1 {
+		e.curtab++
+		e.ActivatePane(e.ActiveTab().ActivePane())
+	}
+}
+
+func (e *Editor) TabPrev() {
+	if e.curtab > 0 {
+		e.curtab--
+		e.ActivatePane(e.ActiveTab().ActivePane())
+	}
+}
+
+func (e *Editor) VSplit(path string) error {
+	bp, err := e.NewBufPaneFromPath(path)
+	if err != nil {
+		return err
+	}
+	e.ActiveTab().VSplit(e, bp)
+	return nil
+}
+
+func (e *Editor) HSplit(path string) error {
+	bp, err := e.NewBufPaneFromPath(path)
+	if err != nil {
+		return err
+	}
+	e.ActiveTab().HSplit(e, bp)
+	return nil
+}
+
+func (e *Editor) SplitSelectNext() {
+	e.ActiveTab().next()
+	e.ActivatePane(e.ActiveTab().ActivePane())
+}
+
+func (e *Editor) SplitSelectRight() {
+}
+
+func (e *Editor) SplitSelectLeft() {
+}
+
+func (e *Editor) SplitSelectUp() {
+}
+
+func (e *Editor) SplitSelectDown() {
 }
 
 func (e *Editor) Quit() error {
-	if err := e.Active().Close(); err != nil {
+	if err := e.ActivePane().Close(); err != nil {
 		return err
 	}
 
-	i := e.cur
-	e.panes[i].Unregister(e.interp)
-	copy(e.panes[i:], e.panes[i+1:])
-	e.panes[len(e.panes)-1] = nil
-	e.panes = e.panes[:len(e.panes)-1]
-	if !e.valid() && len(e.panes) > 0 {
-		e.SetPane(len(e.panes) - 1)
+	if len(e.ActiveTab().panes) <= 1 {
+		e.CloseTabPane()
+	} else {
+		e.ActiveTab().Unsplit(e)
 	}
+
 	return nil
 }
 
 func (e *Editor) QuitAll() {
-	ln := len(e.panes)
-	for i := 0; i < ln; i++ {
-		e.Quit()
-	}
-}
-
-func (e *Editor) ShowBuffers() {
-	for i, b := range e.panes {
-		if e.cur == i {
-			fmt.Fprintf(e.log, "[%d: %v]\n", i, b.Name())
-		} else {
-			fmt.Fprintf(e.log, "%d: %v\n", i, b.Name())
-		}
-	}
-}
-
-func (e *Editor) SetBuffer(name string) error {
-	for i, b := range e.panes {
-		if b.Name() == name {
-			e.SetPane(i)
-			return nil
-		}
-	}
-	return fmt.Errorf("buffer '%s' not found", name)
-}
-
-func (e *Editor) SetBufferIdx(idx int) error {
-	if idx < 0 || idx >= len(e.panes) {
-		return fmt.Errorf("invalid buffer index: %d", idx)
-	}
-	e.SetPane(idx)
-	return nil
-}
-
-func (e *Editor) NewBuffer() {
-	e.MakePane()
-	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
+	// ln := len(e.tabs)
+	// for _, t := range e.tabs {
+	// 	t.Quit()
+	// }
 }
 
 // --- Display ---
@@ -159,14 +187,14 @@ func (e *Editor) setOpt(name string, val interface{}) error {
 	if e.config.IsGlobalOpt(name) {
 		return e.config.SetGlobalOpt(name, val)
 	}
-	return e.panes[e.cur].SetOpt(name, val)
+	return e.ActivePane().SetOpt(name, val)
 }
 
 func (e *Editor) Get(name string) (string, error) {
 	if e.config.IsGlobalOpt(name) {
 		return fmt.Sprintf("%v", e.config.MustGlobalOpt(name)), nil
 	}
-	v, ok := e.panes[e.cur].GetOpt(name)
+	v, ok := e.ActivePane().GetOpt(name)
 	if !ok {
 		return "", fmt.Errorf("option %s not found", name)
 	}
@@ -216,26 +244,6 @@ var commands = []tclutil.Command{
 		"quit-all: close all panes",
 	},
 	{
-		"show-panes",
-		(*Editor).ShowBuffers,
-		"show-panes: display all open panes",
-	},
-	{
-		"set-pane-idx",
-		(*Editor).SetBufferIdx,
-		"set-pane-idx <idx>: set the currently active pane to the <idx>-th pane",
-	},
-	{
-		"set-pane",
-		(*Editor).SetBuffer,
-		"set-pane <name>: set the currently active pane to the pane with name <name>",
-	},
-	{
-		"new-buffer",
-		(*Editor).NewBuffer,
-		"new-buffer: open a new empty buffer",
-	},
-	{
 		"opt",
 		(*Editor).Opt,
 		"opt <name> <val>: assign option <name> to <val>",
@@ -269,5 +277,35 @@ var commands = []tclutil.Command{
 		"refresh",
 		(*Editor).Refresh,
 		"refresh: refresh the display",
+	},
+	{
+		"tab",
+		(*Editor).Tab,
+		"tab <path>: open new tab",
+	},
+	{
+		"tab-next",
+		(*Editor).TabNext,
+		"tab-next: select next tab",
+	},
+	{
+		"tab-prev",
+		(*Editor).TabPrev,
+		"tab-prev: select previous tab",
+	},
+	{
+		"vsplit",
+		(*Editor).VSplit,
+		"vsplit <path>: open a new vertical split",
+	},
+	{
+		"hsplit",
+		(*Editor).HSplit,
+		"hsplit <path>: open a new horizontal split",
+	},
+	{
+		"split-select-next",
+		(*Editor).SplitSelectNext,
+		"split-select-next: select the next split",
 	},
 }

@@ -183,6 +183,9 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
+			if linewid+vx-b.stcol >= b.width || vy >= b.height {
+				return
+			}
 			draw(linewid+vx-b.stcol, vy, mainc, combc, style)
 		},
 		Track: func(off, bx, by, vx, vy int) bool {

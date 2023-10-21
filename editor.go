@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"strings"
 	"sync"
 
 	goerrors "github.com/go-errors/errors"
@@ -17,7 +16,6 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/pane"
-	"github.com/zyedidia/mu/pane/buf"
 	"github.com/zyedidia/mu/pkg/input"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
@@ -40,8 +38,9 @@ func (e PanicErr) Error() string {
 }
 
 type Editor struct {
-	panes       []pane.Pane
-	cur         int
+	tabs        []*Tab
+	curtab      int
+	active      pane.Pane
 	interp      *tcl.Interp
 	displayLock sync.Mutex
 
@@ -71,7 +70,7 @@ type FillFn func(r rune, style theme.Style)
 type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
 type CursorFn func(x, y int)
 
-func newEditor(clip TermClip) *Editor {
+func newEditor(w, h int, clip TermClip) *Editor {
 	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
 	interp := tcl.NewInterp()
@@ -96,10 +95,12 @@ func newEditor(clip TermClip) *Editor {
 		theme:    th,
 		termclip: clip,
 		Redraw:   redraw,
+		w:        w,
+		h:        h,
+		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}),
-		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 	}
 	e.statusbar = NewStatusBar(e, defLeft, defRight)
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
@@ -109,18 +110,26 @@ func newEditor(clip TermClip) *Editor {
 	return e
 }
 
-func NewEditor(clip TermClip) *Editor {
-	e := newEditor(clip)
-	e.MakePane()
-	e.open(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
+func NewEditor(w, h int, clip TermClip) *Editor {
+	e := newEditor(w, h, clip)
+	e.OpenTabPane(e.NewEmptyBufPane())
 	return e
 }
 
-func NewEditorFromPath(path string, clip TermClip) *Editor {
-	e := newEditor(clip)
-	e.MakePane()
-	e.Open(path)
-	return e
+func NewEditorFromPath(path string, w, h int, clip TermClip) (*Editor, error) {
+	e := newEditor(w, h, clip)
+	in := &input.File{
+		Path: path,
+	}
+	out := &output.File{
+		Path: path,
+	}
+	bp, err := e.NewBufPane(in, out)
+	if err != nil {
+		return nil, err
+	}
+	e.OpenTabPane(bp)
+	return e, nil
 }
 
 func init() {
@@ -252,53 +261,18 @@ func (e *Editor) SendRedraw() {
 	e.Redraw <- struct{}{}
 }
 
-func (e *Editor) Active() pane.Pane {
-	return e.panes[e.cur]
+func (e *Editor) ActiveTab() *Tab {
+	return e.tabs[e.curtab]
 }
 
-func (e *Editor) valid() bool {
-	return e.cur >= 0 && e.cur < len(e.panes) && e.panes[e.cur] != nil
-}
-
-func (e *Editor) MakePane() {
-	e.panes = append(e.panes, nil)
-	e.SetPane(len(e.panes) - 1)
-}
-
-func (e *Editor) NewEmptyBufPane() *buf.BufPane {
-	b, err := e.NewBufPane(input.NewReader(strings.NewReader(""), "no name"), &output.Discard{})
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
-func (e *Editor) NewBufPane(in buffer.Input, out buffer.Output) (*buf.BufPane, error) {
-	b, err := buffer.NewBuffer(in, out, e.config, e.Redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
-		return nil, buffer.Cursor{}
-	})
-	if err != nil {
-		return nil, err
-	}
-	return buf.NewBufPane(b, e.infobar, e, e.config, e), nil
-}
-
-func (e *Editor) open(in buffer.Input, out buffer.Output) error {
-	b, err := buffer.NewBuffer(in, out, e.config, e.Redraw, func(name string) (*buffer.BufferData, buffer.Cursor) {
-		return nil, buffer.Cursor{}
-	})
-	if err != nil {
-		return err
-	}
-	e.panes[e.cur] = buf.NewBufPane(b, e.infobar, e, e.config, e)
-	e.panes[e.cur].Register(e.interp)
-	return nil
+func (e *Editor) ActivePane() pane.Pane {
+	return e.active
 }
 
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
-	for _, p := range e.panes {
-		p.Resize(w, h-2)
+	for _, t := range e.tabs {
+		t.Resize(w, h-2)
 	}
 	e.infobar.Resize(w, 1)
 }
@@ -308,8 +282,9 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	defer e.displayLock.Unlock()
 
 	fill(' ', e.theme.Default())
-	if e.cur >= 0 && e.cur < len(e.panes) {
-		e.panes[e.cur].Display(draw, cursor, e.theme)
+
+	if e.curtab >= 0 && e.curtab < len(e.tabs) {
+		e.tabs[e.curtab].Display(draw, cursor, e.theme)
 	}
 	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-1, mainc, combc, style)
@@ -321,20 +296,16 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	}, e.w)
 }
 
-func (e *Editor) SetPane(i int) {
-	e.ActivatePane(e.panes[i])
-	e.cur = i
-}
-
 func (e *Editor) ActivatePane(pane pane.Pane) {
 	if e.infobar.active {
 		e.infobar.cmd.Unregister(e.interp)
-	} else if e.valid() {
-		e.Active().Unregister(e.interp)
+	} else if e.active != nil {
+		e.active.Unregister(e.interp)
 	}
 	if pane != nil {
 		pane.Register(e.interp)
 	}
+	e.active = pane
 }
 
 func (e *Editor) Error(msg string) {
