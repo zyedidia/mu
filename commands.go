@@ -8,8 +8,6 @@ import (
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/kbd/cbind"
-	"github.com/zyedidia/mu/pkg/input"
-	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/shell"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -26,13 +24,7 @@ func (e *Editor) Help() {
 // --- Buffer management ---
 
 func (e *Editor) Open(path string) error {
-	in := &input.File{
-		Path: path,
-	}
-	out := &output.File{
-		Path: path,
-	}
-	bp, err := e.NewBufPane(in, out)
+	bp, err := e.NewBufPaneFromPath(path)
 	if err != nil {
 		return err
 	}

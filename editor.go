@@ -56,9 +56,8 @@ type Editor struct {
 
 	log *buffer.Buffer
 
-	w, h      int
-	infobar   *InfoBar
-	statusbar *StatusBar
+	w, h    int
+	infobar *InfoBar
 
 	Redraw  chan struct{}
 	Errors  chan error
@@ -102,7 +101,6 @@ func newEditor(w, h int, clip TermClip) *Editor {
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}),
 	}
-	e.statusbar = NewStatusBar(e, defLeft, defRight)
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
 	e.MustSetMode("micro")
 	e.Register()
@@ -272,7 +270,7 @@ func (e *Editor) ActivePane() pane.Pane {
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
 	for _, t := range e.tabs {
-		t.Resize(w, h-2)
+		t.Resize(w, h-1) // -1 for infobar
 	}
 	e.infobar.Resize(w, 1)
 }
@@ -291,9 +289,6 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	}, func(x, y int) {
 		cursor(x, e.h+y-1)
 	})
-	e.statusbar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
-		draw(x, e.h+y-2, mainc, combc, style)
-	}, e.w)
 }
 
 func (e *Editor) ActivatePane(pane pane.Pane) {
@@ -306,6 +301,8 @@ func (e *Editor) ActivatePane(pane pane.Pane) {
 		pane.Register(e.interp)
 	}
 	e.active = pane
+
+	e.Resize(e.w, e.h)
 }
 
 func (e *Editor) Error(msg string) {

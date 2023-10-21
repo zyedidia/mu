@@ -385,11 +385,6 @@ func (bp *BufPane) Modified() string {
 
 var commands = []tclutil.Command{
 	{
-		"modified",
-		(*BufPane).Modified,
-		"modified: returns a symbol indicating if the buffer is modified",
-	},
-	{
 		"save",
 		(*BufPane).Save,
 		"save [path]: save the current buffer",
@@ -628,5 +623,48 @@ var commands = []tclutil.Command{
 		"paste",
 		(*BufPane).Paste,
 		"paste: inserts the contents of the clipboard at the current cursor's position",
+	},
+}
+
+var statuscmds = []tclutil.Command{
+	{
+		"modified",
+		(*BufPane).Modified,
+		"modified: returns a symbol indicating if the buffer is modified",
+	},
+	{
+		"name",
+		(*BufPane).Name,
+		"name: return the name of the current buffer",
+	},
+	{
+		"line-col",
+		(*BufPane).LineCol,
+		"line-col <pos>: return the line/col pair corresponding to a byte offset",
+	},
+	{
+		"offset",
+		(*BufPane).Offset,
+		"offset <line> <col>: return the offset corresponding to a line/col pair",
+	},
+	{
+		"size",
+		(*BufPane).Size,
+		"size: return the number of bytes in the buffer",
+	},
+	{
+		"cursor-col",
+		(*BufPane).CursorCol,
+		"cursor-col: returns the column number of the current cursor",
+	},
+	{
+		"cursor-line",
+		(*BufPane).CursorLine,
+		"cursor-line: returns the line number of the current cursor",
+	},
+	{
+		"filetype",
+		(*BufPane).Filetype,
+		"filetype: return the filetype of the current buffer",
 	},
 }

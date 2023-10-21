@@ -1,6 +1,8 @@
 package mu
 
 import (
+	"log"
+
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/theme"
 	"github.com/zyedidia/mu/split"
@@ -9,6 +11,15 @@ import (
 type splitpane struct {
 	id   uint
 	pane pane.Pane
+	bar  *StatusBar
+}
+
+func SplitPane(id uint, p pane.Pane) splitpane {
+	return splitpane{
+		id:   id,
+		pane: p,
+		bar:  NewStatusBar(p, defLeft, defRight),
+	}
 }
 
 type Tab struct {
@@ -19,16 +30,13 @@ type Tab struct {
 }
 
 func (e *Editor) newTab(p pane.Pane) *Tab {
-	root := split.NewRoot(0, 0, e.w, e.h-2)
+	root := split.NewRoot(0, 0, e.w, e.h-1) // -1 for infobar
 	t := &Tab{
-		w:    e.w,
-		h:    e.h - 2,
-		root: root,
-		panes: []splitpane{splitpane{
-			id:   root.ID(),
-			pane: p,
-		}},
-		cur: root.ID(),
+		w:     e.w,
+		h:     e.h - 1, // -1 for infobar
+		root:  root,
+		panes: []splitpane{SplitPane(root.ID(), p)},
+		cur:   root.ID(),
 	}
 	t.Resize(t.w, t.h)
 	return t
@@ -38,7 +46,7 @@ func (t *Tab) Resize(w, h int) {
 	t.root.Resize(w, h)
 	for _, p := range t.panes {
 		node := t.root.GetNode(p.id)
-		p.pane.Resize(node.W, node.H)
+		p.pane.Resize(node.W, node.H-1) // -1 for status bar
 	}
 	t.w, t.h = w, h
 }
@@ -55,6 +63,7 @@ func (t *Tab) ActivePane() pane.Pane {
 func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 	for _, p := range t.panes {
 		n := t.root.GetNode(p.id)
+		log.Println("display", p.id)
 		p.pane.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+y, mainc, combc, style)
 		}, func(x, y int) {
@@ -62,6 +71,9 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 				cursor(n.X+x, n.Y+y)
 			}
 		}, th)
+		p.bar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+			draw(n.X+x, n.Y+n.H+y-1, mainc, combc, style)
+		}, t.w, th)
 	}
 }
 
@@ -69,10 +81,7 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 
 func (t *Tab) VSplit(e *Editor, p pane.Pane) {
 	nid := t.root.GetNode(t.cur).VSplit(true)
-	t.panes = append(t.panes, splitpane{
-		pane: p,
-		id:   nid,
-	})
+	t.panes = append(t.panes, SplitPane(nid, p))
 	t.cur = nid
 	e.ActivatePane(p)
 	t.Resize(t.w, t.h)
@@ -80,10 +89,7 @@ func (t *Tab) VSplit(e *Editor, p pane.Pane) {
 
 func (t *Tab) HSplit(e *Editor, p pane.Pane) {
 	nid := t.root.GetNode(t.cur).HSplit(true)
-	t.panes = append(t.panes, splitpane{
-		pane: p,
-		id:   nid,
-	})
+	t.panes = append(t.panes, SplitPane(nid, p))
 	t.cur = nid
 	e.ActivatePane(p)
 	t.Resize(t.w, t.h)
@@ -160,9 +166,9 @@ func (e *Editor) CloseTabPane() {
 func (t *Tab) Open(e *Editor, p pane.Pane) {
 	for i, sp := range t.panes {
 		if sp.id == t.cur {
-			t.panes[i].pane = p
+			t.panes[i] = SplitPane(sp.id, p)
+			e.ActivatePane(p)
 			break
 		}
 	}
-	e.ActivatePane(t.ActivePane())
 }
