@@ -6,7 +6,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/zyedidia/gotcl"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/pkg/tclutil"
@@ -53,7 +52,7 @@ type BufPane struct {
 	// which gives vertical cursor movement a more natural feel.
 	vertical bool
 
-	status *gotcl.Interp
+	status *tcl.Interp
 
 	messager Messager
 	clip     Clipboard
@@ -79,7 +78,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		clip:          clip,
 		messager:      msger,
 		editor:        editor,
-		status:        gotcl.NewInterp(),
+		status:        tcl.NewInterp(),
 	}
 	for _, c := range statuscmds {
 		tclutil.Register(bp.status, c.Name, c.Fn, bp)

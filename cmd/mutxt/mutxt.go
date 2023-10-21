@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 
 	"github.com/zyedidia/mu"
 	"gopkg.in/readline.v1"
@@ -14,10 +15,14 @@ func main() {
 	args := flag.Args()
 
 	var ed *mu.Editor
+	var err error
 	if len(args) > 0 {
-		ed = mu.NewEditorFromPath(args[0], nil)
+		ed, err = mu.NewEditorFromPath(args[0], 0, 0, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
 	} else {
-		ed = mu.NewEditor(nil)
+		ed = mu.NewEditor(0, 0, nil)
 	}
 
 	rl, err := readline.New("> ")

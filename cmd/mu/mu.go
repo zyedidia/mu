@@ -96,7 +96,8 @@ func main() {
 	if len(args) > 0 {
 		ed, err = mu.NewEditorFromPath(args[0], w, h, s)
 		if err != nil {
-			fmt.Println(err)
+			s.Fini()
+			fmt.Fprintln(os.Stderr, err)
 			exit(1)
 		}
 	} else {
@@ -106,7 +107,7 @@ func main() {
 	defer func() {
 		if err := recover(); err != nil {
 			s.Fini()
-			fmt.Printf("%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
+			fmt.Fprintf(os.Stderr, "%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
 			exit(1)
 		}
 	}()
@@ -164,7 +165,7 @@ func main() {
 		defer func() {
 			if err := recover(); err != nil {
 				s.Fini()
-				fmt.Printf("%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
+				fmt.Fprintf(os.Stderr, "%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
 				exit(1)
 			}
 		}()
@@ -179,7 +180,7 @@ func main() {
 				var pe mu.PanicErr
 				if errors.As(err, &pe) {
 					s.Suspend()
-					fmt.Println(err)
+					fmt.Fprintln(os.Stderr, err)
 					EnterToContinue()
 					s.Resume()
 					ed.Display(fill, draw, cursor)

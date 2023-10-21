@@ -57,7 +57,3 @@ func (s *Stats) String() string {
 	fmt.Fprintf(b, "avg alloc: %s\n", humanize.Bytes(uint64(float64(totalloc)/float64(len(s.Alloc)))))
 	return b.String()
 }
-
-func bToMb(b uint64) uint64 {
-	return b / 1024 / 1024
-}
