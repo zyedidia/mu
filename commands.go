@@ -8,6 +8,7 @@ import (
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/kbd/cbind"
+	"github.com/zyedidia/mu/build"
 	"github.com/zyedidia/mu/pkg/shell"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -134,6 +135,18 @@ func (e *Editor) Command() error {
 	return err
 }
 
+func (e *Editor) CommandEdit(p string) error {
+	out, canceled := e.infobar.prompt("> ", p, "cmd")
+	if canceled {
+		return nil
+	}
+	s, err := e.EvalRet(out, nil)
+	if s != "" && err == nil {
+		e.infobar.Message(s)
+	}
+	return err
+}
+
 func (e *Editor) Shell() {
 	cmd, cancel := e.infobar.Prompt("$ ")
 	if cancel {
@@ -217,6 +230,10 @@ func (e *Editor) Mode() string {
 	return e.GetMode()
 }
 
+func (e *Editor) Version() string {
+	return build.Version
+}
+
 var commands = []tclutil.Command{
 	{
 		"mode",
@@ -257,6 +274,11 @@ var commands = []tclutil.Command{
 		"command",
 		(*Editor).Command,
 		"command: open a command prompt",
+	},
+	{
+		"command-edit",
+		(*Editor).CommandEdit,
+		"command <cmd>: open a command prompt with a placeholder command",
 	},
 	{
 		"shell",
@@ -302,5 +324,10 @@ var commands = []tclutil.Command{
 		"split-select-next",
 		(*Editor).SplitSelectNext,
 		"split-select-next: select the next split",
+	},
+	{
+		"version",
+		(*Editor).Version,
+		"version: returns the version number",
 	},
 }

@@ -14,11 +14,11 @@ type splitpane struct {
 	bar  *StatusBar
 }
 
-func SplitPane(id uint, p pane.Pane) splitpane {
+func SplitPane(e *Editor, id uint, p pane.Pane) splitpane {
 	return splitpane{
 		id:   id,
 		pane: p,
-		bar:  NewStatusBar(p, defLeft, defRight),
+		bar:  NewStatusBar(e, p, defLeft, defRight),
 	}
 }
 
@@ -35,7 +35,7 @@ func (e *Editor) newTab(p pane.Pane) *Tab {
 		w:     e.w,
 		h:     e.h - 1, // -1 for infobar
 		root:  root,
-		panes: []splitpane{SplitPane(root.ID(), p)},
+		panes: []splitpane{SplitPane(e, root.ID(), p)},
 		cur:   root.ID(),
 	}
 	t.Resize(t.w, t.h)
@@ -81,7 +81,7 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 
 func (t *Tab) VSplit(e *Editor, p pane.Pane) {
 	nid := t.root.GetNode(t.cur).VSplit(true)
-	t.panes = append(t.panes, SplitPane(nid, p))
+	t.panes = append(t.panes, SplitPane(e, nid, p))
 	t.cur = nid
 	e.ActivatePane(p)
 	t.Resize(t.w, t.h)
@@ -89,7 +89,7 @@ func (t *Tab) VSplit(e *Editor, p pane.Pane) {
 
 func (t *Tab) HSplit(e *Editor, p pane.Pane) {
 	nid := t.root.GetNode(t.cur).HSplit(true)
-	t.panes = append(t.panes, SplitPane(nid, p))
+	t.panes = append(t.panes, SplitPane(e, nid, p))
 	t.cur = nid
 	e.ActivatePane(p)
 	t.Resize(t.w, t.h)
@@ -166,7 +166,7 @@ func (e *Editor) CloseTabPane() {
 func (t *Tab) Open(e *Editor, p pane.Pane) {
 	for i, sp := range t.panes {
 		if sp.id == t.cur {
-			t.panes[i] = SplitPane(sp.id, p)
+			t.panes[i] = SplitPane(e, sp.id, p)
 			e.ActivatePane(p)
 			break
 		}

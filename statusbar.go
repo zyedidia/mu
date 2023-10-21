@@ -10,7 +10,7 @@ import (
 
 const (
 	defLeft  = "$name $modified($(cursor-line),$(cursor-col)) | ft:$filetype"
-	defRight = "$mode"
+	defRight = "mu $version"
 )
 
 type StatusBar struct {
@@ -20,12 +20,16 @@ type StatusBar struct {
 	right string
 }
 
-func NewStatusBar(p pane.Pane, left, right string) *StatusBar {
+func NewStatusBar(e *Editor, p pane.Pane, left, right string) *StatusBar {
 	return &StatusBar{
 		left:  left,
 		right: right,
 		resolve: func(expr string) (string, error) {
-			return p.EvalRet(expr, nil)
+			s, err := p.EvalRet(expr, nil)
+			if err != nil {
+				return e.EvalRet(expr, nil)
+			}
+			return s, nil
 		},
 	}
 }
