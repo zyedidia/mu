@@ -1,8 +1,6 @@
 package mu
 
 import (
-	"log"
-
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/theme"
 	"github.com/zyedidia/mu/split"
@@ -63,7 +61,6 @@ func (t *Tab) ActivePane() pane.Pane {
 func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 	for _, p := range t.panes {
 		n := t.root.GetNode(p.id)
-		log.Println("display", p.id)
 		p.pane.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+y, mainc, combc, style)
 		}, func(x, y int) {
@@ -73,7 +70,7 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 		}, th)
 		p.bar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+n.H+y-1, mainc, combc, style)
-		}, t.w, th)
+		}, n.W, th)
 	}
 }
 
