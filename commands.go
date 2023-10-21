@@ -112,11 +112,14 @@ func (e *Editor) Quit() error {
 	return nil
 }
 
-func (e *Editor) QuitAll() {
-	// ln := len(e.tabs)
-	// for _, t := range e.tabs {
-	// 	t.Quit()
-	// }
+func (e *Editor) QuitAll() error {
+	for len(e.tabs) > 0 {
+		err := e.Quit()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // --- Display ---
