@@ -44,7 +44,12 @@ func (t *Tab) Resize(w, h int) {
 	t.root.Resize(w, h)
 	for _, p := range t.panes {
 		node := t.root.GetNode(p.id)
-		p.pane.Resize(node.W, node.H-1) // -1 for status bar
+		// make space for the divider if we are not fully wide
+		nw := node.W - 1
+		if node.X+node.W == w {
+			nw = node.W
+		}
+		p.pane.Resize(nw, node.H-1) // -1 for status bar
 	}
 	t.w, t.h = w, h
 }
@@ -71,6 +76,12 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 		p.bar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+n.H+y-1, mainc, combc, style)
 		}, n.W, th)
+		if n.W+n.X != t.w {
+			divstyle := th.Default().Add(theme.AttrReverse)
+			for i := 0; i < n.H; i++ {
+				draw(n.X+n.W-1, n.Y+i, '|', nil, divstyle)
+			}
+		}
 	}
 }
 
