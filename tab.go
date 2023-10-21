@@ -73,9 +73,13 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 				cursor(n.X+x, n.Y+y)
 			}
 		}, th)
+		nw := n.W - 1
+		if n.X+n.W == t.w {
+			nw = n.W
+		}
 		p.bar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+n.H+y-1, mainc, combc, style)
-		}, n.W, th)
+		}, nw, th)
 		if n.W+n.X != t.w {
 			divstyle := th.Default().Add(theme.AttrReverse)
 			for i := 0; i < n.H; i++ {
