@@ -15,6 +15,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/mu"
+	"github.com/zyedidia/mu/build"
 	"github.com/zyedidia/mu/pkg/theme"
 )
 
@@ -39,6 +40,8 @@ const errmsg = `Please report this issue online on GitHub.`
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var showstats = flag.Bool("stats", false, "create performance statistics files")
+var version = flag.Bool("version", false, "show version")
+
 var stats Stats
 
 func exit(code int) {
@@ -61,6 +64,11 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *version {
+		fmt.Println(build.Version)
+		return
+	}
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
