@@ -44,6 +44,8 @@ type Editor struct {
 	interp      *tcl.Interp
 	displayLock sync.Mutex
 
+	buffers []*buffer.Buffer
+
 	modes    map[string]kbd.Config
 	mode     *kbd.Config
 	modeLock sync.Mutex

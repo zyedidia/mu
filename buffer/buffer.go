@@ -206,6 +206,13 @@ func (b *Buffer) Name() string {
 	return b.in.Name()
 }
 
+func (b *Buffer) FullName() string {
+	if b.HasOutput() {
+		return b.out.FullName()
+	}
+	return b.in.FullName()
+}
+
 func (b *Buffer) HasOutput() bool {
 	_, ok := b.out.(*output.Discard)
 	return !ok

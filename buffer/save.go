@@ -15,6 +15,7 @@ import (
 type Output interface {
 	Open() (io.Writer, error)
 	Name() string
+	FullName() string
 }
 
 // Hash performs an md5 hash on the buffer's contents.

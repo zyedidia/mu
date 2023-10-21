@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/google/renameio"
 	"github.com/zyedidia/mu/pkg/shell"
@@ -55,6 +56,11 @@ func (afo *AtomicFile) Open() (io.Writer, error) {
 
 func (afo *AtomicFile) Name() string {
 	return afo.Path
+}
+
+func (afo *AtomicFile) FullName() string {
+	p, _ := filepath.Abs(afo.Path)
+	return p
 }
 
 // RootFile saves a file with sudo (or a "sudo"-like command such as "doas") by
@@ -120,4 +126,9 @@ func (rf *RootFile) Open() (io.Writer, error) {
 
 func (rf *RootFile) Name() string {
 	return rf.Path
+}
+
+func (rf *RootFile) FullName() string {
+	p, _ := filepath.Abs(rf.Path)
+	return p
 }

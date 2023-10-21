@@ -2,6 +2,7 @@ package output
 
 import (
 	"io"
+	"path/filepath"
 )
 
 const (
@@ -23,6 +24,11 @@ func (afo *AtomicFile) Name() string {
 	return afo.Path
 }
 
+func (afo *AtomicFile) FullName() string {
+	p, _ := filepath.Abs(afo.Path)
+	return p
+}
+
 // RootFile is not supported on Windows.
 type RootFile struct {
 	RootCmd string
@@ -35,4 +41,9 @@ func (rf *RootFile) Open() (io.Writer, error) {
 
 func (rf *RootFile) Name() string {
 	return rf.Path
+}
+
+func (rf *RootFile) FullName() string {
+	p, _ := filepath.Abs(rf.Path)
+	return p
 }

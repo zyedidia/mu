@@ -9,6 +9,7 @@ import (
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/kbd/cbind"
 	"github.com/zyedidia/mu/build"
+	"github.com/zyedidia/mu/pane/buf"
 	"github.com/zyedidia/mu/pkg/shell"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -33,8 +34,13 @@ func (e *Editor) Open(path string) error {
 	return nil
 }
 
-func (e *Editor) Tab(path string) error {
-	bp, err := e.NewBufPaneFromPath(path)
+func (e *Editor) Tab(args []string) (err error) {
+	var bp *buf.BufPane
+	if len(args) == 0 {
+		bp = e.NewEmptyBufPane()
+	} else {
+		bp, err = e.NewBufPaneFromPath(args[0])
+	}
 	if err != nil {
 		return err
 	}
@@ -56,8 +62,13 @@ func (e *Editor) TabPrev() {
 	}
 }
 
-func (e *Editor) VSplit(path string) error {
-	bp, err := e.NewBufPaneFromPath(path)
+func (e *Editor) VSplit(args []string) (err error) {
+	var bp *buf.BufPane
+	if len(args) == 0 {
+		bp = e.NewEmptyBufPane()
+	} else {
+		bp, err = e.NewBufPaneFromPath(args[0])
+	}
 	if err != nil {
 		return err
 	}
@@ -65,8 +76,13 @@ func (e *Editor) VSplit(path string) error {
 	return nil
 }
 
-func (e *Editor) HSplit(path string) error {
-	bp, err := e.NewBufPaneFromPath(path)
+func (e *Editor) HSplit(args []string) (err error) {
+	var bp *buf.BufPane
+	if len(args) == 0 {
+		bp = e.NewEmptyBufPane()
+	} else {
+		bp, err = e.NewBufPaneFromPath(args[0])
+	}
 	if err != nil {
 		return err
 	}

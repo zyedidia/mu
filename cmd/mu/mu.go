@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -36,6 +37,20 @@ func EnterToContinue() {
 
 const errmsg = `Please report this issue online on GitHub.`
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var showstats = flag.Bool("stats", false, "create performance statistics files")
+var stats Stats
+
+func exit(code int) {
+	if *cpuprofile != "" {
+		pprof.StopCPUProfile()
+	}
+	if *showstats {
+		fmt.Print(stats.String())
+	}
+	os.Exit(code)
+}
+
 func main() {
 	f, err := os.Create(filepath.Join("/tmp", "mu.log"))
 	if err != nil {
@@ -47,16 +62,24 @@ func main() {
 
 	flag.Parse()
 
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
 	args := flag.Args()
 
 	s, e := tcell.NewScreen()
 	if e != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
+		exit(1)
 	}
 	if e := s.Init(); e != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", e)
-		os.Exit(1)
+		exit(1)
 	}
 
 	w, h := s.Size()
@@ -66,7 +89,7 @@ func main() {
 		ed, err = mu.NewEditorFromPath(args[0], w, h, s)
 		if err != nil {
 			fmt.Println(err)
-			os.Exit(1)
+			exit(1)
 		}
 	} else {
 		ed = mu.NewEditor(w, h, s)
@@ -76,7 +99,7 @@ func main() {
 		if err := recover(); err != nil {
 			s.Fini()
 			fmt.Printf("%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
-			os.Exit(1)
+			exit(1)
 		}
 	}()
 
@@ -122,7 +145,7 @@ func main() {
 				// ourselves from this goroutine
 				time.Sleep(1 * time.Second)
 				log.Println("force killing self")
-				os.Exit(1)
+				exit(1)
 			case <-sigint:
 				// do nothing
 			}
@@ -134,7 +157,7 @@ func main() {
 			if err := recover(); err != nil {
 				s.Fini()
 				fmt.Printf("%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
-				os.Exit(1)
+				exit(1)
 			}
 		}()
 
@@ -158,13 +181,14 @@ func main() {
 				s.Suspend()
 				f()
 				<-ed.Resume
-				log.Println("resuming")
 				s.Resume()
 				ed.Display(fill, draw, cursor)
 				s.Show()
 			case <-ed.Redraw:
+				start := time.Now()
 				ed.Display(fill, draw, cursor)
 				s.Show()
+				stats.AddRedrawTime(time.Since(start))
 			case <-quit:
 				break loop
 			}
@@ -176,10 +200,14 @@ func main() {
 	for {
 		select {
 		case ev := <-evs:
+			start := time.Now()
 			ed.HandleEvent(ev)
+			stats.AddEventTime(time.Since(start))
 		case code := <-terminate:
-			os.Exit(code)
+			exit(code)
 		}
+
+		stats.SampleAlloc()
 	}
 }
 

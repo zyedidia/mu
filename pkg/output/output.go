@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 var (
@@ -21,6 +22,7 @@ var (
 type Output interface {
 	Open() (io.Writer, error)
 	Name() string
+	FullName() string
 }
 
 // Discard opens a null writer which writes data into the void.
@@ -32,6 +34,10 @@ func (no *Discard) Open() (io.Writer, error) {
 
 func (no *Discard) Name() string {
 	return "Discard"
+}
+
+func (no *Discard) FullName() string {
+	return no.Name()
 }
 
 // A File is an Output that writes data to a file at the given path.
@@ -62,6 +68,11 @@ func (fo *File) Name() string {
 	return fo.Path
 }
 
+func (fo *File) FullName() string {
+	p, _ := filepath.Abs(fo.Path)
+	return p
+}
+
 type Stdout struct{}
 
 func (s *Stdout) Open() (io.Writer, error) {
@@ -78,6 +89,10 @@ func (s *Stdout) Open() (io.Writer, error) {
 
 func (s *Stdout) Name() string {
 	return "stdout"
+}
+
+func (s *Stdout) FullName() string {
+	return s.Name()
 }
 
 // A WriterCloser wraps a writer with an additional close function.
