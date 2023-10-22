@@ -344,6 +344,42 @@ func (bp *BufPane) CursorSelection() string {
 	return string(bp.Cursor().Selection(bp.Buffer))
 }
 
+// --- Search ---
+
+func (bp *BufPane) Find(search string) error {
+	rxp, err := regexp.Compile(search)
+	if err != nil {
+		return err
+	}
+	match := bp.Buffer.FindDown(rxp, bp.Cursor().Pos)
+	if match != nil {
+		bp.MoveTo(match[0])
+		return nil
+	}
+
+	return errors.New("no matches")
+}
+
+func (bp *BufPane) FindLiteral(search string) error {
+	return bp.Find(regexp.QuoteMeta(search))
+}
+
+func (bp *BufPane) FindPrompt() error {
+	search, canceled := bp.messager.Prompt("Find: ")
+	if canceled {
+		return nil
+	}
+	return bp.Find(search)
+}
+
+func (bp *BufPane) FindLiteralPrompt() error {
+	search, canceled := bp.messager.Prompt("Find (no regex): ")
+	if canceled {
+		return nil
+	}
+	return bp.FindLiteral(search)
+}
+
 // --- Locations ---
 
 func (bp *BufPane) LineCol(pos int) []int {
@@ -623,6 +659,26 @@ var commands = []tclutil.Command{
 		"paste",
 		(*BufPane).Paste,
 		"paste: inserts the contents of the clipboard at the current cursor's position",
+	},
+	{
+		"find",
+		(*BufPane).Find,
+		"find <regex>: searches for a regular expression",
+	},
+	{
+		"find-literal",
+		(*BufPane).FindLiteral,
+		"find-literal <search>: searches for a literal string",
+	},
+	{
+		"find-prompt",
+		(*BufPane).FindPrompt,
+		"find-prompt: opens an interactive prompt for regex searching",
+	},
+	{
+		"find-literal-prompt",
+		(*BufPane).FindLiteralPrompt,
+		"find-literal-prompt: opens an interactive prompt for literal searching",
 	},
 }
 
