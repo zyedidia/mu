@@ -22,6 +22,7 @@ require (
 	github.com/zyedidia/kbd v0.0.0-20231031223131-799b55808292
 	go.lsp.dev/protocol v0.12.0
 	go.lsp.dev/uri v0.3.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
