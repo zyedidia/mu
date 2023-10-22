@@ -17,7 +17,7 @@ func (bp *BufPane) Save(args []string) error {
 	}
 
 	if !bp.HasOutput() {
-		path, canceled := bp.messager.Prompt("Filename: ")
+		path, canceled := bp.messager.Prompt("save", "Filename: ")
 		if canceled {
 			return errors.New("save failed: no output file")
 		}
@@ -365,7 +365,7 @@ func (bp *BufPane) FindLiteral(search string) error {
 }
 
 func (bp *BufPane) FindPrompt() error {
-	search, canceled := bp.messager.Prompt("Find: ")
+	search, canceled := bp.messager.Prompt("find", "Find: ")
 	if canceled {
 		return nil
 	}
@@ -373,7 +373,7 @@ func (bp *BufPane) FindPrompt() error {
 }
 
 func (bp *BufPane) FindLiteralPrompt() error {
-	search, canceled := bp.messager.Prompt("Find (no regex): ")
+	search, canceled := bp.messager.Prompt("find", "Find (no regex): ")
 	if canceled {
 		return nil
 	}

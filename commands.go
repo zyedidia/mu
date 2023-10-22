@@ -154,7 +154,7 @@ func (e *Editor) Refresh() {
 // --- Commands ---
 
 func (e *Editor) Command() error {
-	out, canceled := e.infobar.Prompt("> ")
+	out, canceled := e.infobar.Prompt("cmd", "> ")
 	if canceled {
 		return nil
 	}
@@ -166,7 +166,7 @@ func (e *Editor) Command() error {
 }
 
 func (e *Editor) CommandEdit(p string) error {
-	out, canceled := e.infobar.prompt("> ", p, "cmd")
+	out, canceled := e.infobar.prompt("cmd", "> ", p, "cmd")
 	if canceled {
 		return nil
 	}
@@ -178,7 +178,7 @@ func (e *Editor) CommandEdit(p string) error {
 }
 
 func (e *Editor) Shell() {
-	cmd, cancel := e.infobar.Prompt("$ ")
+	cmd, cancel := e.infobar.Prompt("shell", "$ ")
 	if cancel {
 		return
 	}

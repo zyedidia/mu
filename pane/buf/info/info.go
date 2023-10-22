@@ -15,8 +15,10 @@ type InfoResp struct {
 type InfoPane struct {
 	*buf.BufPane
 
-	// history of responses, 0 is oldest
-	history []string
+	typ string
+
+	// history of responses per prompt type, 0 is oldest
+	history map[string][]string
 	histidx int
 
 	Done chan InfoResp
@@ -26,6 +28,7 @@ func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg b
 	ip := &InfoPane{
 		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, editor, false),
 		Done:    make(chan InfoResp),
+		history: make(map[string][]string),
 	}
 	return ip
 }
@@ -42,4 +45,9 @@ func (ip *InfoPane) Unregister(interp *tcl.Interp) {
 	for _, c := range commands {
 		tclutil.Unregister(interp, c.Name)
 	}
+}
+
+func (ip *InfoPane) SetType(s string) {
+	ip.typ = s
+	ip.histidx = len(ip.history[ip.typ])
 }

@@ -111,7 +111,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
-		Resume:   make(chan struct{}),
+		Resume:   make(chan struct{}, 1),
 	}
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
 	e.MustSetMode("micro")

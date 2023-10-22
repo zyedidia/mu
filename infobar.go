@@ -74,17 +74,18 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 	}
 }
 
-func (i *InfoBar) Prompt(msg string) (resp string, canceled bool) {
-	return i.prompt(msg, "", "cmd")
+func (i *InfoBar) Prompt(typ, msg string) (resp string, canceled bool) {
+	return i.prompt(typ, msg, "", "cmd")
 }
 
 func (i *InfoBar) CharPrompt(msg string) (resp string, canceled bool) {
-	return i.prompt(msg, "", "charcmd")
+	return i.prompt("charcmd", msg, "", "charcmd")
 }
 
-func (i *InfoBar) prompt(msg, partial, mode string) (resp string, canceled bool) {
+func (i *InfoBar) prompt(typ, msg, partial, mode string) (resp string, canceled bool) {
 	i.Message(msg)
 	i.cmd.BufPane.Insert(0, []byte(partial))
+	i.cmd.SetType(typ)
 
 	m := i.ed.GetMode()
 	i.ed.MustSetMode(mode)

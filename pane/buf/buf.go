@@ -22,7 +22,7 @@ type Clipboard interface {
 }
 
 type Messager interface {
-	Prompt(p string) (string, bool)
+	Prompt(typ, p string) (string, bool)
 	CharPrompt(p string) (string, bool)
 	Message(msg string)
 	Error(msg string)

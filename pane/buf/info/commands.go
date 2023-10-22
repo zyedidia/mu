@@ -1,16 +1,13 @@
 package info
 
 import (
-	"log"
-
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
 func (ip *InfoPane) Execute() {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
-	ip.history = append(ip.history, text)
-	ip.histidx = len(ip.history)
+	ip.history[ip.typ] = append(ip.history[ip.typ], text)
 	ip.Done <- InfoResp{text, false}
 }
 
@@ -25,19 +22,18 @@ func (ip *InfoPane) EnterChar(char rune) {
 }
 
 func (ip *InfoPane) HistoryPrev() {
-	log.Println("history prev", ip.histidx, len(ip.history))
-	if ip.histidx > 0 && ip.histidx <= len(ip.history) {
+	if ip.histidx > 0 && ip.histidx <= len(ip.history[ip.typ]) {
 		ip.histidx--
 		ip.BufPane.Remove(0, ip.BufPane.Len())
-		ip.BufPane.Insert(0, []byte(ip.history[ip.histidx]))
+		ip.BufPane.Insert(0, []byte(ip.history[ip.typ][ip.histidx]))
 	}
 }
 
 func (ip *InfoPane) HistoryNext() {
-	if ip.histidx >= 0 && ip.histidx < len(ip.history)-1 {
+	if ip.histidx >= 0 && ip.histidx < len(ip.history[ip.typ])-1 {
 		ip.histidx++
 		ip.BufPane.Remove(0, ip.BufPane.Len())
-		ip.BufPane.Insert(0, []byte(ip.history[ip.histidx]))
+		ip.BufPane.Insert(0, []byte(ip.history[ip.typ][ip.histidx]))
 	} else {
 		ip.histidx++
 		ip.BufPane.Remove(0, ip.BufPane.Len())
