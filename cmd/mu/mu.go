@@ -90,6 +90,14 @@ func main() {
 		exit(1)
 	}
 
+	defer func() {
+		if err := recover(); err != nil {
+			s.Fini()
+			fmt.Fprintf(os.Stderr, "%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
+			exit(1)
+		}
+	}()
+
 	w, h := s.Size()
 
 	var ed *mu.Editor
@@ -103,14 +111,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		exit(1)
 	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			s.Fini()
-			fmt.Fprintf(os.Stderr, "%s\n%v\n%s\n", "a fatal error occurred", errors.Wrap(err, 2).ErrorStack(), errmsg)
-			exit(1)
-		}
-	}()
 
 	draw := func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
 		s.SetContent(vx, vy, mainc, combc, tcellStyle(style))

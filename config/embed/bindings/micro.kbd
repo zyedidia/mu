@@ -7,6 +7,11 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+v', 'paste'}
           / {'ctrl+l', 'refresh'}
           / {'ctrl+w', 'split-select-next'}
+          / {'ctrl+g' ('ctrl+w' / 'w'), 'split-select-next'}
+          / {'ctrl+g' '/', 'vsplit'}
+          / {'ctrl+g' '-', 'hsplit'}
+          / {'ctrl+g' 't', 'term'}
+          / {'ctrl+t', 'tab'}
           / {'ctrl+o', 'command-edit "open "'}
           / {'enter', 'insert-at [cursor-pos] \\n; relocate'}
           / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
