@@ -40,8 +40,7 @@ func (e *Editor) Open(path string) error {
 	if err != nil {
 		return err
 	}
-	e.ActiveTab().Open(e, bp)
-	return nil
+	return e.ActiveTab().Open(e, bp)
 }
 
 func (e *Editor) Tab(args []string) (err error) {

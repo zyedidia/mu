@@ -74,7 +74,7 @@ func loadBindings(cfg *config.ConfigFS, modes ...string) (map[string]kbd.Config,
 	for _, m := range modes {
 		b, err := cfg.LoadBindings(m)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("while loading %s.kbd: %w", m, err)
 		}
 		modemap[m] = b
 	}
@@ -270,10 +270,9 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 		err := ec.ConsumeEvent(ev)
 		if e.ActivePane().Closed() {
+			e.Quit()
 			if len(e.tabs) == 0 {
-				e.OpenTabPane(e.NewEmptyBufPane())
-			} else {
-				e.Quit()
+				e.Errors <- ErrQuit
 			}
 		} else if err != nil {
 			e.Errors <- err
@@ -334,7 +333,9 @@ func (e *Editor) ActivatePane(pane pane.Pane) {
 	if pane != nil {
 		mode := pane.Register(e.interp)
 		err := e.SetMode(mode)
-		log.Println("set mode", err)
+		if err != nil {
+			log.Println("error setting mode:", err)
+		}
 	}
 	e.active = pane
 

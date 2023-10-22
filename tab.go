@@ -171,11 +171,16 @@ func (e *Editor) CloseTabPane() {
 	}
 	if len(e.tabs) > 0 {
 		e.ActivatePane(e.ActiveTab().ActivePane())
+	} else {
+		e.ActivatePane(nil)
 	}
 }
 
 // Open opens 'p' in the currently active pane in this tab.
-func (t *Tab) Open(e *Editor, p pane.Pane) {
+func (t *Tab) Open(e *Editor, p pane.Pane) error {
+	if err := e.ActivePane().Close(); err != nil {
+		return err
+	}
 	for i, sp := range t.panes {
 		if sp.id == t.cur {
 			t.panes[i] = SplitPane(e, sp.id, p)
@@ -183,4 +188,5 @@ func (t *Tab) Open(e *Editor, p pane.Pane) {
 			break
 		}
 	}
+	return nil
 }

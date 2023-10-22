@@ -55,6 +55,7 @@ func NewTermPane(redraw chan struct{}, name string, args ...string) (*TermPane, 
 			redraw <- struct{}{}
 		}
 		fmt.Fprintf(t.term, "command exited: press any key to close")
+		redraw <- struct{}{}
 		t.closeterm()
 	}()
 
