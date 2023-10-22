@@ -49,7 +49,7 @@ func (b *BufferData) Filetype() string {
 	if ft, ok := b.GetStrOpt("filetype"); ok {
 		return ft
 	}
-	return "unknown"
+	return "none"
 }
 
 // LoadHighlighter initializes the syntax highlighting memoization table and

@@ -118,7 +118,7 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 
 	ftdtct, ftok := detectFtEarly(cfg, r)
 	if !ftok {
-		ftdtct = "unknown"
+		ftdtct = "none"
 	}
 
 	opts := cfg.GetBufferOptions(r.Name(), ftdtct)
