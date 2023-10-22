@@ -26,8 +26,13 @@ func (e *Editor) Help() {
 
 // --- Buffer management ---
 
-func (e *Editor) Term() error {
-	tp, err := term.NewTermPaneShell(e.Redraw)
+func (e *Editor) Term(args []string) (err error) {
+	var tp *term.TermPane
+	if len(args) == 0 {
+		tp, err = term.NewTermPaneShell(e.Redraw)
+	} else {
+		tp, err = term.NewTermPane(e.Redraw, args[0], args[1:]...)
+	}
 	if err != nil {
 		return err
 	}
@@ -363,7 +368,7 @@ var commands = []tclutil.Command{
 	{
 		"term",
 		(*Editor).Term,
-		"term: open a shell in a terminal pane",
+		"term <cmd>: run cmd in a terminal pane",
 	},
 	{
 		"version",
