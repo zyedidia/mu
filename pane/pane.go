@@ -8,7 +8,7 @@ import (
 )
 
 type Pane interface {
-	Register(interp *gotcl.Interp)
+	Register(interp *gotcl.Interp) string
 	Unregister(interp *gotcl.Interp)
 	Help(w io.Writer)
 	Name() string
@@ -16,10 +16,11 @@ type Pane interface {
 	Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int), theme *theme.Theme)
 	Resize(w, h int)
 
-	EvalStatus(cmd string, vars []interface{}) (string, error)
+	Status() (string, string)
 
 	SetOpt(name string, val interface{}) error
 	GetOpt(name string) (interface{}, bool)
 
 	Close() error
+	Closed() bool
 }

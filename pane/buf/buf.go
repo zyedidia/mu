@@ -93,10 +93,11 @@ func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config
 	return bp
 }
 
-func (bp *BufPane) Register(interp *tcl.Interp) {
+func (bp *BufPane) Register(interp *tcl.Interp) string {
 	for _, c := range commands {
 		tclutil.Register(interp, c.Name, c.Fn, bp)
 	}
+	return "micro"
 }
 
 func (bp *BufPane) Unregister(interp *tcl.Interp) {
@@ -129,10 +130,6 @@ func (bp *BufPane) Close() error {
 	return nil
 }
 
-func (bp *BufPane) EvalStatus(cmd string, vars []interface{}) (string, error) {
-	obj, err := tclutil.EvalWithVars(bp.status, cmd, vars)
-	if obj != nil && err == nil {
-		return obj.AsString(), nil
-	}
-	return "", err
+func (bp *BufPane) Closed() bool {
+	return false
 }

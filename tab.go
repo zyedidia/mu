@@ -16,7 +16,7 @@ func SplitPane(e *Editor, id uint, p pane.Pane) splitpane {
 	return splitpane{
 		id:   id,
 		pane: p,
-		bar:  NewStatusBar(e, p, defLeft, defRight),
+		bar:  NewStatusBar(e, p),
 	}
 }
 

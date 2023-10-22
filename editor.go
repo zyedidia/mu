@@ -69,7 +69,19 @@ type FillFn func(r rune, style theme.Style)
 type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
 type CursorFn func(x, y int)
 
-func newEditor(w, h int, clip TermClip) *Editor {
+func loadBindings(cfg *config.ConfigFS, modes ...string) (map[string]kbd.Config, error) {
+	modemap := make(map[string]kbd.Config)
+	for _, m := range modes {
+		b, err := cfg.LoadBindings(m)
+		if err != nil {
+			return nil, err
+		}
+		modemap[m] = b
+	}
+	return modemap, nil
+}
+
+func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
 	interp := tcl.NewInterp()
@@ -80,16 +92,16 @@ func newEditor(w, h int, clip TermClip) *Editor {
 	thname := cfg.GlobalStrOpt("theme")
 	th, err := cfg.LoadTheme(thname)
 	if err != nil {
-		log.Printf("error loading theme %s: %v\n", thname, err)
+		return nil, err
 	}
 	redraw := make(chan struct{}, 16)
+	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "term")
+	if err != nil {
+		return nil, err
+	}
 	e := &Editor{
-		interp: interp,
-		modes: map[string]kbd.Config{
-			"micro":   cfg.MustLoadBindings("micro"),
-			"cmd":     cfg.MustLoadBindings("cmd"),
-			"charcmd": cfg.MustLoadBindings("charcmd"),
-		},
+		interp:   interp,
+		modes:    modes,
 		config:   cfg,
 		theme:    th,
 		termclip: clip,
@@ -105,17 +117,23 @@ func newEditor(w, h int, clip TermClip) *Editor {
 	e.MustSetMode("micro")
 	e.Register()
 	e.initClipboard()
-	return e
+	return e, nil
 }
 
-func NewEditor(w, h int, clip TermClip) *Editor {
-	e := newEditor(w, h, clip)
+func NewEditor(w, h int, clip TermClip) (*Editor, error) {
+	e, err := newEditor(w, h, clip)
+	if err != nil {
+		return nil, err
+	}
 	e.OpenTabPane(e.NewEmptyBufPane())
-	return e
+	return e, nil
 }
 
 func NewEditorFromPath(path string, w, h int, clip TermClip) (*Editor, error) {
-	e := newEditor(w, h, clip)
+	e, err := newEditor(w, h, clip)
+	if err != nil {
+		return nil, err
+	}
 	bp, err := e.NewBufPaneFromPath(path)
 	if err != nil {
 		return nil, err
@@ -251,7 +269,13 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		defer e.displayLock.Unlock()
 
 		err := ec.ConsumeEvent(ev)
-		if err != nil {
+		if e.ActivePane().Closed() {
+			if len(e.tabs) == 0 {
+				e.OpenTabPane(e.NewEmptyBufPane())
+			} else {
+				e.Quit()
+			}
+		} else if err != nil {
 			e.Errors <- err
 			e.Error(err.Error())
 		}
@@ -308,7 +332,9 @@ func (e *Editor) ActivatePane(pane pane.Pane) {
 		e.active.Unregister(e.interp)
 	}
 	if pane != nil {
-		pane.Register(e.interp)
+		mode := pane.Register(e.interp)
+		err := e.SetMode(mode)
+		log.Println("set mode", err)
 	}
 	e.active = pane
 

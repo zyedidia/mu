@@ -10,6 +10,7 @@ import (
 	"github.com/zyedidia/kbd/cbind"
 	"github.com/zyedidia/mu/build"
 	"github.com/zyedidia/mu/pane/buf"
+	"github.com/zyedidia/mu/pane/term"
 	"github.com/zyedidia/mu/pkg/shell"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -24,6 +25,15 @@ func (e *Editor) Help() {
 }
 
 // --- Buffer management ---
+
+func (e *Editor) Term() error {
+	tp, err := term.NewTermPaneShell(e.Redraw)
+	if err != nil {
+		return err
+	}
+	e.ActiveTab().Open(e, tp)
+	return nil
+}
 
 func (e *Editor) Open(path string) error {
 	bp, err := e.NewBufPaneFromPath(path)
@@ -350,6 +360,11 @@ var commands = []tclutil.Command{
 		"split-select-next",
 		(*Editor).SplitSelectNext,
 		"split-select-next: select the next split",
+	},
+	{
+		"term",
+		(*Editor).Term,
+		"term: open a shell in a terminal pane",
 	},
 	{
 		"version",

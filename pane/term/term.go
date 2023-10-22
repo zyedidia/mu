@@ -55,7 +55,6 @@ func NewTermPane(redraw chan struct{}, name string, args ...string) (*TermPane, 
 			redraw <- struct{}{}
 		}
 		fmt.Fprintf(t.term, "command exited: press any key to close")
-		redraw <- struct{}{}
 		t.closeterm()
 	}()
 
@@ -63,8 +62,21 @@ func NewTermPane(redraw chan struct{}, name string, args ...string) (*TermPane, 
 }
 
 func (t *TermPane) Close() error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if t.exited {
+		return nil
+	}
+
 	// TODO: force close this terminal
 	return nil
+}
+
+func (t *TermPane) Closed() bool {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	return t.exited
 }
 
 func (t *TermPane) closeterm() {
@@ -133,11 +145,17 @@ func (t *TermPane) Name() string {
 	return t.name
 }
 
-func (t *TermPane) Register(*gotcl.Interp)   {}
+func (t *TermPane) Register(*gotcl.Interp) string {
+	return "term"
+}
 func (t *TermPane) Unregister(*gotcl.Interp) {}
 func (t *TermPane) Help(w io.Writer)         {}
 
-func (t *TermPane) SetOpt(name string, val interface{}) {}
+func (t *TermPane) SetOpt(name string, val interface{}) error { return nil }
 func (t *TermPane) GetOpt(name string) (interface{}, bool) {
 	return nil, false
+}
+
+func (t *TermPane) Status() (string, string) {
+	return fmt.Sprintf("%s:%d", t.name, t.cmd.Process.Pid), ""
 }

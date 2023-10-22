@@ -95,13 +95,13 @@ func main() {
 	var ed *mu.Editor
 	if len(args) > 0 {
 		ed, err = mu.NewEditorFromPath(args[0], w, h, s)
-		if err != nil {
-			s.Fini()
-			fmt.Fprintln(os.Stderr, err)
-			exit(1)
-		}
 	} else {
-		ed = mu.NewEditor(w, h, s)
+		ed, err = mu.NewEditor(w, h, s)
+	}
+	if err != nil {
+		s.Fini()
+		fmt.Fprintln(os.Stderr, err)
+		exit(1)
 	}
 
 	defer func() {
