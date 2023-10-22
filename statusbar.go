@@ -25,7 +25,7 @@ func NewStatusBar(e *Editor, p pane.Pane, left, right string) *StatusBar {
 		left:  left,
 		right: right,
 		resolve: func(expr string) (string, error) {
-			s, err := p.EvalRet(expr, nil)
+			s, err := p.EvalStatus(expr, nil)
 			if err != nil {
 				return e.EvalRet(expr, nil)
 			}

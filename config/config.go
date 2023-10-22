@@ -1,9 +1,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/zyedidia/flare"
@@ -96,19 +98,7 @@ func (cfs *ConfigFS) IsGlobalOpt(name string) bool {
 	return globals[name]
 }
 
-func GlobalOpt[T any](cfs *ConfigFS, name string) (t T, v bool) {
-	if !globals[name] {
-		return
-	}
-	if i, ok := cfs.opts.top[name]; ok {
-		if o, ok := i.(T); ok {
-			return o, true
-		}
-	}
-	return
-}
-
-func MustGlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
+func GlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
 	if !globals[name] {
 		return
 	}
@@ -120,28 +110,29 @@ func MustGlobalOpt[T any](cfs *ConfigFS, name string) (t T) {
 	return
 }
 
-func (cfs *ConfigFS) GlobalOpt(name string) (interface{}, bool) {
-	if !globals[name] {
-		return nil, false
-	}
-	opt, v := cfs.opts.top[name]
-	return opt, v
-}
-
-func (cfs *ConfigFS) GlobalStrOpt(name string) (string, bool) {
+func (cfs *ConfigFS) GlobalStrOpt(name string) string {
 	return GlobalOpt[string](cfs, name)
 }
 
-func (cfs *ConfigFS) MustGlobalStrOpt(name string) string {
-	return MustGlobalOpt[string](cfs, name)
-}
-
-func (cfs *ConfigFS) MustGlobalOpt(name string) interface{} {
+func (cfs *ConfigFS) GlobalOpt(name string) interface{} {
 	return cfs.opts.top[name]
 }
 
+var ErrTypeMismatch = errors.New("type mismatch")
+
 func (cfs *ConfigFS) SetGlobalOpt(name string, val interface{}) error {
+	if v, ok := cfs.opts.top[name]; ok {
+		if reflect.TypeOf(v) != reflect.TypeOf(val) {
+			return fmt.Errorf("%w: expected %v, got %v", ErrTypeMismatch, reflect.TypeOf(v), reflect.TypeOf(val))
+		}
+	}
+
+	if vf, ok := verify[name]; ok {
+		if err := vf(val); err != nil {
+			return err
+		}
+	}
+
 	cfs.opts.top[name] = val
-	// TODO: give error if new value has different type from old value
 	return nil
 }

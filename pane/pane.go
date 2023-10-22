@@ -16,7 +16,7 @@ type Pane interface {
 	Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int), theme *theme.Theme)
 	Resize(w, h int)
 
-	EvalRet(cmd string, vars []interface{}) (string, error)
+	EvalStatus(cmd string, vars []interface{}) (string, error)
 
 	SetOpt(name string, val interface{}) error
 	GetOpt(name string) (interface{}, bool)

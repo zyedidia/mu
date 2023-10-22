@@ -77,7 +77,7 @@ func newEditor(w, h int, clip TermClip) *Editor {
 	if err != nil {
 		log.Println(err)
 	}
-	thname := cfg.MustGlobalStrOpt("theme")
+	thname := cfg.GlobalStrOpt("theme")
 	th, err := cfg.LoadTheme(thname)
 	if err != nil {
 		log.Printf("error loading theme %s: %v\n", thname, err)
@@ -136,7 +136,7 @@ func init() {
 }
 
 func (e *Editor) initClipboard() {
-	switch e.config.MustGlobalStrOpt("clipboard") {
+	switch e.config.GlobalStrOpt("clipboard") {
 	case "external":
 		c, err := clipper.GetClipboard(clipper.Clipboards...)
 		if err == nil {
@@ -157,7 +157,7 @@ func (e *Editor) initClipboard() {
 }
 
 func (e *Editor) GetClipboard(reg string) ([]byte, error) {
-	if e.config.MustGlobalStrOpt("clipboard") == "terminal" {
+	if e.config.GlobalStrOpt("clipboard") == "terminal" {
 		return e.termclip.GetClipboard(reg)
 	} else if e.clipboard != nil {
 		return e.clipboard.ReadAll(reg)
@@ -166,7 +166,7 @@ func (e *Editor) GetClipboard(reg string) ([]byte, error) {
 }
 
 func (e *Editor) SetClipboard(reg string, text []byte) error {
-	if e.config.MustGlobalStrOpt("clipboard") == "terminal" {
+	if e.config.GlobalStrOpt("clipboard") == "terminal" {
 		return e.termclip.SetClipboard(reg, text)
 	} else if e.clipboard != nil {
 		return e.clipboard.WriteAll(reg, text)
@@ -202,6 +202,10 @@ func (e *Editor) HasMode() bool {
 	e.modeLock.Lock()
 	defer e.modeLock.Unlock()
 	return e.mode != nil
+}
+
+type EventConsumer interface {
+	ConsumeEvent(ev tcell.Event) error
 }
 
 func (e *Editor) HandleEvent(ev tcell.Event) {
@@ -240,6 +244,17 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 				e.Error(err.Error())
 			}
 		}()
+	} else if ec, ok := e.ActivePane().(EventConsumer); ok {
+		// active pane wants the raw event directly
+		e.displayLock.Lock()
+		defer e.SendRedraw()
+		defer e.displayLock.Unlock()
+
+		err := ec.ConsumeEvent(ev)
+		if err != nil {
+			e.Errors <- err
+			e.Error(err.Error())
+		}
 	}
 }
 

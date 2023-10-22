@@ -31,7 +31,9 @@ require (
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
+	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/pty v1.1.1 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.0.3 // indirect
 	github.com/rivo/uniseg v0.1.0 // indirect

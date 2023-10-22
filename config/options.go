@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"log"
 	"strings"
 
@@ -11,6 +12,19 @@ import (
 var globals = map[string]bool{
 	"theme":     true,
 	"clipboard": true,
+}
+
+var verify = map[string]func(interface{}) error{
+	"clipboard": func(v interface{}) error {
+		if _, ok := v.(string); !ok {
+			return ErrTypeMismatch
+		}
+		switch v.(string) {
+		case "internal", "external", "terminal":
+			return nil
+		}
+		return errors.New("expected 'internal', 'external', or 'terminal'")
+	},
 }
 
 type ftopts struct {

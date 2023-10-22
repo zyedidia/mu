@@ -19,7 +19,7 @@ type Config interface {
 	LoadHighlighter(name string) (*flare.Highlighter, error)
 
 	GetBufferOptions(path string, ft string) map[string]interface{}
-	GlobalOpt(name string) (interface{}, bool)
+	GlobalOpt(name string) interface{}
 }
 
 func GetOpt[T any](opts map[string]interface{}, name string) (t T, v bool) {

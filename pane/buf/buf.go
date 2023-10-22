@@ -129,7 +129,7 @@ func (bp *BufPane) Close() error {
 	return nil
 }
 
-func (bp *BufPane) EvalRet(cmd string, vars []interface{}) (string, error) {
+func (bp *BufPane) EvalStatus(cmd string, vars []interface{}) (string, error) {
 	obj, err := tclutil.EvalWithVars(bp.status, cmd, vars)
 	if obj != nil && err == nil {
 		return obj.AsString(), nil
