@@ -19,7 +19,6 @@ require (
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
-	github.com/zyedidia/kbd v0.0.0-20220516230706-68a4f37d01f9
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
@@ -39,6 +38,7 @@ require (
 	github.com/rivo/uniseg v0.1.0 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
+	github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a // indirect
 	golang.org/x/exp v0.0.0-20220218215828-6cf2b201936e // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
