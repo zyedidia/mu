@@ -126,3 +126,7 @@ func (c *ConfigFS) WalkDir(root string, walkfn fs.WalkDirFunc) error {
 	}
 	return nil
 }
+
+func (c *ConfigFS) CacheDir() string {
+	return DefaultCacheDir()
+}

@@ -124,9 +124,13 @@ func (bp *BufPane) Close() error {
 			return errors.New("closed failed: invalid response")
 		}
 		if strings.ToLower(resp) == "y" {
-			return bp.Save(nil)
+			err := bp.Save(nil)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	bp.Buffer.Close()
 	return nil
 }
 

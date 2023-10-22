@@ -7,9 +7,9 @@
 package undo
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/gob"
+	"io"
 	"sort"
 	"time"
 )
@@ -67,24 +67,23 @@ func NewTree[T, S any](base T, cutoff int) *UndoTree[T, S] {
 	return u
 }
 
-// ToBytes serializes and compresses the tree into a byte stream that can be
+// WriteTo serializes and compresses the tree into a byte stream that can be
 // saved to disk.
-func (u *UndoTree[T, S]) ToBytes() ([]byte, error) {
-	var buf bytes.Buffer
-	fz := gzip.NewWriter(&buf)
+func (u *UndoTree[T, S]) WriteTo(w io.Writer) error {
+	fz := gzip.NewWriter(w)
 	enc := gob.NewEncoder(fz)
 	err := enc.Encode(u)
 	fz.Close()
-	return buf.Bytes(), err
+	return err
 }
 
-// FromBytes loads the undo tree from a serialized version.
-func FromBytes[T, S any](b []byte, base T, cutoff int) (*UndoTree[T, S], error) {
+// FromReader loads the undo tree from a serialized version.
+func FromReader[T, S any](r io.Reader, base T, cutoff int) (*UndoTree[T, S], error) {
 	u := UndoTree[T, S]{
 		base:   base,
 		cutoff: cutoff,
 	}
-	fz, err := gzip.NewReader(bytes.NewReader(b))
+	fz, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, err
 	}

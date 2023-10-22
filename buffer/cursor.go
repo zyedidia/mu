@@ -1,7 +1,9 @@
 package buffer
 
 import (
+	"encoding/gob"
 	"fmt"
+	"os"
 	"unicode"
 )
 
@@ -276,4 +278,28 @@ func (c Cursor) WordEnd(b *Buffer, wordc func(r rune) bool) Cursor {
 
 	c.Pos = p
 	return c
+}
+
+func (b *Buffer) SerializeCursors(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	return enc.Encode(b.cursors)
+}
+
+func LoadCursors(path string) (cursors []Cursor) {
+	f, err := os.Open(path)
+	if err != nil {
+		return []Cursor{Cursor{}}
+	}
+	dec := gob.NewDecoder(f)
+	err = dec.Decode(&cursors)
+	if err != nil {
+		return []Cursor{Cursor{}}
+	}
+	f.Close()
+	return cursors
 }

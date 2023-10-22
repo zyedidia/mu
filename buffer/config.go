@@ -20,6 +20,8 @@ type Config interface {
 
 	GetBufferOptions(path string, ft string) map[string]interface{}
 	GlobalOpt(name string) interface{}
+
+	CacheDir() string
 }
 
 func GetOpt[T any](opts map[string]interface{}, name string) (t T, v bool) {

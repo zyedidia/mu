@@ -3,6 +3,7 @@ package buffer
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -74,14 +75,17 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share fun
 				cursors:    []Cursor{c},
 				cur:        0,
 			}
+			dat.refs++
 			dat.parents = append(dat.parents, b)
 			return b, nil
 		}
 	}
-	c := Cursor{}
 	b = &Buffer{
-		cursors: []Cursor{c},
-		cur:     0,
+		cursors: LoadCursors(
+			filepath.Join(cfg.CacheDir(),
+				input.EscapePath(in.FullName())+".cursors"),
+		),
+		cur: 0,
 	}
 	dat, err := NewBufferData(in, out, cfg, redraw, b)
 	if err != nil {
@@ -277,8 +281,11 @@ func (b *Buffer) Reload() error {
 }
 
 func (b *Buffer) Close() {
-	b.refs--
-	if b.refs == 0 {
+	path := filepath.Join(b.cfg.CacheDir(),
+		input.EscapePath(b.FullName())+".cursors")
+	b.SerializeCursors(path)
+	b.BufferData.refs--
+	if b.BufferData.refs == 0 {
 		close(b.Exited)
 	}
 }
