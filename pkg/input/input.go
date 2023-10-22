@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zyedidia/mu/pkg/cpu"
+	"github.com/zyedidia/mu/pkg/home"
 	"github.com/zyedidia/mu/pkg/input/parallel"
 )
 
@@ -32,6 +33,13 @@ type Input interface {
 // reading from it will return an empty byte slice rather than an error.
 type File struct {
 	Path string
+}
+
+func NewFile(path string) (*File, error) {
+	p, err := home.Expand(path)
+	return &File{
+		Path: p,
+	}, err
 }
 
 // Read opens the file, and reads its contents using all available CPUs.

@@ -16,8 +16,6 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/pane"
-	"github.com/zyedidia/mu/pkg/input"
-	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
 )
@@ -118,13 +116,7 @@ func NewEditor(w, h int, clip TermClip) *Editor {
 
 func NewEditorFromPath(path string, w, h int, clip TermClip) (*Editor, error) {
 	e := newEditor(w, h, clip)
-	in := &input.File{
-		Path: path,
-	}
-	out := &output.File{
-		Path: path,
-	}
-	bp, err := e.NewBufPane(in, out)
+	bp, err := e.NewBufPaneFromPath(path)
 	if err != nil {
 		return nil, err
 	}

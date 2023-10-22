@@ -34,8 +34,9 @@ func (e *Editor) NewBufPane(in buffer.Input, out buffer.Output) (*buf.BufPane, e
 }
 
 func (e *Editor) NewBufPaneFromPath(path string) (*buf.BufPane, error) {
-	in := &input.File{
-		Path: path,
+	in, err := input.NewFile(path)
+	if err != nil {
+		return nil, err
 	}
 	out := &output.File{
 		Path: path,
