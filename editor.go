@@ -282,6 +282,7 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	defer e.displayLock.Unlock()
 
 	fill(' ', e.theme.Default())
+	cursor(-1, -1)
 
 	if e.curtab >= 0 && e.curtab < len(e.tabs) {
 		e.tabs[e.curtab].Display(draw, cursor, e.theme)

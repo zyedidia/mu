@@ -361,9 +361,9 @@ func (bp *BufPane) Size() int {
 
 // --- View ---
 
-func (b *BufPane) RelocateToCur() {
-	line, col := b.LineColAt(b.Cursor().Pos)
-	b.Relocate(bLoc{line, col})
+func (bp *BufPane) RelocateToCur() {
+	line, col := bp.LineColAt(bp.Cursor().Pos)
+	bp.Relocate(bLoc{line, col})
 }
 
 // --- Options ---

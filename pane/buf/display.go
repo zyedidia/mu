@@ -189,7 +189,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 			draw(linewid+vx-b.stcol, vy, mainc, combc, style)
 		},
 		Track: func(off, bx, by, vx, vy int) bool {
-			if vy >= b.height {
+			if vy >= b.height || linewid+vx-b.stcol >= b.width {
 				return true
 			}
 			lines[vy] = by + 1
