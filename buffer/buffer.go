@@ -82,7 +82,7 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share Sha
 		}
 	}
 	b = &Buffer{
-		cursors: LoadCursors(cfg.CacheFS(),
+		cursors: loadCursors(cfg.CacheFS(),
 			input.EscapePath(in.FullName())+".cursors"),
 		cur: 0,
 	}
@@ -143,7 +143,7 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 		parents: []*Buffer{parent},
 	}
 
-	buf.undo = undo.NewTree[*BufferData, Cursor](buf, undo.NoCutoff)
+	buf.loadUndo(cfg.CacheFS(), input.EscapePath(r.FullName())+".undo")
 
 	buf.unmodified()
 

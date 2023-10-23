@@ -2,8 +2,11 @@ package buffer
 
 import (
 	"encoding/gob"
+	"log"
 
 	"github.com/zyedidia/gpeg/memo"
+	"github.com/zyedidia/mu/buffer/undo"
+	"github.com/zyedidia/mu/config"
 )
 
 // An Edit represents an edit to the document that can be undone.
@@ -15,7 +18,7 @@ type Edit struct {
 }
 
 func init() {
-	gob.Register(Edit{})
+	gob.RegisterName("github.com/zyedidia/mu/buffer.Edit", &Edit{})
 }
 
 func (e *Edit) State() Cursor {
@@ -109,4 +112,30 @@ func (b *Buffer) Redo() {
 		b.PutCursor(b.undo.NextState(ep))
 		b.undo.Redo(ep)
 	}
+}
+
+func (b *BufferData) SerializeUndo(fs config.WriteFS, fname string) error {
+	f, err := fs.Create(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return b.undo.WriteTo(f)
+}
+
+func (b *BufferData) loadUndo(fs config.WriteFS, fname string) {
+	f, err := fs.Open(fname)
+	if err != nil {
+		log.Println("error loading undo", err)
+		b.undo = undo.NewTree[*BufferData, Cursor](b, undo.NoCutoff)
+		return
+	}
+	defer f.Close()
+	t, err := undo.FromReader[*BufferData, Cursor](f, b, undo.NoCutoff)
+	if err != nil {
+		log.Println("error loading undo", err)
+		b.undo = undo.NewTree[*BufferData, Cursor](b, undo.NoCutoff)
+		return
+	}
+	b.undo = t
 }

@@ -291,12 +291,12 @@ func (b *Buffer) SerializeCursors(fs config.WriteFS, fname string) error {
 	return enc.Encode(b.cursors)
 }
 
-func LoadCursors(fs config.WriteFS, fname string) (cursors []Cursor) {
+func loadCursors(fs config.WriteFS, fname string) (cursors []Cursor) {
 	f, err := fs.Open(fname)
 	if err != nil {
 		return []Cursor{Cursor{}}
 	}
-	// TODO: close f
+	defer f.Close()
 	dec := gob.NewDecoder(f)
 	err = dec.Decode(&cursors)
 	if err != nil {
