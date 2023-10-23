@@ -48,6 +48,10 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 	}
 	cfg.SetConfigDir(dir)
 	cfg.SetCacheDir(DefaultCacheDir())
+
+	log.Println("config dir:", cfg.config)
+	log.Println("cache dir:", cfg.cache)
+
 	data, _ := fs.ReadFile(cfg, "options.toml")
 	opts, err := LoadOptions(data)
 	if err != nil {
@@ -60,6 +64,7 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 	if _, err := os.Stat(filepath.Join(dir, "bindings")); os.IsNotExist(err) {
 		cfg.WriteDefaultBindings()
 	}
+
 	return cfg
 }
 
