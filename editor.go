@@ -257,7 +257,9 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 			}()
 
 			err := e.Eval(action.Cmd, action.Vars)
-			if err != nil {
+			if len(e.tabs) == 0 {
+				e.exit()
+			} else if err != nil {
 				e.Errors <- err
 				e.Error(err.Error())
 			}
@@ -272,7 +274,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		if e.ActivePane().Closed() {
 			e.Quit()
 			if len(e.tabs) == 0 {
-				e.Errors <- ErrQuit
+				e.exit()
 			}
 		} else if err != nil {
 			e.Errors <- err
@@ -352,4 +354,11 @@ func (e *Editor) Message(msg string) {
 
 func (e *Editor) SuspendResume() (chan func(), chan struct{}) {
 	return e.Suspend, e.Resume
+}
+
+var ErrQuit = errors.New("quit")
+
+func (e *Editor) exit() {
+	e.infobar.cmd.SerializeHistory(e.config)
+	e.Errors <- ErrQuit
 }

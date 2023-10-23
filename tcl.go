@@ -1,8 +1,6 @@
 package mu
 
 import (
-	"errors"
-
 	"github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -30,14 +28,9 @@ proc repeat-fn {n fn} {
 }
 `
 
-var ErrQuit = errors.New("quit")
-
 func (e *Editor) Eval(cmd string, vars []interface{}) error {
 	interp := gotcl.NewInterpFrom(e.interp)
 	_, err := tclutil.EvalWithVars(interp, cmd, vars)
-	if len(e.tabs) == 0 {
-		return ErrQuit
-	}
 	return err
 }
 
