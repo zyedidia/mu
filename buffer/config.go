@@ -5,6 +5,7 @@ import (
 
 	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
+	"github.com/zyedidia/mu/config"
 )
 
 const (
@@ -20,6 +21,8 @@ type Config interface {
 
 	GetBufferOptions(path string, ft string) map[string]interface{}
 	GlobalOpt(name string) interface{}
+
+	CacheFS() config.WriteFS
 }
 
 func GetOpt[T any](opts map[string]interface{}, name string) (t T, v bool) {

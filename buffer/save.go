@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/zyedidia/mu/pkg/input"
 	"github.com/zyedidia/mu/pkg/output"
 )
 
@@ -79,5 +80,6 @@ func (b *Buffer) Save() error {
 		return err
 	}
 	b.unmodified()
+	b.SerializeUndo(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".undo")
 	return nil
 }

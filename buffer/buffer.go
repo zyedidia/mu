@@ -65,7 +65,9 @@ type Input interface {
 	FullName() string
 }
 
-func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
+type ShareFn func(name string) (*BufferData, Cursor)
+
+func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share ShareFn) (b *Buffer, err error) {
 	if share != nil {
 		dat, c := share(in.FullName())
 		if dat != nil {
@@ -74,14 +76,15 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share fun
 				cursors:    []Cursor{c},
 				cur:        0,
 			}
+			dat.refs++
 			dat.parents = append(dat.parents, b)
 			return b, nil
 		}
 	}
-	c := Cursor{}
 	b = &Buffer{
-		cursors: []Cursor{c},
-		cur:     0,
+		cursors: loadCursors(cfg.CacheFS(),
+			input.EscapePath(in.FullName())+".cursors"),
+		cur: 0,
 	}
 	dat, err := NewBufferData(in, out, cfg, redraw, b)
 	if err != nil {
@@ -140,7 +143,7 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 		parents: []*Buffer{parent},
 	}
 
-	buf.undo = undo.NewTree[*BufferData, Cursor](buf, undo.NoCutoff)
+	buf.loadUndo(cfg.CacheFS(), input.EscapePath(r.FullName())+".undo")
 
 	buf.unmodified()
 
@@ -277,8 +280,9 @@ func (b *Buffer) Reload() error {
 }
 
 func (b *Buffer) Close() {
-	b.refs--
-	if b.refs == 0 {
+	b.SerializeCursors(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".cursors")
+	b.BufferData.refs--
+	if b.BufferData.refs == 0 {
 		close(b.Exited)
 	}
 }

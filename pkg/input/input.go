@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/zyedidia/mu/pkg/cpu"
@@ -179,4 +180,8 @@ func (e *Empty) ModTime() (time.Time, error) {
 
 func (e *Empty) FullName() string {
 	return e.Name()
+}
+
+func EscapePath(path string) string {
+	return strings.ReplaceAll(path, string(os.PathSeparator), "%")
 }

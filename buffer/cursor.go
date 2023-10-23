@@ -1,8 +1,11 @@
 package buffer
 
 import (
+	"encoding/gob"
 	"fmt"
 	"unicode"
+
+	"github.com/zyedidia/mu/config"
 )
 
 type Cursor struct {
@@ -276,4 +279,28 @@ func (c Cursor) WordEnd(b *Buffer, wordc func(r rune) bool) Cursor {
 
 	c.Pos = p
 	return c
+}
+
+func (b *Buffer) SerializeCursors(fs config.WriteFS, fname string) error {
+	f, err := fs.Create(fname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	return enc.Encode(b.cursors)
+}
+
+func loadCursors(fs config.WriteFS, fname string) (cursors []Cursor) {
+	f, err := fs.Open(fname)
+	if err != nil {
+		return []Cursor{Cursor{}}
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+	err = dec.Decode(&cursors)
+	if err != nil {
+		return []Cursor{Cursor{}}
+	}
+	return cursors
 }

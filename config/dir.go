@@ -4,9 +4,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/adrg/xdg"
 )
 
 func DefaultConfigDir() string {
+	// TODO: possible error
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return xdg
 	}
@@ -16,4 +19,8 @@ func DefaultConfigDir() string {
 		return ""
 	}
 	return filepath.Join(home, ".config", "mu")
+}
+
+func DefaultCacheDir() string {
+	return filepath.Join(xdg.CacheHome, "mu")
 }

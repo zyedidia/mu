@@ -3,10 +3,12 @@ module github.com/zyedidia/mu
 go 1.18
 
 require (
+	github.com/adrg/xdg v0.4.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-errors/errors v1.4.1
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
+	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/mattn/go-runewidth v0.0.10
 	github.com/micro-editor/tcell/v2 v2.2.4
@@ -30,7 +32,6 @@ require (
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
-	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/kr/pty v1.1.1 // indirect
 	github.com/kr/text v0.1.0 // indirect
