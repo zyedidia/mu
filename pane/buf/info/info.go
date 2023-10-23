@@ -1,8 +1,11 @@
 package info
 
 import (
+	"encoding/gob"
+
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/buffer"
+	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/pane/buf"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
@@ -28,7 +31,7 @@ func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg b
 	ip := &InfoPane{
 		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, editor, false),
 		Done:    make(chan InfoResp),
-		history: make(map[string][]string),
+		history: loadHistory(cfg.CacheFS()),
 	}
 	return ip
 }
@@ -50,4 +53,30 @@ func (ip *InfoPane) Unregister(interp *tcl.Interp) {
 func (ip *InfoPane) SetType(s string) {
 	ip.typ = s
 	ip.histidx = len(ip.history[ip.typ])
+}
+
+const histfile = "history.dat"
+
+func (ip *InfoPane) SerializeHistory(cfg buffer.Config) error {
+	f, err := cfg.CacheFS().Create(histfile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	return enc.Encode(ip.history)
+}
+
+func loadHistory(fs config.WriteFS) (hist map[string][]string) {
+	f, err := fs.Open(histfile)
+	if err != nil {
+		return map[string][]string{}
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+	err = dec.Decode(&hist)
+	if err != nil {
+		return map[string][]string{}
+	}
+	return hist
 }
