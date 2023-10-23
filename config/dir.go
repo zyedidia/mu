@@ -7,6 +7,7 @@ import (
 )
 
 func DefaultConfigDir() string {
+	// TODO: possible error
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return xdg
 	}
@@ -19,6 +20,7 @@ func DefaultConfigDir() string {
 }
 
 func DefaultCacheDir() string {
+	// TODO: possible error
 	if xdg := os.Getenv("XDG_CACHE_DIR"); xdg != "" {
 		return xdg
 	}

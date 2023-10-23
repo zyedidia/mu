@@ -11,6 +11,10 @@ import (
 
 type WriteFS string
 
+func (wr WriteFS) Create(name string) (*os.File, error) {
+	return os.Create(filepath.Join(string(wr), name))
+}
+
 func (wr WriteFS) Open(name string) (fs.File, error) {
 	f, err := os.Open(filepath.Join(string(wr), name))
 	if err != nil {
@@ -34,6 +38,7 @@ func (wr WriteFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 type ConfigFS struct {
 	embed  fs.FS
 	config WriteFS
+	cache  WriteFS
 	opts   *Options
 }
 
@@ -42,6 +47,7 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 		embed: GetSysFS(sys),
 	}
 	cfg.SetConfigDir(dir)
+	cfg.SetCacheDir(DefaultCacheDir())
 	data, _ := fs.ReadFile(cfg, "options.toml")
 	opts, err := LoadOptions(data)
 	if err != nil {
@@ -98,8 +104,19 @@ func (c *ConfigFS) SetConfigDir(dir string) {
 	}
 }
 
+func (c *ConfigFS) SetCacheDir(dir string) {
+	c.cache = WriteFS(dir)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		os.MkdirAll(dir, 0750)
+	}
+}
+
 func (c *ConfigFS) ConfigDir() string {
 	return string(c.config)
+}
+
+func (c *ConfigFS) CacheFS() WriteFS {
+	return c.cache
 }
 
 func (c *ConfigFS) Open(name string) (f fs.File, err error) {
@@ -125,8 +142,4 @@ func (c *ConfigFS) WalkDir(root string, walkfn fs.WalkDirFunc) error {
 		log.Printf("embed walkdir error (%s): %v", root, err)
 	}
 	return nil
-}
-
-func (c *ConfigFS) CacheDir() string {
-	return DefaultCacheDir()
 }

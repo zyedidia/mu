@@ -3,7 +3,6 @@ package buffer
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -66,7 +65,9 @@ type Input interface {
 	FullName() string
 }
 
-func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share func(name string) (*BufferData, Cursor)) (b *Buffer, err error) {
+type ShareFn func(name string) (*BufferData, Cursor)
+
+func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share ShareFn) (b *Buffer, err error) {
 	if share != nil {
 		dat, c := share(in.FullName())
 		if dat != nil {
@@ -81,10 +82,8 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share fun
 		}
 	}
 	b = &Buffer{
-		cursors: LoadCursors(
-			filepath.Join(cfg.CacheDir(),
-				input.EscapePath(in.FullName())+".cursors"),
-		),
+		cursors: LoadCursors(cfg.CacheFS(),
+			input.EscapePath(in.FullName())+".cursors"),
 		cur: 0,
 	}
 	dat, err := NewBufferData(in, out, cfg, redraw, b)
@@ -281,9 +280,7 @@ func (b *Buffer) Reload() error {
 }
 
 func (b *Buffer) Close() {
-	path := filepath.Join(b.cfg.CacheDir(),
-		input.EscapePath(b.FullName())+".cursors")
-	b.SerializeCursors(path)
+	b.SerializeCursors(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".cursors")
 	b.BufferData.refs--
 	if b.BufferData.refs == 0 {
 		close(b.Exited)
