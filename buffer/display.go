@@ -26,7 +26,7 @@ type RenderTracker struct {
 type RuneVisualizer interface {
 	// String should not contain any combining characters.
 	String(r rune, vx int, th *theme.Theme) (string, theme.Style)
-	Size(r rune, vx int) int
+	Size(r rune, vx int, width int) int
 	Special(r rune) bool
 }
 
@@ -55,7 +55,7 @@ func (v *Visualizer) String(r rune, vx int, th *theme.Theme) (string, theme.Styl
 	return fmt.Sprintf("<%02x>", r), th.Default()
 }
 
-func (v *Visualizer) Size(r rune, vx int) int {
+func (v *Visualizer) Size(r rune, vx int, width int) int {
 	if r == '\t' {
 		tsz := v.TabSize
 		return tsz - (vx % tsz)
@@ -63,7 +63,7 @@ func (v *Visualizer) Size(r rune, vx int) int {
 		r, _ := utf8.DecodeRuneInString(s)
 		return runewidth.RuneWidth(r)
 	} else if unicode.IsPrint(r) {
-		return runewidth.RuneWidth(r)
+		return width
 	} else if r == '\t' {
 		tsz := v.TabSize
 		return tsz - (vx % tsz)
@@ -114,16 +114,15 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 		// return y >= height
 	}
 
-	drawRune := func(off int, c rune, combc []rune, bx, by int, style theme.Style) (done, loop bool) {
+	drawRune := func(off int, c rune, combc []rune, width, bx, by int, style theme.Style) (done, loop bool) {
 		if tracker.Draw != nil {
 			if b.matches != nil && style == th.Default() {
 				style = th.Style(b.matches.Group(off))
 			}
 			tracker.Draw(x, y, c, combc, style)
 		}
-		rw := runewidth.RuneWidth(c)
-		x += rw
-		vx += rw
+		x += width
+		vx += width
 
 		if x >= width {
 			if softwrap {
@@ -171,7 +170,7 @@ loop:
 		}
 
 		// get rune at off
-		r, combc, size := b.DecodeGraphemeAt(off)
+		r, combc, size, width := b.DecodeGraphemeWidthAt(off)
 		by, bx := b.LineColAt(off)
 		if tracker.Track(off, bx, by, x, y) {
 			return
@@ -181,7 +180,7 @@ loop:
 			str, style := displayer.String(r, x, th)
 			if str != "\n" {
 				for _, c := range str {
-					drawRune(off, c, nil, bx, by, style)
+					drawRune(off, c, nil, width, bx, by, style)
 				}
 			}
 			end := newline()
@@ -192,7 +191,7 @@ loop:
 		} else if displayer.Special(r) {
 			dr, style := displayer.String(r, x, th)
 			for _, c := range dr {
-				done, loop := drawRune(off, c, nil, bx, by, style)
+				done, loop := drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style)
 				if done {
 					return
 				} else if loop {
@@ -200,7 +199,7 @@ loop:
 				}
 			}
 		} else {
-			done, loop := drawRune(off, r, combc, bx, by, th.Default())
+			done, loop := drawRune(off, r, combc, width, bx, by, th.Default())
 			if done {
 				return
 			} else if loop {
@@ -214,13 +213,13 @@ loop:
 
 func (b *Buffer) wordSizeAt(vx, off int, wordchar func(r rune) bool, displayer RuneVisualizer) int {
 	vn := 0
-	r, _, sz := b.DecodeGraphemeAt(off)
+	r, _, sz, width := b.DecodeGraphemeWidthAt(off)
 	off += sz
-	vn += displayer.Size(r, vx+vn)
+	vn += displayer.Size(r, vx+vn, width)
 	for wordchar(r) {
-		r, _, sz = b.DecodeGraphemeAt(off)
+		r, _, sz, width = b.DecodeGraphemeWidthAt(off)
 		off += sz
-		vn += displayer.Size(r, vx+vn)
+		vn += displayer.Size(r, vx+vn, width)
 	}
 	return vn
 }

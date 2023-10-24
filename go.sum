@@ -39,8 +39,9 @@ github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3v
 github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/rivo/uniseg v0.1.0 h1:+2KBaVoUmb9XzDsrx/Ct0W/EYOSFf/nWTauy++DprtY=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
+github.com/rivo/uniseg v0.4.4 h1:8TfxU8dW6PdqD27gjM8MVNuicgxIjxpm4K7x4jp8sis=
+github.com/rivo/uniseg v0.4.4/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
 github.com/segmentio/fasthash v1.0.3 h1:EI9+KE1EwvMLBWwjpRDc+fEM+prwxDYbslddQGtrmhM=
 github.com/segmentio/fasthash v1.0.3/go.mod h1:waKX8l2N8yckOgmSsXJi7x1ZfdKZ4x7KRMzBtS3oedY=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
@@ -66,8 +67,6 @@ github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1/go.mod h1:4Hhqh6e8X
 github.com/zyedidia/gpeg v0.0.0-20211003220203-241091abc9c8/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80 h1:294fTzXJ1B4Cqu3DVQr9ll9uuIk7FXGVnktjjyEmVXY=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
-github.com/zyedidia/kbd v0.0.0-20220516230706-68a4f37d01f9 h1:69MTQyAg6rxGN84ksxrosE6+iTZwnsjPB92fqW0Qf2Y=
-github.com/zyedidia/kbd v0.0.0-20220516230706-68a4f37d01f9/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
 github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a h1:gwRvsOOci7caILFbozXZvfb2CNJ7ypagyYsPqVFaaEk=
 github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
 github.com/zyedidia/rope v0.0.0-20210616205215-37fbf22eab3a/go.mod h1:IKo1js3O2gdESAUH9F3B33wlrRBnpJMJR/gXyY0a3ho=

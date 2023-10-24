@@ -280,7 +280,9 @@ func (b *Buffer) Reload() error {
 }
 
 func (b *Buffer) Close() {
-	b.SerializeCursors(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".cursors")
+	if !b.Modified() {
+		b.SerializeCursors(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".cursors")
+	}
 	b.BufferData.refs--
 	if b.BufferData.refs == 0 {
 		close(b.Exited)
