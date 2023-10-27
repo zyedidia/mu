@@ -285,7 +285,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 func (e *Editor) Register() {
 	for _, c := range commands {
-		tclutil.Register(e.interp, c.Name, c.Fn, e)
+		tclutil.Register(e.interp, c.Name, c.Fn, e, c.Pre)
 	}
 }
 

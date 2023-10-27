@@ -40,6 +40,11 @@ func (b *Buffer) Modified() bool {
 // SetOutput changes the target output for saving this buffer.
 func (b *Buffer) SetOutput(o Output) {
 	b.out = o
+	if f, ok := o.(*output.File); ok {
+		b.in = &input.File{
+			Path: f.Path,
+		}
+	}
 }
 
 // FileOutput returns nil if the output is not a file.

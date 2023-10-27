@@ -42,28 +42,28 @@ func (ip *InfoPane) HistoryNext() {
 
 var commands = []tclutil.Command{
 	{
-		"history-prev",
-		(*InfoPane).HistoryPrev,
-		"history-prev: load previous response",
+		Name: "history-prev",
+		Fn:   (*InfoPane).HistoryPrev,
+		Doc:  "history-prev: load previous response",
 	},
 	{
-		"history-next",
-		(*InfoPane).HistoryNext,
-		"history-prev: load next response",
+		Name: "history-next",
+		Fn:   (*InfoPane).HistoryNext,
+		Doc:  "history-prev: load next response",
 	},
 	{
-		"execute",
-		(*InfoPane).Execute,
-		"execute: return the current text as the prompt response",
+		Name: "execute",
+		Fn:   (*InfoPane).Execute,
+		Doc:  "execute: return the current text as the prompt response",
 	},
 	{
-		"cancel",
-		(*InfoPane).Cancel,
-		"cancel: cancel the current prompt",
+		Name: "cancel",
+		Fn:   (*InfoPane).Cancel,
+		Doc:  "cancel: cancel the current prompt",
 	},
 	{
-		"enter-char",
-		(*InfoPane).EnterChar,
-		"enter-char: enter a single character as the prompt response",
+		Name: "enter-char",
+		Fn:   (*InfoPane).EnterChar,
+		Doc:  "enter-char: enter a single character as the prompt response",
 	},
 }

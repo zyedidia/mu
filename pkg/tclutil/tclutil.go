@@ -13,6 +13,7 @@ type Command struct {
 	Name string
 	Fn   interface{}
 	Doc  string
+	Pre  func() error
 }
 
 var errInterface reflect.Type
@@ -25,11 +26,17 @@ func Unregister(interp *tcl.Interp, name string) {
 	interp.SetCmd(name, nil)
 }
 
-func Register(interp *tcl.Interp, name string, fn, arg0 interface{}) {
+func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() error) {
 	v := reflect.ValueOf(fn)
 	t := v.Type()
 
 	cmd := func(itp *tcl.Interp, args []*tcl.TclObj) tcl.TclStatus {
+		if pre != nil {
+			if err := pre(); err != nil {
+				return itp.Fail(err)
+			}
+		}
+
 		argv := make([]reflect.Value, 0, len(args))
 		argv = append(argv, reflect.ValueOf(arg0))
 

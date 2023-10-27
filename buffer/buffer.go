@@ -205,6 +205,20 @@ func (b *BufferData) unmodified() {
 	}
 }
 
+func (b *BufferData) SetExtModified() {
+	b.ModTime = time.Now()
+	b.modified = true
+	b.modhash = nil
+}
+
+func (b *BufferData) ExtModified() bool {
+	t, err := b.in.ModTime()
+	if err != nil {
+		return false
+	}
+	return b.ModTime.Before(t)
+}
+
 // Name returns this buffer's name, indicating the output writer.
 func (b *Buffer) Name() string {
 	if b.HasOutput() {

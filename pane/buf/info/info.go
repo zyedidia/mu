@@ -39,7 +39,7 @@ func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg b
 func (ip *InfoPane) Register(interp *tcl.Interp) {
 	ip.BufPane.Register(interp)
 	for _, c := range commands {
-		tclutil.Register(interp, c.Name, c.Fn, ip)
+		tclutil.Register(interp, c.Name, c.Fn, ip, c.Pre)
 	}
 }
 
