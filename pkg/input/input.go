@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
-	"github.com/zyedidia/mu/pkg/cpu"
 	"github.com/zyedidia/mu/pkg/home"
 	"github.com/zyedidia/mu/pkg/input/parallel"
 )
@@ -58,7 +58,7 @@ func (f *File) Read() ([]byte, error) {
 		return nil, err
 	}
 	b := make([]byte, fi.Size())
-	n, err := parallel.ReadFull(file, b, cpu.NumCores())
+	n, err := parallel.ReadFull(file, b, runtime.NumCPU())
 	return b[:n], err
 }
 
@@ -109,7 +109,7 @@ func NewReader(r SizedReaderAt, name string) *Reader {
 
 func (r *Reader) Read() ([]byte, error) {
 	b := make([]byte, r.rs.Size())
-	n, err := parallel.ReadFull(r.rs, b, cpu.NumCores())
+	n, err := parallel.ReadFull(r.rs, b, runtime.NumCPU())
 	return b[:n], err
 }
 

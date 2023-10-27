@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"time"
 	"unsafe"
 
-	"github.com/zyedidia/mu/pkg/cpu"
 	"github.com/zyedidia/mu/pkg/gommap"
 	"github.com/zyedidia/mu/pkg/input/parallel"
 )
@@ -156,7 +156,7 @@ func allowModifications(mmap []byte) []byte {
 		// this should really never happen... if the map fails though we can just read
 		// back from the temp file into memory
 		newb := make([]byte, slclen)
-		n, _ := parallel.ReadFull(tmp, newb, cpu.NumCores())
+		n, _ := parallel.ReadFull(tmp, newb, runtime.NumCPU())
 		return newb[:n]
 	}
 	tmp.Close()
@@ -172,7 +172,7 @@ func unmap(mmap []byte) {
 
 func mmapToMem(b []byte) []byte {
 	newb := make([]byte, len(b))
-	n, _ := parallel.ReadFull(bytes.NewReader(b), newb, cpu.NumCores())
+	n, _ := parallel.ReadFull(bytes.NewReader(b), newb, runtime.NumCPU())
 	unmap(b)
 	return newb[:n]
 }
