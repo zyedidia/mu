@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	defLeft  = "{{keyword}}$name $modified($(cursor-line),$(cursor-col)) | ft:$filetype"
+	defLeft  = "$name $modified($(cursor-line),$(cursor-col)) | ft:$filetype"
 	defRight = "mu $version"
 )
 

@@ -23,6 +23,12 @@ func NewPaletteColor(index int) Color {
 	}
 }
 
+func NewNamedColor(s string) Color {
+	return Color{
+		color: tcell.GetColor(s),
+	}
+}
+
 func (c Color) Valid() bool {
 	return c.color.Valid()
 }

@@ -50,14 +50,30 @@ func (t *Theme) Style(group string) Style {
 		return Style{}
 	}
 
-	if r, ok := t.rules[group]; ok {
-		return r
+	st := t.def
+	parts := strings.Split(group, ":")
+	fg := false
+
+	for _, p := range parts {
+		if r, ok := t.rules[p]; ok {
+			st = r
+		} else if a, err := Attr(p); err == nil {
+			st = st.Add(a)
+		} else {
+			i := strings.LastIndexByte(p, '.')
+			if i == -1 {
+				if fg {
+					st.Bg = NewNamedColor(p)
+				} else {
+					st.Fg = NewNamedColor(p)
+				}
+			} else {
+				st = t.Style(group[:i])
+			}
+		}
 	}
-	i := strings.LastIndexByte(group, '.')
-	if i == -1 {
-		return t.def
-	}
-	return t.Style(group[:i])
+
+	return st
 }
 
 func (t *Theme) Default() Style {
@@ -72,7 +88,7 @@ type ColorSegment struct {
 	Text  string
 }
 
-var parseReRaw = `\{\{[a-z0-9_-]+\}\}`
+var parseReRaw = `\{\{[a-z0-9:_-]+\}\}`
 var parseRe = regexp.MustCompile(`(?i)` + parseReRaw)
 
 func (th *Theme) ColorString(v string) []ColorSegment {
@@ -89,7 +105,7 @@ func (th *Theme) ColorString(v string) []ColorSegment {
 	result := new(bytes.Buffer)
 	m := []int{0, 0}
 	for _, nm := range matches {
-		// Write the text in between this match and the last
+		// Write the text in between this match and the last.
 		segments = append(segments, ColorSegment{
 			Style: st,
 			Text:  v[m[1]:nm[0]],
