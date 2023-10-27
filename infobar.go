@@ -75,17 +75,22 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 }
 
 func (i *InfoBar) Prompt(typ, msg string) (resp string, canceled bool) {
-	return i.prompt(typ, msg, "", "cmd")
+	return i.prompt(typ, msg, "", "cmd", nil)
+}
+
+func (i *InfoBar) IPrompt(typ, msg string, cb func(cur string)) (resp string, canceled bool) {
+	return i.prompt(typ, msg, "", "cmd", cb)
 }
 
 func (i *InfoBar) CharPrompt(msg string) (resp string, canceled bool) {
-	return i.prompt("charcmd", msg, "", "charcmd")
+	return i.prompt("charcmd", msg, "", "charcmd", nil)
 }
 
-func (i *InfoBar) prompt(typ, msg, partial, mode string) (resp string, canceled bool) {
+func (i *InfoBar) prompt(typ, msg, partial, mode string, cb func(cur string)) (resp string, canceled bool) {
 	i.Message(msg)
 	i.cmd.BufPane.Insert(0, []byte(partial))
 	i.cmd.SetType(typ)
+	i.cmd.Callback = cb
 
 	m := i.ed.GetMode()
 	i.ed.MustSetMode(mode)
@@ -100,6 +105,7 @@ func (i *InfoBar) prompt(typ, msg, partial, mode string) (resp string, canceled 
 
 	i.ed.MustSetMode(m)
 	i.cmd.Unregister(i.ed.interp)
+	i.cmd.Callback = nil
 	i.ed.ActivePane().Register(i.ed.interp)
 	i.Clear()
 	i.active = false

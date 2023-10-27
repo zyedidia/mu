@@ -23,6 +23,7 @@ type Clipboard interface {
 
 type Messager interface {
 	Prompt(typ, p string) (string, bool)
+	IPrompt(typ, p string, cb func(string)) (string, bool)
 	CharPrompt(p string) (string, bool)
 	Message(msg string)
 	Error(msg string)

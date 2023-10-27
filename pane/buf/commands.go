@@ -376,8 +376,22 @@ func (bp *BufPane) FindLiteral(search string) error {
 }
 
 func (bp *BufPane) FindPrompt() error {
-	search, canceled := bp.messager.Prompt("find", "Find: ")
+	start := bp.Cursor().Pos
+	search, canceled := bp.messager.IPrompt("find", "Find: ", func(cur string) {
+		rxp, err := regexp.Compile(cur)
+		if err != nil {
+			bp.MoveTo(start)
+			return
+		}
+		match := bp.Buffer.FindDown(rxp, start)
+		if match != nil {
+			bp.MoveTo(match[0])
+		} else {
+			bp.MoveTo(start)
+		}
+	})
 	if canceled {
+		bp.MoveTo(start)
 		return nil
 	}
 	return bp.Find(search)

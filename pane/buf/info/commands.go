@@ -5,16 +5,24 @@ import (
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
+func (ip *InfoPane) PostEvent() {
+	if ip.Callback != nil {
+		ip.Callback(string(ip.Bytes()))
+	}
+}
+
 func (ip *InfoPane) Execute() {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
 	ip.history[ip.typ] = append(ip.history[ip.typ], text)
+	ip.Callback = nil // make sure callback doesn't get called afterwards
 	ip.Done <- InfoResp{text, false}
 }
 
 func (ip *InfoPane) Cancel() {
 	text := string(ip.Bytes())
 	ip.BufPane.Remove(0, ip.BufPane.Len())
+	ip.Callback = nil // make sure callback doesn't get called afterwards
 	ip.Done <- InfoResp{text, true}
 }
 

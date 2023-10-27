@@ -12,13 +12,14 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+g' '-', 'hsplit'}
           / {'ctrl+g' 't', 'term'}
           / {'ctrl+t', 'tab'}
+          / {'ctrl+f', 'find-prompt'}
           / {'ctrl+o', 'command-edit "open "'}
           / {'tab',    'insert-at [cursor-pos] \\t; relocate'}
           / {'enter', 'insert-at [cursor-pos] \\n; relocate'}
           / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
           / {., 'insert-at [cursor-pos] $0; relocate'}
-          / { move, 'move-to [$1]; relocate' }
+          / {move, 'move-to [$1]; relocate'}
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}

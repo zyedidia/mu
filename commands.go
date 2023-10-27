@@ -166,7 +166,7 @@ func (e *Editor) Command() error {
 }
 
 func (e *Editor) CommandEdit(p string) error {
-	out, canceled := e.infobar.prompt("cmd", "> ", p, "cmd")
+	out, canceled := e.infobar.prompt("cmd", "> ", p, "cmd", nil)
 	if canceled {
 		return nil
 	}

@@ -268,6 +268,10 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 				e.Error(err.Error())
 			}
 			e.complete.active = e.complete.next
+
+			if e.infobar.active {
+				e.infobar.cmd.PostEvent()
+			}
 		}()
 	} else if ec, ok := e.ActivePane().(EventConsumer); ok {
 		// active pane wants the raw event directly

@@ -24,7 +24,8 @@ type InfoPane struct {
 	history map[string][]string
 	histidx int
 
-	Done chan InfoResp
+	Callback func(cur string)
+	Done     chan InfoResp
 }
 
 func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, editor buf.Editor) *InfoPane {
