@@ -36,7 +36,7 @@ func EnterToContinue() {
 	reader.ReadString('\n')
 }
 
-const errmsg = `Please report this issue online on GitHub.`
+const errmsg = `Please report this issue at https://github.com/zyedidia/micro/issues.`
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var showstats = flag.Bool("stats", false, "create performance statistics files")

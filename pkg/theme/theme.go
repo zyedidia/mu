@@ -1,7 +1,9 @@
 package theme
 
 import (
+	"bytes"
 	"errors"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -63,4 +65,45 @@ func (t *Theme) Default() Style {
 		return Style{}
 	}
 	return t.def
+}
+
+type ColorSegment struct {
+	Style Style
+	Text  string
+}
+
+var parseReRaw = `\{\{[a-z0-9_-]+\}\}`
+var parseRe = regexp.MustCompile(`(?i)` + parseReRaw)
+
+func (th *Theme) ColorString(v string) []ColorSegment {
+	matches := parseRe.FindAllStringIndex(v, -1)
+	if len(matches) == 0 {
+		return []ColorSegment{{
+			Style: th.Default().Add(AttrReverse),
+			Text:  v,
+		}}
+	}
+
+	var segments []ColorSegment
+	var st Style
+	result := new(bytes.Buffer)
+	m := []int{0, 0}
+	for _, nm := range matches {
+		// Write the text in between this match and the last
+		segments = append(segments, ColorSegment{
+			Style: st,
+			Text:  v[m[1]:nm[0]],
+		})
+		result.WriteString(v[m[1]:nm[0]])
+		m = nm
+
+		st = th.Style(v[m[0]+2 : m[1]-2])
+	}
+	result.WriteString(v[m[1]:])
+	segments = append(segments, ColorSegment{
+		Style: st,
+		Text:  v[m[1]:],
+	})
+
+	return segments
 }

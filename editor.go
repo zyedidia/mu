@@ -25,7 +25,7 @@ type TermClip interface {
 	GetClipboard(reg string) ([]byte, error)
 }
 
-const errmsg = `Please report this issue online on GitHub.`
+const errmsg = `Please report this issue at https://github.com/zyedidia/micro/issues.`
 
 type PanicErr struct {
 	trace string
