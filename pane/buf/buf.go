@@ -141,3 +141,9 @@ func (bp *BufPane) Close() error {
 func (bp *BufPane) Closed() bool {
 	return false
 }
+
+func (bp *BufPane) WordFullBefore() string {
+	from := bp.Cursor()
+	to := from.WordLeft(bp.Buffer, isNotSpace)
+	return string(bp.Slice(to.Pos, from.Pos))
+}

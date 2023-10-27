@@ -1,6 +1,7 @@
 package info
 
 import (
+	"github.com/zyedidia/mu/pkg/completer"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
@@ -40,6 +41,14 @@ func (ip *InfoPane) HistoryNext() {
 	}
 }
 
+func (ip *InfoPane) Complete() {
+	prefix := ip.WordFullBefore()
+	comps := completer.FileComplete(prefix, ".")
+	if len(comps) == 1 {
+		ip.Insert(ip.Cursor().Pos, []byte(comps[0][len(prefix):]))
+	}
+}
+
 var commands = []tclutil.Command{
 	{
 		Name: "history-prev",
@@ -65,5 +74,10 @@ var commands = []tclutil.Command{
 		Name: "enter-char",
 		Fn:   (*InfoPane).EnterChar,
 		Doc:  "enter-char: enter a single character as the prompt response",
+	},
+	{
+		Name: "complete",
+		Fn:   (*InfoPane).Complete,
+		Doc:  "complete: make an autocompletion suggestion",
 	},
 }
