@@ -81,6 +81,8 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 					return itp.FailStr(fmt.Sprintf("%v", ret[0]))
 				}
 				return itp.Return(tcl.FromStr(""))
+			case reflect.Bool:
+				return itp.Return(tcl.FromBool(ret[0].Bool()))
 			case reflect.Int:
 				return itp.Return(tcl.FromInt(int(ret[0].Int())))
 			case reflect.String:

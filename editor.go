@@ -48,6 +48,8 @@ type Editor struct {
 	mode     *kbd.Config
 	modeLock sync.Mutex
 
+	complete *CompleteBar
+
 	theme  *theme.Theme
 	config *config.ConfigFS
 
@@ -109,6 +111,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		w:        w,
 		h:        h,
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
+		complete: &CompleteBar{},
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}, 1),
@@ -250,6 +253,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 			defer e.SendRedraw()
 			defer e.displayLock.Unlock()
 
+			e.complete.next = false
 			defer func() {
 				if err := recover(); err != nil {
 					e.Errors <- PanicErr{goerrors.Wrap(err, 2).ErrorStack()}
@@ -263,6 +267,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 				e.Errors <- err
 				e.Error(err.Error())
 			}
+			e.complete.active = e.complete.next
 		}()
 	} else if ec, ok := e.ActivePane().(EventConsumer); ok {
 		// active pane wants the raw event directly
@@ -324,6 +329,9 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	}, func(x, y int) {
 		cursor(x, e.h+y-1)
 	})
+	e.complete.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+		draw(x, e.h+y-2, mainc, combc, style)
+	}, e.w, e.theme)
 }
 
 func (e *Editor) ActivatePane(pane pane.Pane) {

@@ -32,6 +32,13 @@ type Messager interface {
 type Editor interface {
 	EvalRet(cmd string, vars []interface{}) (string, error)
 	SuspendResume() (chan func(), chan struct{})
+
+	StartCompletion(s []string)
+	StopCompletion()
+	ActiveCompletion() bool
+	NextCompletion()
+	PrevCompletion()
+	KeepCompleting()
 }
 
 type BufPane struct {
@@ -57,7 +64,7 @@ type BufPane struct {
 	messager Messager
 	clip     Clipboard
 	cfg      Config
-	editor   Editor
+	Editor   Editor
 }
 
 func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor) *BufPane {
@@ -77,7 +84,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		cfg:           cfg,
 		clip:          clip,
 		messager:      msger,
-		editor:        editor,
+		Editor:        editor,
 		status:        tcl.NewInterp(),
 	}
 	for _, c := range statuscmds {
@@ -142,8 +149,15 @@ func (bp *BufPane) Closed() bool {
 	return false
 }
 
-func (bp *BufPane) WordFullBefore() string {
-	from := bp.Cursor()
-	to := from.WordLeft(bp.Buffer, isNotSpace)
-	return string(bp.Slice(to.Pos, from.Pos))
+func (bp *BufPane) WordStart() string {
+	start := bp.Cursor()
+	consumed := 0
+	for {
+		r, _, sz := bp.DecodeGraphemeBefore(start.Pos - consumed)
+		if !isNotSpace(r) || sz == 0 {
+			break
+		}
+		consumed += sz
+	}
+	return string(bp.Slice(start.Pos-consumed, start.Pos))
 }

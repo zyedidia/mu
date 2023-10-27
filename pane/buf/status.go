@@ -22,7 +22,7 @@ func (bp *BufPane) Status() (string, string) {
 	resolve := func(expr string) (string, error) {
 		s, err := bp.evalStatus(expr)
 		if err != nil {
-			return bp.editor.EvalRet(expr, nil)
+			return bp.Editor.EvalRet(expr, nil)
 		}
 		return s, nil
 	}

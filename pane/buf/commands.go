@@ -52,7 +52,7 @@ func (bp *BufPane) saveWithSudo() (bool, error) {
 			return false, nil
 		}
 		if choice == "y" {
-			suspend, resume := bp.editor.SuspendResume()
+			suspend, resume := bp.Editor.SuspendResume()
 			bp.SetOutput(&output.RootFile{
 				Suspend: suspend,
 				Resume:  resume,

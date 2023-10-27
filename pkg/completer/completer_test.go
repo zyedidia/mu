@@ -16,13 +16,10 @@ func check(expected, actual []string, t *testing.T) {
 }
 
 func TestFileCompleter(t *testing.T) {
-	fc := FileCompleter{
-		".",
-	}
 	expected := []string{
 		"./completer.go",
 		"./completer_test.go",
 	}
-	actual := fc.Completions("./co")
+	actual := FileComplete("./co", ".")
 	check(expected, actual, t)
 }

@@ -6,7 +6,8 @@ bindings <- {'ctrl+z', 'undo'}
           / {'ctrl+q', 'cancel'}
           / {'ctrl+c', 'cancel'}
           / {'escape', 'cancel'}
-          / {'tab',    'complete'}
+          / {'tab',    'if {![complete]} {next-completion}'}
+          / {'backtab', 'prev-completion'}
           / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
           / {., 'insert-at [cursor-pos] $0; relocate'}

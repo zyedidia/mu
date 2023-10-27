@@ -41,12 +41,37 @@ func (ip *InfoPane) HistoryNext() {
 	}
 }
 
-func (ip *InfoPane) Complete() {
-	prefix := ip.WordFullBefore()
+func (ip *InfoPane) NextCompletion() bool {
+	if ip.Editor.ActiveCompletion() {
+		ip.Editor.NextCompletion()
+		ip.Editor.KeepCompleting()
+		return true
+	}
+	return false
+}
+
+func (ip *InfoPane) PrevCompletion() bool {
+	if ip.Editor.ActiveCompletion() {
+		ip.Editor.PrevCompletion()
+		ip.Editor.KeepCompleting()
+		return true
+	}
+	return false
+}
+
+func (ip *InfoPane) Complete() bool {
+	if ip.Editor.ActiveCompletion() {
+		return false
+	}
+	prefix := ip.WordStart()
 	comps := completer.FileComplete(prefix, ".")
 	if len(comps) == 1 {
 		ip.Insert(ip.Cursor().Pos, []byte(comps[0][len(prefix):]))
+	} else {
+		ip.Editor.StartCompletion(comps)
 	}
+	ip.Editor.KeepCompleting()
+	return true
 }
 
 var commands = []tclutil.Command{
@@ -79,5 +104,15 @@ var commands = []tclutil.Command{
 		Name: "complete",
 		Fn:   (*InfoPane).Complete,
 		Doc:  "complete: make an autocompletion suggestion",
+	},
+	{
+		Name: "next-completion",
+		Fn:   (*InfoPane).NextCompletion,
+		Doc:  "next-completion: select the next completion",
+	},
+	{
+		Name: "prev-completion",
+		Fn:   (*InfoPane).PrevCompletion,
+		Doc:  "prev-completion: select the previous completion",
 	},
 }
