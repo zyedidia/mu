@@ -1,6 +1,7 @@
 package mu
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/zyedidia/mu/buffer"
@@ -34,6 +35,10 @@ func (e *Editor) NewBufPane(in buffer.Input, out buffer.Output) (*buf.BufPane, e
 }
 
 func (e *Editor) NewBufPaneFromPath(path string) (*buf.BufPane, error) {
+	if strings.Contains(path, ":") {
+		return e.NewBufPaneFromRemote(path)
+	}
+
 	in, err := input.NewFile(path)
 	if err != nil {
 		return nil, err
@@ -41,5 +46,21 @@ func (e *Editor) NewBufPaneFromPath(path string) (*buf.BufPane, error) {
 	out := &output.File{
 		Path: path,
 	}
+	return e.NewBufPane(in, out)
+}
+
+func (e *Editor) NewBufPaneFromRemote(path string) (*buf.BufPane, error) {
+	host, path, found := strings.Cut(path, ":")
+	if !found {
+		return nil, errors.New("must be of the form host:path")
+	}
+
+	c, err := e.remote.Connect(host)
+	if err != nil {
+		return nil, err
+	}
+
+	in := input.NewRemoteFile(c, path)
+	out := &output.Discard{}
 	return e.NewBufPane(in, out)
 }

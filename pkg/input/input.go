@@ -2,6 +2,7 @@ package input
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/zyedidia/mu/pkg/home"
 	"github.com/zyedidia/mu/pkg/input/parallel"
+	"github.com/zyedidia/mu/remote"
 )
 
 // Input is an interface for defining sources of input data. This may include
@@ -184,4 +186,34 @@ func (e *Empty) FullName() string {
 
 func EscapePath(path string) string {
 	return strings.ReplaceAll(path, string(os.PathSeparator), "%")
+}
+
+type RemoteFile struct {
+	Client *remote.Client
+	Path   string
+	mod    time.Time
+}
+
+func NewRemoteFile(c *remote.Client, p string) *RemoteFile {
+	return &RemoteFile{
+		Client: c,
+		Path:   p,
+		mod:    time.Now(),
+	}
+}
+
+func (f *RemoteFile) Read() ([]byte, error) {
+	return f.Client.RunCommand("cat " + f.Path)
+}
+
+func (f *RemoteFile) ModTime() (time.Time, error) {
+	return f.mod, nil
+}
+
+func (f *RemoteFile) Name() string {
+	return fmt.Sprintf("%s:%s", f.Client, f.Path)
+}
+
+func (f *RemoteFile) FullName() string {
+	return f.Name()
 }

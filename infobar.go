@@ -94,6 +94,12 @@ func (i *InfoBar) Prompt(typ, msg string) (resp string, canceled bool) {
 	return i.prompt(typ, msg, "", "cmd", nil)
 }
 
+func (i *InfoBar) Password(msg string) (resp string, canceled bool) {
+	// password is a special type that causes history to not be saved and no
+	// displaying to be disabled
+	return i.prompt("password", msg, "", "cmd", nil)
+}
+
 func (i *InfoBar) IPrompt(typ, msg string, cb func(cur string)) (resp string, canceled bool) {
 	return i.prompt(typ, msg, "", "cmd", cb)
 }
@@ -111,7 +117,9 @@ func (i *InfoBar) prompt(typ, msg, partial, mode string, cb func(cur string)) (r
 	m := i.ed.GetMode()
 	i.ed.MustSetMode(mode)
 	i.active = true
-	i.ed.ActivePane().Unregister(i.ed.interp)
+	if i.ed.ActivePane() != nil {
+		i.ed.ActivePane().Unregister(i.ed.interp)
+	}
 	i.cmd.Register(i.ed.interp)
 
 	i.ed.displayLock.Unlock()
@@ -122,7 +130,9 @@ func (i *InfoBar) prompt(typ, msg, partial, mode string, cb func(cur string)) (r
 	i.ed.MustSetMode(m)
 	i.cmd.Unregister(i.ed.interp)
 	i.cmd.Callback = nil
-	i.ed.ActivePane().Register(i.ed.interp)
+	if i.ed.ActivePane() != nil {
+		i.ed.ActivePane().Register(i.ed.interp)
+	}
 	i.Clear()
 	i.active = false
 	return r.Resp, r.Canceled

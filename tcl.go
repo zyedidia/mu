@@ -46,9 +46,6 @@ func (e *Editor) Eval(cmd string, vars []interface{}) error {
 func (e *Editor) EvalRet(cmd string, vars []interface{}) (string, error) {
 	interp := gotcl.NewInterpFrom(e.interp)
 	obj, err := tclutil.EvalWithVars(interp, cmd, vars)
-	if len(e.tabs) == 0 {
-		return "", ErrQuit
-	}
 	if obj != nil && err == nil {
 		return obj.AsString(), nil
 	}

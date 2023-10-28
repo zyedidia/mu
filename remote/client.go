@@ -1,11 +1,14 @@
 package remote
 
 import (
+	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 var DefaultTimeout = 10 * time.Second
@@ -24,11 +27,18 @@ type Config struct {
 	Callback ssh.HostKeyCallback
 }
 
-func NewClient(user string, addr string, auth []ssh.AuthMethod) (*Client, error) {
+func NewClient(user string, addr string, getpass func() (string, error)) (*Client, error) {
 	callback, err := DefaultKnownHosts()
 	if err != nil {
 		return nil, err
 	}
+
+	var auth []ssh.AuthMethod
+	sshagent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+	if err == nil {
+		auth = append(auth, ssh.PublicKeysCallback(agent.NewClient(sshagent).Signers))
+	}
+	auth = append(auth, ssh.PasswordCallback(getpass))
 
 	c := &Client{
 		config: Config{
@@ -53,4 +63,29 @@ func (c *Client) Connect() error {
 	})
 	c.client = client
 	return err
+}
+
+func (c *Client) Ssh() *ssh.Client {
+	return c.client
+}
+
+func (c *Client) String() string {
+	return fmt.Sprintf("%s@%s", c.config.User, c.config.Addr)
+}
+
+func (c *Client) RunCommand(cmd string) ([]byte, error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	sout := &bytes.Buffer{}
+	serr := &bytes.Buffer{}
+	session.Stdout = sout
+	session.Stderr = serr
+	if err := session.Run(cmd); err != nil {
+		return nil, fmt.Errorf("remote command: %w: %s", err, serr.String())
+	}
+	return sout.Bytes(), nil
 }

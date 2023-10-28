@@ -20,6 +20,7 @@ import (
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
+	"github.com/zyedidia/mu/remote"
 )
 
 type TermClip interface {
@@ -51,6 +52,8 @@ type Editor struct {
 	modeLock sync.Mutex
 
 	complete *CompleteBar
+
+	remote *remote.Remote
 
 	theme  *theme.Theme
 	config *config.ConfigFS
@@ -120,6 +123,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}, 1),
 	}
+
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, nil, redraw), e)
 
 	langs, err := cfg.LoadLspLanguages()
@@ -148,6 +152,15 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		}
 	}, langs)
 
+	e.remote = remote.NewRemote(func() (string, error) {
+		pass, cancel := e.infobar.Password("Password: ")
+		if cancel {
+			return "", errors.New("canceled")
+		}
+
+		return pass, nil
+	})
+
 	e.MustSetMode("micro")
 	e.Register()
 	e.initClipboard()
@@ -168,11 +181,21 @@ func NewEditorFromPath(path string, w, h int, clip TermClip) (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
-	bp, err := e.NewBufPaneFromPath(path)
-	if err != nil {
-		return nil, err
-	}
-	e.OpenTabPane(bp)
+	go func() {
+		// Open pane in another goroutine so that the opening routine can use
+		// the infobar if it needs to ask the user for input in order to open
+		// the file (remote connection). If an error occurs, it will display it
+		// and open an empty buffer.
+		e.displayLock.Lock()
+		defer e.SendRedraw()
+		defer e.displayLock.Unlock()
+		bp, err := e.NewBufPaneFromPath(path)
+		if err != nil {
+			e.infobar.Error(err.Error())
+			bp = e.NewEmptyBufPane()
+		}
+		e.OpenTabPane(bp)
+	}()
 	return e, nil
 }
 
@@ -303,7 +326,7 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 			}()
 
 			err := e.Eval(action.Cmd, action.Vars)
-			if len(e.tabs) == 0 {
+			if len(e.tabs) == 0 && !e.infobar.active {
 				e.exit()
 			} else if err != nil {
 				e.Errors <- err
