@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/zyedidia/mu/buffer"
-	"github.com/zyedidia/mu/pane/buf/info"
+	"github.com/zyedidia/mu/pane/info"
 	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
 )
