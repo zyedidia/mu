@@ -16,6 +16,7 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/pane"
+	"github.com/zyedidia/mu/pane/buf"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
 )
@@ -241,6 +242,19 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		w, h := rev.Size()
 		e.Resize(w, h)
 		return
+	}
+
+	if mev, ok := ev.(*tcell.EventMouse); ok {
+		if mev.Buttons() == tcell.ButtonNone {
+			return
+		}
+
+		e.displayLock.Lock()
+		x, y := mev.Position()
+		e.ActiveTab().ActivateXY(e, x, y)
+		log.Println(e.ActivePane().(*buf.BufPane).MouseLoc(x, y))
+		e.displayLock.Unlock()
+		e.SendRedraw()
 	}
 
 	action, ok, more := e.mode.VM.Exec(ev)

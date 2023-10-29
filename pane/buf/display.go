@@ -73,6 +73,27 @@ func (b *BufPane) vLoc2bLoc(vl vLoc) (bl bLoc) {
 	return bl
 }
 
+func (b *BufPane) MouseLoc(x, y int) (int, int) {
+	x -= b.lnumWidth()
+	var bl bLoc
+	b.Buffer.RenderForward(buffer.RenderTracker{
+		Draw: nil,
+		Track: func(off, bx, by, vx, vy int) bool {
+			if vx == x && vy == y {
+				bl.line = by
+				bl.col = bx
+				return true
+			} else if vy > y || (vx >= x && vy == y) {
+				return true
+			}
+			bl.line = by
+			bl.col = bx
+			return false
+		},
+	}, b.bufferWidth(), b.height, b.stpos, b.vis, b.softwrap, b.wordwrap, nil)
+	return bl.line, bl.col
+}
+
 func (b *BufPane) bLoc2vLoc(bl bLoc) (vl vLoc) {
 	off := b.OffsetAt(bl.line, 0)
 	b.Buffer.RenderForward(buffer.RenderTracker{

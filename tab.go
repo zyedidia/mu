@@ -190,3 +190,15 @@ func (t *Tab) Open(e *Editor, p pane.Pane) error {
 	}
 	return nil
 }
+
+func (t *Tab) ActivateXY(e *Editor, x, y int) (int, int) {
+	for _, sp := range t.panes {
+		n := t.root.GetNode(sp.id)
+		if x >= n.X && x < n.X+n.W && y >= n.Y && y < n.Y+n.H {
+			t.cur = sp.id
+			e.ActivatePane(sp.pane)
+			return x - n.X, y - n.Y
+		}
+	}
+	return x, y
+}

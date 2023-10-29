@@ -82,6 +82,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		linenums:      true,
+		softwrap:      true,
 		cfg:           cfg,
 		clip:          clip,
 		messager:      msger,

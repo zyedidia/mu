@@ -98,6 +98,8 @@ func main() {
 		}
 	}()
 
+	s.EnableMouse()
+
 	w, h := s.Size()
 
 	var ed *mu.Editor

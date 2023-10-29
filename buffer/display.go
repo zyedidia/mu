@@ -114,15 +114,15 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 		// return y >= height
 	}
 
-	drawRune := func(off int, c rune, combc []rune, width, bx, by int, style theme.Style) (done, loop bool) {
+	drawRune := func(off int, c rune, combc []rune, rwidth, bx, by int, style theme.Style) (done, loop bool) {
 		if tracker.Draw != nil {
 			if b.matches != nil && style == th.Default() {
 				style = th.Style(b.matches.Group(off))
 			}
 			tracker.Draw(x, y, c, combc, style)
 		}
-		x += width
-		vx += width
+		x += rwidth
+		vx += rwidth
 
 		if x >= width {
 			if softwrap {
