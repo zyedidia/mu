@@ -5,11 +5,15 @@
 package output
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/zyedidia/mu/remote"
 )
 
 var (
@@ -107,4 +111,44 @@ func (wc *WriterCloser) Write(p []byte) (n int, err error) {
 
 func (wc *WriterCloser) Close() error {
 	return wc.CloseFn()
+}
+
+type RemoteFile struct {
+	Client *remote.Client
+	Path   string
+}
+
+func (f *RemoteFile) Open() (io.Writer, error) {
+	cmd, err := f.Client.Ssh().NewSession()
+	if err != nil {
+		return nil, err
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	serr := &bytes.Buffer{}
+	cmd.Stderr = serr
+	wc := &WriterCloser{
+		Wr: stdin,
+		CloseFn: func() error {
+			stdin.Close()
+			err := cmd.Wait()
+			if err != nil {
+				return fmt.Errorf("remote command: %w: %s", err, serr.String())
+			}
+			cmd.Close()
+			return nil
+		},
+	}
+	err = cmd.Start("cat > " + f.Path)
+	return wc, err
+}
+
+func (f *RemoteFile) Name() string {
+	return fmt.Sprintf("%s:%s", f.Client, f.Path)
+}
+
+func (f *RemoteFile) FullName() string {
+	return f.Name()
 }

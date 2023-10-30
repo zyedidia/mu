@@ -61,6 +61,6 @@ func (e *Editor) NewBufPaneFromRemote(path string) (*buf.BufPane, error) {
 	}
 
 	in := input.NewRemoteFile(c, path)
-	out := &output.Discard{}
+	out := &output.RemoteFile{c, path}
 	return e.NewBufPane(in, out)
 }
