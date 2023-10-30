@@ -90,7 +90,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		status:        tcl.NewInterp(),
 	}
 	for _, c := range statuscmds {
-		tclutil.Register(bp.status, c.Name, c.Fn, bp, c.Pre)
+		tclutil.Register(bp.status, c.Name, c.Fn, bp, nil, nil)
 	}
 	bp.InitOpts()
 	return bp
@@ -107,8 +107,15 @@ func (bp *BufPane) Register(interp *tcl.Interp) string {
 		bp.CheckModified()
 		return nil
 	}
+	reloc := func() {
+		bp.RelocateToCur()
+	}
 	for _, c := range commands {
-		tclutil.Register(interp, c.Name, c.Fn, bp, pre)
+		post := reloc
+		if !c.Relocate {
+			post = nil
+		}
+		tclutil.Register(interp, c.Name, c.Fn, bp, pre, post)
 	}
 	return "micro"
 }

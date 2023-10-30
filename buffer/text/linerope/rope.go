@@ -414,33 +414,45 @@ func (n *Node) Rebalance() {
 	}
 }
 
+func (n *Node) indexAllFunc(off, start, end int, sep []byte, fn func(idx int) bool) {
+	if n.kind == tNode && end < off+n.left.length {
+		// [start,end) is in left node
+		n.left.indexAllFunc(off, start, end, sep, fn)
+	} else if n.kind == tNode && start >= off+n.left.length {
+		// [start,end) is in right node
+		n.right.indexAllFunc(off+n.left.length, start, end, sep, fn)
+	} else {
+		var total int
+		n.EachLeaf(func(it *Node) bool {
+			val := it.Value()
+			var acc int
+			for {
+				idx := bytes.Index(val[acc:], sep)
+				if idx == -1 {
+					acc += len(val[acc:])
+					break
+				}
+
+				fullidx := off + total + acc + idx
+				if fullidx >= start && fullidx < end {
+					if fn(fullidx) {
+						return true
+					}
+				}
+
+				acc += idx + 1
+			}
+			total += acc
+			return false
+		})
+	}
+}
+
 // IndexAllFunc iterates through all occurrences of 'sep' in the range
 // [start:end) and calls fn each time with the index of the occurrence. If 'fn'
 // returns 'true' iteration is aborted and fn will no longer be called.
 func (n *Node) IndexAllFunc(start, end int, sep []byte, fn func(idx int) bool) {
-	_, r := n.SplitAt(start)
-	l, _ := r.SplitAt(end - start)
-
-	var total int
-	l.EachLeaf(func(it *Node) bool {
-		val := it.Value()
-		var acc int
-		for {
-			idx := bytes.Index(val[acc:], sep)
-			if idx == -1 {
-				acc += len(val[acc:])
-				break
-			}
-
-			if fn(start + total + acc + idx) {
-				return true
-			}
-
-			acc += idx + 1
-		}
-		total += acc
-		return false
-	})
+	n.indexAllFunc(0, start, end, sep, fn)
 }
 
 // Each applies the given function to every node in the rope.

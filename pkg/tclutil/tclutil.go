@@ -26,7 +26,7 @@ func Unregister(interp *tcl.Interp, name string) {
 	interp.SetCmd(name, nil)
 }
 
-func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() error) {
+func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() error, post func()) {
 	v := reflect.ValueOf(fn)
 	t := v.Type()
 
@@ -70,6 +70,10 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 				}
 			}
 			ret = v.Call(argv)
+		}
+
+		if post != nil {
+			defer post()
 		}
 
 		if len(ret) == 0 {

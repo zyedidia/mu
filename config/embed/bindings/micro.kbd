@@ -19,7 +19,7 @@ bindings <- {'ctrl+s', 'save'}
           / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
           / {., 'insert-at [cursor-pos] $0; relocate'}
-          / {move, 'move-to [$1]; relocate'}
+          / {move, 'move-to [$1]'}
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}

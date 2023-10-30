@@ -97,7 +97,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
-	redraw := make(chan struct{}, 16)
+	redraw := make(chan struct{}, 1)
 	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "term")
 	if err != nil {
 		return nil, err
@@ -262,8 +262,8 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		e.mode.VM.Reset()
 	}
 	if ok {
+		e.displayLock.Lock()
 		go func() {
-			e.displayLock.Lock()
 			defer e.SendRedraw()
 			defer e.displayLock.Unlock()
 
@@ -308,12 +308,16 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 func (e *Editor) Register() {
 	for _, c := range commands {
-		tclutil.Register(e.interp, c.Name, c.Fn, e, c.Pre)
+		tclutil.Register(e.interp, c.Name, c.Fn, e, c.Pre, nil)
 	}
 }
 
 func (e *Editor) SendRedraw() {
-	e.Redraw <- struct{}{}
+	// only send if not already full
+	select {
+	case e.Redraw <- struct{}{}:
+	default:
+	}
 }
 
 func (e *Editor) ActiveTab() *Tab {

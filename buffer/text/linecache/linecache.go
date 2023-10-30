@@ -14,8 +14,8 @@ type LineLooker interface {
 	IndexAllFunc(start, end int, sep []byte, fn func(idx int) bool)
 }
 
-// cache 32 lines at a time.
-const cachesz = 32
+// number of lines to cache
+const cachesz = 4096
 
 // A Liner is a cache that wraps a LineLooker so that frequent requests
 // to the same locations are cached.

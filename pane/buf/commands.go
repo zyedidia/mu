@@ -389,6 +389,7 @@ func (bp *BufPane) FindPrompt() error {
 		} else {
 			bp.MoveTo(start)
 		}
+		bp.RelocateToCur()
 	})
 	if canceled {
 		bp.MoveTo(start)
@@ -444,7 +445,15 @@ func (bp *BufPane) Modified() string {
 	return ""
 }
 
-var commands = []tclutil.Command{
+type command struct {
+	Name        string
+	Fn          interface{}
+	Doc         string
+	Relocate    bool
+	Multicursor bool
+}
+
+var commands = []command{
 	{
 		Name: "save",
 		Fn:   (*BufPane).Save,
@@ -601,14 +610,16 @@ var commands = []tclutil.Command{
 		Doc:  "till-char-back <char> <pos>: jump backwards to the first occurrence of <char> in the current line",
 	},
 	{
-		Name: "move-to",
-		Fn:   (*BufPane).MoveTo,
-		Doc:  "move-to <pos>: move the current cursor to <pos>",
+		Name:     "move-to",
+		Fn:       (*BufPane).MoveTo,
+		Doc:      "move-to <pos>: move the current cursor to <pos>",
+		Relocate: true,
 	},
 	{
-		Name: "select-to",
-		Fn:   (*BufPane).SelectTo,
-		Doc:  "select-to <pos>: move the current cursor to <pos> and make a selection",
+		Name:     "select-to",
+		Fn:       (*BufPane).SelectTo,
+		Doc:      "select-to <pos>: move the current cursor to <pos> and make a selection",
+		Relocate: true,
 	},
 	{
 		Name: "switch-cursor",
@@ -681,29 +692,34 @@ var commands = []tclutil.Command{
 		Doc:  "redo:",
 	},
 	{
-		Name: "paste",
-		Fn:   (*BufPane).Paste,
-		Doc:  "paste: inserts the contents of the clipboard at the current cursor's position",
+		Name:     "paste",
+		Fn:       (*BufPane).Paste,
+		Doc:      "paste: inserts the contents of the clipboard at the current cursor's position",
+		Relocate: true,
 	},
 	{
-		Name: "find",
-		Fn:   (*BufPane).Find,
-		Doc:  "find <regex>: searches for a regular expression",
+		Name:     "find",
+		Fn:       (*BufPane).Find,
+		Doc:      "find <regex>: searches for a regular expression",
+		Relocate: true,
 	},
 	{
-		Name: "find-literal",
-		Fn:   (*BufPane).FindLiteral,
-		Doc:  "find-literal <search>: searches for a literal string",
+		Name:     "find-literal",
+		Fn:       (*BufPane).FindLiteral,
+		Doc:      "find-literal <search>: searches for a literal string",
+		Relocate: true,
 	},
 	{
-		Name: "find-prompt",
-		Fn:   (*BufPane).FindPrompt,
-		Doc:  "find-prompt: opens an interactive prompt for regex searching",
+		Name:     "find-prompt",
+		Fn:       (*BufPane).FindPrompt,
+		Doc:      "find-prompt: opens an interactive prompt for regex searching",
+		Relocate: true,
 	},
 	{
-		Name: "find-literal-prompt",
-		Fn:   (*BufPane).FindLiteralPrompt,
-		Doc:  "find-literal-prompt: opens an interactive prompt for literal searching",
+		Name:     "find-literal-prompt",
+		Fn:       (*BufPane).FindLiteralPrompt,
+		Doc:      "find-literal-prompt: opens an interactive prompt for literal searching",
+		Relocate: true,
 	},
 	{
 		Name: "check-modified",
