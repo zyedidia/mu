@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/zyedidia/mu/pkg/input"
 	"github.com/zyedidia/mu/pkg/output"
@@ -44,6 +45,20 @@ func (b *Buffer) SetOutput(o Output) {
 		b.in = &input.File{
 			Path: f.Path,
 		}
+		b.ReloadFiletype()
+	}
+}
+
+func (b *Buffer) ReloadFiletype() {
+	ft, ok := b.DetectFiletype()
+	if ok {
+		b.Options["filetype"] = ft
+		err := b.LoadHighlighter()
+		if err != nil {
+			log.Println("reload ft:", err)
+			return
+		}
+		go b.InitialHighlight()
 	}
 }
 

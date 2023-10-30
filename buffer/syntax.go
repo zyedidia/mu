@@ -79,6 +79,7 @@ func (b *BufferData) LoadHighlighter() error {
 func (b *BufferData) InitialHighlight() {
 	b.hisem.Acquire(context.Background(), 1)
 	if b.highlighter == nil {
+		b.hisem.Release(1)
 		return
 	}
 
