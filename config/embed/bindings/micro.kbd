@@ -15,12 +15,12 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+f', 'find-prompt'}
           / {'ctrl+o', 'command-edit "open "'}
           / {'mouseleft', 'move-to [mouse-loc $1]'}
-          / {'paste', 'insert-at [cursor-pos] $0; relocate'}
-          / {'tab',    'insert-at [cursor-pos] \\t; relocate'}
-          / {'enter', 'insert-at [cursor-pos] \\n; relocate'}
-          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
-          / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
-          / {., 'insert-at [cursor-pos] $0; relocate'}
+          / {'paste', 'insert $0'}
+          / {'tab',    'insert \\t'}
+          / {'enter', 'insert \\n'}
+          / {'backspace', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [left [cursor-pos]] }'}
+          / {'delete', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [right [cursor-pos]] }'}
+          / {., 'insert $0'}
           / {move, 'move-to [$1]'}
           / {select, 'select-to [$1]'}
 
@@ -36,6 +36,12 @@ move <- {'left', 'left [cursor-pos]'}
       / {'alt+left', 'ws-left [cursor-pos]'}
 
 select <- {'shift+left', 'left [cursor-pos]'}
-      / {'shift+right', 'right [cursor-pos]'}
-      / {'shift+up', 'up [cursor-pos]'}
-      / {'shift+down', 'down [cursor-pos]'}
+        / {'shift+right', 'right [cursor-pos]'}
+        / {'shift+up', 'up [cursor-pos]'}
+        / {'shift+down', 'down [cursor-pos]'}
+        / {'shift+ctrl+down', 'size'}
+        / {'shift+ctrl+up', 'zero'}
+        / {'shift+ctrl+left', 'word-left [cursor-pos]'}
+        / {'shift+ctrl+right', 'word-right [cursor-pos]'}
+        / {'shift+alt+right', 'ws-right [cursor-pos]'}
+        / {'shift+alt+left', 'ws-left [cursor-pos]'}

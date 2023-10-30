@@ -3,6 +3,7 @@ package buf
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -84,7 +85,17 @@ func (bp *BufPane) InsertAt(pos int, val string) {
 	bp.Buffer.Insert(pos, []byte(val))
 }
 
-func (bp *BufPane) Remove(from, to int) int {
+func (bp *BufPane) InsertCmd(val string) {
+	c := bp.Cursor()
+	if c.HasSelection() {
+		bp.Buffer.Remove(c.Sel[0], c.Sel[1])
+		c.Deselect(0)
+	}
+	log.Println("HAS SELECTION", bp.Cursor().HasSelection())
+	bp.Buffer.Insert(c.Pos, []byte(val))
+}
+
+func (bp *BufPane) RemoveRange(from, to int) int {
 	if from > to {
 		from, to = to, from
 	}
@@ -93,6 +104,22 @@ func (bp *BufPane) Remove(from, to int) int {
 	}
 	bp.Buffer.Remove(from, to)
 	return from
+}
+
+func (bp *BufPane) RemoveTo(to int) int {
+	from := bp.Cursor().Pos
+	if from > to {
+		from, to = to, from
+	}
+	return bp.RemoveRange(from, to)
+}
+
+func (bp *BufPane) RemoveSelection() {
+	c := bp.Cursor()
+	if c.HasSelection() {
+		bp.RemoveRange(c.Sel[0], c.Sel[1])
+		bp.Cursor().Deselect(0)
+	}
 }
 
 func (bp *BufPane) Undo() {
@@ -484,9 +511,27 @@ var commands = []command{
 		Doc:  "insert-at <pos> <text>: insert <text> at <pos>",
 	},
 	{
-		Name: "remove",
-		Fn:   (*BufPane).Remove,
-		Doc:  "remove <from> <to>: remove the bytes in the range [<from>:<to>)",
+		Name:     "insert",
+		Fn:       (*BufPane).InsertCmd,
+		Doc:      "insert-at <text>: insert <text> at the current cursor",
+		Relocate: true,
+	},
+	{
+		Name: "remove-range",
+		Fn:   (*BufPane).RemoveRange,
+		Doc:  "remove-range <from> <to>: remove the bytes in the range [<from>:<to>)",
+	},
+	{
+		Name:     "remove-to",
+		Fn:       (*BufPane).RemoveTo,
+		Doc:      "remove-to <to>: remove the bytes in the range [<cursor>:<to>)",
+		Relocate: true,
+	},
+	{
+		Name:     "remove-selection",
+		Fn:       (*BufPane).RemoveSelection,
+		Doc:      "remove-selection: remove the current selection",
+		Relocate: true,
 	},
 	{
 		Name: "read",
@@ -678,7 +723,7 @@ var commands = []command{
 	{
 		Name: "cursor-has-selection",
 		Fn:   (*BufPane).CursorHasSelection,
-		Doc:  "cursor-range: returns whether the current cursor has a selection",
+		Doc:  "cursor-has-selection: returns whether the current cursor has a selection",
 	},
 	{
 		Name: "cursor-selection",
