@@ -79,6 +79,7 @@ func (b *BufPane) MouseLoc(x, y int) (int, int) {
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: nil,
 		Track: func(off, bx, by, vx, vy int) bool {
+			vx -= b.stcol
 			if vx == x && vy == y {
 				bl.line = by
 				bl.col = bx
