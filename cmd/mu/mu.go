@@ -82,11 +82,11 @@ func main() {
 
 	s, e := tcell.NewScreen()
 	if e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
+		fmt.Fprintf(os.Stderr, "screen: %v\n", e)
 		exit(1)
 	}
 	if e := s.Init(); e != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", e)
+		fmt.Fprintf(os.Stderr, "screen init: %v\n", e)
 		exit(1)
 	}
 
@@ -200,6 +200,11 @@ func main() {
 				ed.Display(fill, draw, cursor)
 				s.Show()
 				stats.AddRedrawTime(time.Since(start))
+				// Force 5 ms of sleeping in the redraw loop to reduce
+				// contention on the editor lock. Redraws may accumulate in the
+				// meantime, but we can handle it after 5 ms without any
+				// noticeable delay.
+				time.Sleep(5 * time.Millisecond)
 			case <-quit:
 				break loop
 			}
