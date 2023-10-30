@@ -41,7 +41,10 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 		argv = append(argv, reflect.ValueOf(arg0))
 
 		var ret []reflect.Value
-		if t.NumIn() == 2 && t.In(1).Kind() == reflect.Slice && t.In(1).Elem().Kind() == reflect.String {
+		if t.NumIn() == 2 && t.In(1) == reflect.TypeOf(args) {
+			argv = append(argv, reflect.ValueOf(args))
+			ret = v.Call(argv)
+		} else if t.NumIn() == 2 && t.In(1).Kind() == reflect.Slice && t.In(1).Elem().Kind() == reflect.String {
 			slice := make([]string, 0, len(args))
 			for i := range args {
 				slice = append(slice, args[i].AsString())

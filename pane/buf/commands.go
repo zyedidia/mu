@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 	"unicode"
 
 	"github.com/zyedidia/mu/pkg/output"
@@ -353,6 +355,18 @@ func (bp *BufPane) CursorHasSelection() bool {
 
 func (bp *BufPane) CursorSelection() string {
 	return string(bp.Cursor().Selection(bp.Buffer))
+}
+
+func (bp *BufPane) VisualPos(loc string) int {
+	// TODO: we assume the location comes in as a list {x, y} but we should
+	// actually check that, or even better use the TclObj interface directly
+	// (looks like tcl.AsList is not working right).
+	parts := strings.Split(loc[1:len(loc)-1], " ")
+	x, _ := strconv.Atoi(parts[0])
+	y, _ := strconv.Atoi(parts[1])
+
+	line, col := bp.MouseLoc(x, y)
+	return bp.OffsetAt(line, col)
 }
 
 // --- Search ---
@@ -725,6 +739,11 @@ var commands = []command{
 		Name: "check-modified",
 		Fn:   (*BufPane).CheckModified,
 		Doc:  "check-modified: checks if the current buffer has been externally modified",
+	},
+	{
+		Name: "visual-pos",
+		Fn:   (*BufPane).VisualPos,
+		Doc:  "visual-pos <x> <y>: returns the buffer position associated with the visual x, y position",
 	},
 }
 
