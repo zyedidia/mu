@@ -99,6 +99,7 @@ func main() {
 	}()
 
 	s.EnableMouse()
+	s.EnablePaste()
 
 	w, h := s.Size()
 

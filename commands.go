@@ -151,6 +151,10 @@ func (e *Editor) Refresh() {
 	e.infobar.Clear()
 }
 
+func (e *Editor) Print(s string) {
+	e.infobar.Message(s)
+}
+
 // --- Commands ---
 
 func (e *Editor) Command() error {
@@ -374,5 +378,10 @@ var commands = []tclutil.Command{
 		Name: "version",
 		Fn:   (*Editor).Version,
 		Doc:  "version: returns the version number",
+	},
+	{
+		Name: "print",
+		Fn:   (*Editor).Print,
+		Doc:  "print: displays a value",
 	},
 }
