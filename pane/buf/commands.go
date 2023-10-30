@@ -3,7 +3,6 @@ package buf
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -91,7 +90,6 @@ func (bp *BufPane) InsertCmd(val string) {
 		bp.Buffer.Remove(c.Sel[0], c.Sel[1])
 		c.Deselect(0)
 	}
-	log.Println("HAS SELECTION", bp.Cursor().HasSelection())
 	bp.Buffer.Insert(c.Pos, []byte(val))
 }
 
@@ -179,6 +177,55 @@ func (bp *BufPane) FindUp(off int, regex string) ([]int, error) {
 		return nil, fmt.Errorf("no match found")
 	}
 	return match, nil
+}
+
+func (bp *BufPane) Find(search string) error {
+	rxp, err := regexp.Compile(search)
+	if err != nil {
+		return err
+	}
+	match := bp.Buffer.FindDown(rxp, bp.Cursor().Pos)
+	if match != nil {
+		bp.MoveTo(match[0])
+		return nil
+	}
+
+	return errors.New("no matches")
+}
+
+func (bp *BufPane) FindLiteral(search string) error {
+	return bp.Find(regexp.QuoteMeta(search))
+}
+
+func (bp *BufPane) FindPrompt() error {
+	start := bp.Cursor().Pos
+	search, canceled := bp.messager.IPrompt("find", "Find: ", func(cur string) {
+		rxp, err := regexp.Compile(cur)
+		if err != nil {
+			bp.MoveTo(start)
+			return
+		}
+		match := bp.Buffer.FindDown(rxp, start)
+		if match != nil {
+			bp.MoveTo(match[0])
+		} else {
+			bp.MoveTo(start)
+		}
+		bp.RelocateToCur()
+	})
+	if canceled {
+		bp.MoveTo(start)
+		return nil
+	}
+	return bp.Find(search)
+}
+
+func (bp *BufPane) FindLiteralPrompt() error {
+	search, canceled := bp.messager.Prompt("find", "Find (no regex): ")
+	if canceled {
+		return nil
+	}
+	return bp.FindLiteral(search)
 }
 
 // --- Movement ---
@@ -396,57 +443,6 @@ func (bp *BufPane) VisualPos(loc string) int {
 	return bp.OffsetAt(line, col)
 }
 
-// --- Search ---
-
-func (bp *BufPane) Find(search string) error {
-	rxp, err := regexp.Compile(search)
-	if err != nil {
-		return err
-	}
-	match := bp.Buffer.FindDown(rxp, bp.Cursor().Pos)
-	if match != nil {
-		bp.MoveTo(match[0])
-		return nil
-	}
-
-	return errors.New("no matches")
-}
-
-func (bp *BufPane) FindLiteral(search string) error {
-	return bp.Find(regexp.QuoteMeta(search))
-}
-
-func (bp *BufPane) FindPrompt() error {
-	start := bp.Cursor().Pos
-	search, canceled := bp.messager.IPrompt("find", "Find: ", func(cur string) {
-		rxp, err := regexp.Compile(cur)
-		if err != nil {
-			bp.MoveTo(start)
-			return
-		}
-		match := bp.Buffer.FindDown(rxp, start)
-		if match != nil {
-			bp.MoveTo(match[0])
-		} else {
-			bp.MoveTo(start)
-		}
-		bp.RelocateToCur()
-	})
-	if canceled {
-		bp.MoveTo(start)
-		return nil
-	}
-	return bp.Find(search)
-}
-
-func (bp *BufPane) FindLiteralPrompt() error {
-	search, canceled := bp.messager.Prompt("find", "Find (no regex): ")
-	if canceled {
-		return nil
-	}
-	return bp.FindLiteral(search)
-}
-
 // --- Locations ---
 
 func (bp *BufPane) LineCol(pos int) []int {
@@ -467,6 +463,18 @@ func (bp *BufPane) Size() int {
 func (bp *BufPane) RelocateToCur() {
 	line, col := bp.LineColAt(bp.Cursor().Pos)
 	bp.Relocate(bLoc{line, col})
+}
+
+func (bp *BufPane) ScrollUp(amt int) {
+	topl, _ := bp.LineColAt(bp.stpos)
+	topl = max(0, topl-amt)
+	bp.stpos = bp.OffsetAt(topl, 0)
+}
+
+func (bp *BufPane) ScrollDown(amt int) {
+	topl, _ := bp.LineColAt(bp.stpos)
+	topl = min(bp.NumLines(), topl+amt)
+	bp.stpos = bp.OffsetAt(topl, 0)
 }
 
 // --- Options ---
@@ -734,6 +742,16 @@ var commands = []command{
 		Name: "relocate",
 		Fn:   (*BufPane).RelocateToCur,
 		Doc:  "relocate:",
+	},
+	{
+		Name: "scroll-up",
+		Fn:   (*BufPane).ScrollUp,
+		Doc:  "scroll-up <n>: scroll up <n> lines",
+	},
+	{
+		Name: "scroll-down",
+		Fn:   (*BufPane).ScrollDown,
+		Doc:  "scroll-down <n>: scroll down <n> lines:",
 	},
 	{
 		Name: "vim-clamp",

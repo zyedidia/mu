@@ -21,7 +21,7 @@ require (
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
-	github.com/zyedidia/kbd v0.0.0-20231030192935-04bf9a2775a9
+	github.com/zyedidia/kbd v0.0.0-20231030233501-a7f48e3331e4
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c

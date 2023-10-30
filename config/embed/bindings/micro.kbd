@@ -14,7 +14,9 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+t', 'tab'}
           / {'ctrl+f', 'find-prompt'}
           / {'ctrl+o', 'command-edit "open "'}
-          / {'mouseleft', 'move-to [mouse-loc $1]'}
+          / {'mouseleft', 'move-to [visual-pos $0]'}
+          / {'mousewheelup', 'scroll-up 2'}
+          / {'mousewheeldown', 'scroll-down 2'}
           / {'paste', 'insert $0'}
           / {'tab',    'insert \\t'}
           / {'enter', 'insert \\n'}
