@@ -11,7 +11,7 @@ require (
 	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
 	github.com/klauspost/cpuid/v2 v2.0.9
 	github.com/mattn/go-runewidth v0.0.10
-	github.com/micro-editor/tcell/v2 v2.2.4
+	github.com/micro-editor/tcell/v2 v2.2.5-0.20231030161318-aa1a5dfd0015
 	github.com/pelletier/go-toml v1.9.5
 	github.com/zyedidia/clipper v0.1.0
 	github.com/zyedidia/flare v0.1.0
@@ -21,7 +21,7 @@ require (
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
-	github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a
+	github.com/zyedidia/kbd v0.0.0-20231030152559-44a9fcbbc47f
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
