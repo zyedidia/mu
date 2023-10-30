@@ -119,6 +119,11 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 			if b.matches != nil && style == th.Default() {
 				style = th.Style(b.matches.Group(off))
 			}
+			for _, c := range b.cursors {
+				if c.HasSelection() && off >= c.Sel[0] && off < c.Sel[1] {
+					style = th.Default().Add(theme.AttrReverse)
+				}
+			}
 			tracker.Draw(x, y, c, combc, style)
 		}
 		x += rwidth

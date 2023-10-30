@@ -22,14 +22,20 @@ bindings <- {'ctrl+s', 'save'}
           / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
           / {., 'insert-at [cursor-pos] $0; relocate'}
           / {move, 'move-to [$1]'}
+          / {select, 'select-to [$1]'}
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}
       / {'up', 'up [cursor-pos]'}
       / {'down', 'down [cursor-pos]'}
       / {'ctrl+down', 'size'}
-      / {'ctrl+up', 'return 0'}
+      / {'ctrl+up', 'zero'}
       / {'ctrl+left', 'word-left [cursor-pos]'}
       / {'ctrl+right', 'word-right [cursor-pos]'}
       / {'alt+right', 'ws-right [cursor-pos]'}
       / {'alt+left', 'ws-left [cursor-pos]'}
+
+select <- {'shift+left', 'left [cursor-pos]'}
+      / {'shift+right', 'right [cursor-pos]'}
+      / {'shift+up', 'up [cursor-pos]'}
+      / {'shift+down', 'down [cursor-pos]'}

@@ -100,6 +100,8 @@ func (c Cursor) SelectTo(pos int) Cursor {
 	if !c.HasSel {
 		c.Orig[0] = c.Pos
 		c.Orig[1] = c.Pos
+		c.Sel[0] = c.Pos
+		c.Sel[1] = c.Pos
 	}
 
 	c.HasSel = true
@@ -112,6 +114,7 @@ func (c Cursor) SelectTo(pos int) Cursor {
 	} else if pos < c.Orig[1] {
 		c.Sel[0] = c.Orig[0]
 	}
+	c.Pos = pos
 	return c
 }
 

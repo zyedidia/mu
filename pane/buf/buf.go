@@ -75,7 +75,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 			TabSize: 4,
 			CharMap: map[rune]string{
 				'\t': "|",
-				'\n': "\n",
+				'\n': " ",
 				' ':  " ",
 			},
 		},

@@ -26,6 +26,9 @@ proc repeat-fn {n fn} {
 		}
 	}
 }
+proc zero {} {
+	return 0
+}
 `
 
 func (e *Editor) Eval(cmd string, vars []interface{}) error {

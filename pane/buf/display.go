@@ -215,7 +215,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 				return true
 			}
 			lines[vy] = by + 1
-			if c.Pos == off && linewid+vx-b.stcol < b.width {
+			if !c.HasSelection() && c.Pos == off && linewid+vx-b.stcol < b.width {
 				showCursor(linewid+vx-b.stcol, vy)
 			}
 			return false
