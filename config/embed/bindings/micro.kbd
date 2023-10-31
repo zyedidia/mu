@@ -16,7 +16,8 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+n', 'find-next'}
           / {'ctrl+p', 'find-prev'}
           / {'ctrl+o', 'command-edit "open "'}
-          / {'mouseleft', 'move-to [visual-pos $0]'}
+          / {'mouseleft', 'mouse-click $0'}
+          / {'mousenone', 'mouse-release $0'}
           / {'mousewheelup', 'scroll-up 2'}
           / {'mousewheeldown', 'scroll-down 2'}
           / {'paste', 'insert $0'}

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/zyedidia/mu/pkg/output"
@@ -474,6 +475,55 @@ func (bp *BufPane) VisualPos(loc string) int {
 	return bp.OffsetAt(line, col)
 }
 
+var mouseRe = regexp.MustCompile(`\{\d+ \d+\}`)
+
+func parseMouse(loc string) (int, int, error) {
+	if !mouseRe.MatchString(loc) {
+		return 0, 0, fmt.Errorf("invalid mouse location: %s", loc)
+	}
+	parts := strings.Split(loc[1:len(loc)-1], " ")
+	x, _ := strconv.Atoi(parts[0])
+	y, _ := strconv.Atoi(parts[1])
+	return x, y, nil
+}
+
+func (bp *BufPane) MouseClick(loc string) error {
+	x, y, err := parseMouse(loc)
+	if err != nil {
+		return err
+	}
+	line, col := bp.MouseLoc(x, y)
+	off := bp.OffsetAt(line, col)
+
+	if bp.mouse.drag {
+		bp.SelectTo(off)
+	} else {
+		if time.Since(bp.mouse.release) < mouseClickThreshold {
+			if bp.mouse.double {
+				bp.mouse.triple = true
+			} else {
+				bp.mouse.double = true
+			}
+		} else {
+			bp.mouse.double = false
+			bp.mouse.triple = false
+		}
+
+		bp.MoveTo(off)
+	}
+
+	bp.mouse.drag = true
+	return nil
+}
+
+func (bp *BufPane) MouseRelease(loc string) error {
+	if bp.mouse.drag {
+		bp.mouse.release = time.Now()
+	}
+	bp.mouse.drag = false
+	return nil
+}
+
 // --- Locations ---
 
 func (bp *BufPane) LineCol(pos int) []int {
@@ -850,6 +900,18 @@ var commands = []command{
 		Name: "visual-pos",
 		Fn:   (*BufPane).VisualPos,
 		Doc:  "visual-pos <x> <y>: returns the buffer position associated with the visual x, y position",
+	},
+	{
+		Name:     "mouse-click",
+		Fn:       (*BufPane).MouseClick,
+		Doc:      "mouse-click <pos>: handle a mouse click at <pos>",
+		Relocate: true,
+	},
+	{
+		Name:     "mouse-release",
+		Fn:       (*BufPane).MouseRelease,
+		Doc:      "mouse-release <pos>: handle a mouse release at <pos>",
+		Relocate: true,
 	},
 }
 

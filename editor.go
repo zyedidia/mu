@@ -245,10 +245,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	}
 
 	if mev, ok := ev.(*tcell.EventMouse); ok {
-		if mev.Buttons() == tcell.ButtonNone {
-			return
-		}
-
 		e.displayLock.Lock()
 		x, y := mev.Position()
 		e.ActiveTab().ActivateXY(e, x, y)

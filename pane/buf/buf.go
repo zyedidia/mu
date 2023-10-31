@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/buffer"
@@ -57,6 +58,8 @@ type BufPane struct {
 
 	search *regexp.Regexp
 
+	mouse mouseState
+
 	// Vertical is a bit of a hack for cursor movements to indicate
 	// that they are performing a purely vertical move. This signals
 	// that the editor should not recalculate the cursor's visual X
@@ -70,6 +73,15 @@ type BufPane struct {
 	cfg      Config
 	Editor   Editor
 }
+
+type mouseState struct {
+	release time.Time
+	drag    bool
+	double  bool
+	triple  bool
+}
+
+const mouseClickThreshold = 500 * time.Millisecond
 
 func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor) *BufPane {
 	bp := &BufPane{
