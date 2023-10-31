@@ -20,6 +20,8 @@ require (
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
 	github.com/zyedidia/kbd v0.0.0-20231031223131-799b55808292
+	go.lsp.dev/protocol v0.12.0
+	go.lsp.dev/uri v0.3.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
@@ -37,7 +39,14 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.0.3 // indirect
 	github.com/mattn/go-runewidth v0.0.10 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
+	github.com/segmentio/asm v1.1.3 // indirect
+	github.com/segmentio/encoding v0.3.4 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
+	go.lsp.dev/jsonrpc2 v0.10.0 // indirect
+	go.lsp.dev/pkg v0.0.0-20210717090340-384b27a52fb2 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/exp v0.0.0-20220218215828-6cf2b201936e // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
