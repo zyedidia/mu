@@ -187,9 +187,38 @@ func (bp *BufPane) Find(search string) error {
 	match := bp.Buffer.FindDown(rxp, bp.Cursor().Pos)
 	if match != nil {
 		bp.MoveTo(match[0])
+		bp.SelectTo(match[1])
+		bp.search = rxp
 		return nil
 	}
 
+	return errors.New("no matches")
+}
+
+func (bp *BufPane) FindNext() error {
+	if bp.search == nil {
+		return errors.New("no search term")
+	}
+
+	match := bp.Buffer.FindDown(bp.search, bp.Cursor().Pos)
+	if match != nil {
+		bp.MoveTo(match[0])
+		bp.SelectTo(match[1])
+		return nil
+	}
+	return errors.New("no matches")
+}
+
+func (bp *BufPane) FindPrev() error {
+	if bp.search == nil {
+		return errors.New("no search term")
+	}
+	match := bp.Buffer.FindUp(bp.search, bp.Cursor().Pos)
+	if match != nil {
+		bp.MoveTo(match[0])
+		bp.SelectTo(match[1])
+		return nil
+	}
 	return errors.New("no matches")
 }
 
@@ -208,6 +237,7 @@ func (bp *BufPane) FindPrompt() error {
 		match := bp.Buffer.FindDown(rxp, start)
 		if match != nil {
 			bp.MoveTo(match[0])
+			bp.SelectTo(match[1])
 		} else {
 			bp.MoveTo(start)
 		}
@@ -217,6 +247,7 @@ func (bp *BufPane) FindPrompt() error {
 		bp.MoveTo(start)
 		return nil
 	}
+	bp.MoveTo(start)
 	return bp.Find(search)
 }
 
@@ -796,6 +827,18 @@ var commands = []command{
 		Name:     "find-literal-prompt",
 		Fn:       (*BufPane).FindLiteralPrompt,
 		Doc:      "find-literal-prompt: opens an interactive prompt for literal searching",
+		Relocate: true,
+	},
+	{
+		Name:     "find-next",
+		Fn:       (*BufPane).FindNext,
+		Doc:      "find-next: search for next occurrence of the last search term",
+		Relocate: true,
+	},
+	{
+		Name:     "find-prev",
+		Fn:       (*BufPane).FindPrev,
+		Doc:      "find-next: search for previous occurrence of the last search term",
 		Relocate: true,
 	},
 	{

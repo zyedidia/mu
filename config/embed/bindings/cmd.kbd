@@ -8,10 +8,11 @@ bindings <- {'ctrl+z', 'undo'}
           / {'escape', 'cancel'}
           / {'tab',    'if {![complete]} {next-completion}'}
           / {'backtab', 'prev-completion'}
-          / {'backspace', 'set char [left [cursor-pos]]; remove $char [cursor-pos]; relocate'}
-          / {'delete', 'set char [right [cursor-pos]]; remove [cursor-pos] $char'}
-          / {., 'insert-at [cursor-pos] $0; relocate'}
-          / { move, 'move-to [$1]; relocate' }
+          / {'backspace', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [left [cursor-pos]] }'}
+          / {'delete', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [right [cursor-pos]] }'}
+          / {., 'insert $0'}
+          / {move, 'move-to [$1]'}
+          / {select, 'select-to [$1]'}
 
 move <- {'left', 'left [cursor-pos]'}
       / {'right', 'right [cursor-pos]'}
@@ -21,3 +22,14 @@ move <- {'left', 'left [cursor-pos]'}
       / {'ctrl+right', 'word-right [cursor-pos]'}
       / {'alt+right', 'ws-right [cursor-pos]'}
       / {'alt+left', 'ws-left [cursor-pos]'}
+
+select <- {'shift+left', 'left [cursor-pos]'}
+        / {'shift+right', 'right [cursor-pos]'}
+        / {'shift+up', 'up [cursor-pos]'}
+        / {'shift+down', 'down [cursor-pos]'}
+        / {'shift+ctrl+down', 'size'}
+        / {'shift+ctrl+up', 'zero'}
+        / {'shift+ctrl+left', 'word-left [cursor-pos]'}
+        / {'shift+ctrl+right', 'word-right [cursor-pos]'}
+        / {'shift+alt+right', 'ws-right [cursor-pos]'}
+        / {'shift+alt+left', 'ws-left [cursor-pos]'}

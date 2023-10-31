@@ -14,8 +14,8 @@ func (b *Buffer) FindDown(r *regexp.Regexp, off int) []int {
 	br := bufio.NewReader(sr)
 
 	loc := r.FindReaderSubmatchIndex(br)
-	if loc == nil {
-		return nil
+	if loc == nil && off != 0 {
+		return b.FindDown(r, 0)
 	}
 	for i := range loc {
 		loc[i] += off
@@ -29,7 +29,30 @@ func (b *Buffer) FindDown(r *regexp.Regexp, off int) []int {
 func (b *Buffer) FindUp(r *regexp.Regexp, off int) []int {
 	sr := io.NewSectionReader(b.Buffer, 0, int64(off))
 	br := bufio.NewReader(sr)
-	return r.FindReaderSubmatchIndex(br)
+	var last []int
+	var start int
+	for {
+		match := r.FindReaderSubmatchIndex(br)
+		if match != nil {
+			sr = io.NewSectionReader(b.Buffer, int64(start+match[1]), int64(off))
+			if start+match[1] >= off {
+				break
+			}
+			br = bufio.NewReader(sr)
+			if last == nil {
+				last = make([]int, 2)
+			}
+			last[0] = start + match[0]
+			last[1] = start + match[1]
+			start = start + match[1]
+		} else {
+			break
+		}
+	}
+	if last == nil && off != b.Buffer.Len() {
+		return b.FindUp(r, b.Buffer.Len())
+	}
+	return last
 }
 
 // Replace the match from loc with repl. Before replacement, 're.Expand' is

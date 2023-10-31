@@ -13,6 +13,8 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+g' 't', 'term'}
           / {'ctrl+t', 'tab'}
           / {'ctrl+f', 'find-prompt'}
+          / {'ctrl+n', 'find-next'}
+          / {'ctrl+p', 'find-prev'}
           / {'ctrl+o', 'command-edit "open "'}
           / {'mouseleft', 'move-to [visual-pos $0]'}
           / {'mousewheelup', 'scroll-up 2'}

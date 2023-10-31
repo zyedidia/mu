@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	tcl "github.com/zyedidia/gotcl"
@@ -53,6 +54,8 @@ type BufPane struct {
 	scrollmargin       int
 	hscrollmargin      int
 	linenums           bool
+
+	search *regexp.Regexp
 
 	// Vertical is a bit of a hack for cursor movements to indicate
 	// that they are performing a purely vertical move. This signals
