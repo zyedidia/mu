@@ -780,9 +780,9 @@ var commands = []command{
 		Doc:  "spawn-cursor <pos>: spawn a new cursor at <pos>",
 	},
 	{
-		Name: "remove-cursor",
-		Fn:   (*BufPane).RemoveCursor,
-		Doc:  "remove-cursor <idx>: remove the <idx>-th cursor",
+		Name: "remove-cursors",
+		Fn:   (*BufPane).RemoveCursors,
+		Doc:  "remove-cursors: remove all extra cursors",
 	},
 	{
 		Name: "num-cursors",

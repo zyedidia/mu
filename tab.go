@@ -68,9 +68,9 @@ func (t *Tab) Display(draw DrawFn, cursor CursorFn, th *theme.Theme) {
 		n := t.root.GetNode(p.id)
 		p.pane.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 			draw(n.X+x, n.Y+y, mainc, combc, style)
-		}, func(x, y int) {
+		}, func(x, y int, main bool) {
 			if p.id == t.cur {
-				cursor(n.X+x, n.Y+y)
+				cursor(n.X+x, n.Y+y, main)
 			}
 		}, th)
 		nw := n.W - 1

@@ -16,7 +16,6 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/pane"
-	"github.com/zyedidia/mu/pane/buf"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
 )
@@ -70,7 +69,7 @@ type Editor struct {
 
 type FillFn func(r rune, style theme.Style)
 type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
-type CursorFn func(x, y int)
+type CursorFn func(x, y int, main bool)
 
 func loadBindings(cfg *config.ConfigFS, modes ...string) (map[string]kbd.Config, error) {
 	modemap := make(map[string]kbd.Config)
@@ -248,7 +247,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		e.displayLock.Lock()
 		x, y := mev.Position()
 		e.ActiveTab().ActivateXY(e, x, y)
-		log.Println(e.ActivePane().(*buf.BufPane).MouseLoc(x, y))
 		e.displayLock.Unlock()
 		e.SendRedraw()
 	}
@@ -337,15 +335,15 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	defer e.displayLock.Unlock()
 
 	fill(' ', e.theme.Default())
-	cursor(-1, -1)
+	cursor(-1, -1, true)
 
 	if e.curtab >= 0 && e.curtab < len(e.tabs) {
 		e.tabs[e.curtab].Display(draw, cursor, e.theme)
 	}
 	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-1, mainc, combc, style)
-	}, func(x, y int) {
-		cursor(x, e.h+y-1)
+	}, func(x, y int, main bool) {
+		cursor(x, e.h+y-1, main)
 	})
 	e.complete.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-2, mainc, combc, style)

@@ -193,9 +193,7 @@ func (b *BufPane) Relocate(bl bLoc) {
 	}
 }
 
-func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int), th *theme.Theme) {
-	c := b.Cursor()
-
+func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int, main bool), th *theme.Theme) {
 	lines := make([]int, b.height)
 
 	linewid := 0
@@ -215,8 +213,10 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 				return true
 			}
 			lines[vy] = by + 1
-			if !c.HasSelection() && c.Pos == off && linewid+vx-b.stcol < b.width {
-				showCursor(linewid+vx-b.stcol, vy)
+			for i, c := range b.Cursors() {
+				if !c.HasSelection() && c.Pos == off && linewid+vx-b.stcol < b.width {
+					showCursor(linewid+vx-b.stcol, vy, i == 0)
+				}
 			}
 			return false
 		},

@@ -13,7 +13,7 @@ type Pane interface {
 	Help(w io.Writer)
 	Name() string
 
-	Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int), theme *theme.Theme)
+	Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int, main bool), theme *theme.Theme)
 	Resize(w, h int)
 
 	Status() (string, string)

@@ -21,6 +21,10 @@ func (b *Buffer) NumCursors() int {
 	return len(b.cursors)
 }
 
+func (b *Buffer) Cursors() []Cursor {
+	return b.cursors
+}
+
 func (b *Buffer) SwitchCursor(idx int) error {
 	if idx >= 0 && idx < len(b.cursors) {
 		b.cur = idx
@@ -33,13 +37,8 @@ func (b *Buffer) SpawnCursor(at int) {
 	b.cursors = append(b.cursors, b.GetCursorAt(at))
 }
 
-func (b *Buffer) RemoveCursor(idx int) error {
-	if idx < 0 || idx >= len(b.cursors) {
-		return fmt.Errorf("invalid cursor: %d", idx)
-	}
-	copy(b.cursors[idx:], b.cursors[idx+1:])
-	b.cursors = b.cursors[:len(b.cursors)-1]
-	return nil
+func (b *Buffer) RemoveCursors() {
+	b.cursors = b.cursors[:1]
 }
 
 func (b *Buffer) PutCursor(c Cursor) {

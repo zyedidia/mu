@@ -54,6 +54,21 @@ func exit(code int) {
 	os.Exit(code)
 }
 
+type loc struct {
+	x, y int
+}
+
+var cursors []loc
+
+func show(s tcell.Screen) {
+	for _, c := range cursors {
+		mainc, combc, style, _ := s.GetContent(c.x, c.y)
+		s.SetContent(c.x, c.y, mainc, combc, style.Reverse(true))
+	}
+	cursors = cursors[:0]
+	s.Show()
+}
+
 func main() {
 	f, err := os.Create(filepath.Join("/tmp", "mu.log"))
 	if err != nil {
@@ -122,14 +137,18 @@ func main() {
 		s.Fill(x, tcellStyle(style))
 	}
 
-	cursor := func(x, y int) {
-		s.ShowCursor(x, y)
+	cursor := func(x, y int, main bool) {
+		if main {
+			s.ShowCursor(x, y)
+		} else {
+			cursors = append(cursors, loc{x, y})
+		}
 	}
 
 	evs := make(chan tcell.Event)
 
 	ed.Display(fill, draw, cursor)
-	s.Show()
+	show(s)
 
 	go func() {
 		for {
@@ -187,7 +206,7 @@ func main() {
 					EnterToContinue()
 					s.Resume()
 					ed.Display(fill, draw, cursor)
-					s.Show()
+					show(s)
 				}
 			case f := <-ed.Suspend:
 				s.Suspend()
@@ -195,11 +214,11 @@ func main() {
 				<-ed.Resume
 				s.Resume()
 				ed.Display(fill, draw, cursor)
-				s.Show()
+				show(s)
 			case <-ed.Redraw:
 				start := time.Now()
 				ed.Display(fill, draw, cursor)
-				s.Show()
+				show(s)
 				stats.AddRedrawTime(time.Since(start))
 				// Force 5 ms of sleeping in the redraw loop to reduce
 				// contention on the editor lock. Redraws may accumulate in the

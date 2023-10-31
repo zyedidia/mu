@@ -50,7 +50,7 @@ func (i *InfoBar) Resize(w, h int) {
 	i.cmd.Resize(w, h)
 }
 
-func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), cursor func(x, y int)) {
+func (i *InfoBar) Display(draw DrawFn, cursor CursorFn) {
 	msg := i.msg.data
 	x, y := 0, 0
 	for len(msg) > 0 {
@@ -67,8 +67,8 @@ func (i *InfoBar) Display(draw func(x, y int, mainc rune, combc []rune, style th
 	if i.active {
 		i.cmd.Display(func(bx, by int, mainc rune, combc []rune, style theme.Style) {
 			draw(x+bx, y+by, mainc, combc, style)
-		}, func(bx, by int) {
-			cursor(x+bx, y+by)
+		}, func(bx, by int, main bool) {
+			cursor(x+bx, y+by, true)
 		}, i.ed.theme)
 		return
 	}

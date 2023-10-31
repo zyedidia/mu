@@ -111,7 +111,7 @@ func (t *TermPane) ConsumeEvent(ev tcell.Event) error {
 	return nil
 }
 
-func (t *TermPane) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int), th *theme.Theme) {
+func (t *TermPane) Display(draw func(x, y int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int, main bool), th *theme.Theme) {
 	t.state.Lock()
 	defer t.state.Unlock()
 
@@ -131,7 +131,8 @@ func (t *TermPane) Display(draw func(x, y int, mainc rune, combc []rune, style t
 	}
 
 	if t.state.CursorVisible() {
-		showCursor(t.state.Cursor())
+		x, y := t.state.Cursor()
+		showCursor(x, y, true)
 	}
 }
 
