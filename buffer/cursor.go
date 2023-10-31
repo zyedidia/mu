@@ -139,21 +139,18 @@ func (c *Cursor) Deselect(idx int) {
 }
 
 func (c Cursor) Right(b *Buffer) Cursor {
-	c.Deselect(1)
 	_, _, sz := b.DecodeGraphemeAt(c.Pos)
 	c.Pos += sz
 	return c
 }
 
 func (c Cursor) Left(b *Buffer) Cursor {
-	c.Deselect(0)
 	_, _, sz := b.DecodeGraphemeBefore(c.Pos)
 	c.Pos -= sz
 	return c
 }
 
 func (c Cursor) RightVim(b *Buffer) Cursor {
-	c.Deselect(0)
 	l, col := b.LineColAt(c.Pos)
 	if col == b.LineLen(l)-1 {
 		return c
@@ -162,7 +159,6 @@ func (c Cursor) RightVim(b *Buffer) Cursor {
 }
 
 func (c Cursor) LeftVim(b *Buffer) Cursor {
-	c.Deselect(0)
 	_, col := b.LineColAt(c.Pos)
 	if col == 0 {
 		return c
