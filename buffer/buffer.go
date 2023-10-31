@@ -12,6 +12,7 @@ import (
 	"github.com/zyedidia/mu/buffer/text"
 	"github.com/zyedidia/mu/buffer/text/endings"
 	"github.com/zyedidia/mu/buffer/undo"
+	"github.com/zyedidia/mu/lsp"
 	"github.com/zyedidia/mu/pkg/input"
 	"github.com/zyedidia/mu/pkg/output"
 	"golang.org/x/sync/semaphore"
@@ -44,6 +45,8 @@ type BufferData struct {
 	matches     *flare.Matches
 	minvalid    bool
 	redraw      chan struct{}
+
+	lsp *lsp.Server
 
 	refs int
 
@@ -161,6 +164,8 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 		log.Println(err)
 	}
 	go buf.InitialHighlight()
+
+	buf.LoadLsp()
 
 	return buf, nil
 }
@@ -301,6 +306,10 @@ func (b *Buffer) Close() {
 	// b.BufferData.refs--
 	if b.BufferData.refs == 0 {
 		close(b.Exited)
+		if b.lsp != nil {
+			b.lsp.Shutdown()
+			b.lsp = nil
+		}
 	}
 }
 

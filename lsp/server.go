@@ -146,6 +146,11 @@ func (s *Server) Initialize(directory string) {
 	}()
 }
 
+func (s *Server) Shutdown() {
+	s.sendRequest(lsp.MethodShutdown, nil)
+	s.sendNotification(lsp.MethodExit, nil)
+}
+
 func (s *Server) sendNotification(method string, params interface{}) error {
 	m := RPCNotification{
 		RPCVersion: "2.0",
