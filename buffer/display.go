@@ -124,6 +124,9 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 					style = th.Default().Add(theme.AttrReverse)
 				}
 			}
+			if _, ok := b.GetDiagnosticLineCol(by, bx); ok {
+				style = style.Add(theme.AttrUnderline)
+			}
 			tracker.Draw(x, y, c, combc, style)
 		}
 		x += rwidth

@@ -74,7 +74,7 @@ func (b *BufPane) vLoc2bLoc(vl vLoc) (bl bLoc) {
 }
 
 func (b *BufPane) MouseLoc(x, y int) (int, int) {
-	x -= b.lnumWidth()
+	x -= b.width - b.bufferWidth()
 	var bl bLoc
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: nil,
@@ -200,13 +200,14 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 	if b.linenums {
 		linewid = b.lnumWidth()
 	}
+	gutter := b.gutterWidth() + linewid
 
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
-			if linewid+vx-b.stcol >= b.width || vy >= b.height {
+			if gutter+vx-b.stcol >= b.width || vy >= b.height {
 				return
 			}
-			draw(linewid+vx-b.stcol, vy, mainc, combc, style)
+			draw(gutter+vx-b.stcol, vy, mainc, combc, style)
 		},
 		Track: func(off, bx, by, vx, vy int) bool {
 			if vy >= b.height {
@@ -214,8 +215,8 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 			}
 			lines[vy] = by + 1
 			for i, c := range b.Cursors() {
-				if !c.HasSelection() && c.Pos == off && linewid+vx-b.stcol < b.width {
-					showCursor(linewid+vx-b.stcol, vy, i == 0)
+				if !c.HasSelection() && c.Pos == off && gutter+vx-b.stcol < b.width {
+					showCursor(gutter+vx-b.stcol, vy, i == 0)
 				}
 			}
 			return false
@@ -227,18 +228,31 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		for i, l := range lines {
 			var ls string
 			if l == 0 {
-				return
+				break
 			} else if i != 0 && l == lines[i-1] {
 				ls = strings.Repeat(" ", linewid)
 			} else {
 				ls = fmt.Sprintf(strfmt, l)
 			}
 
-			x := 0
+			x := b.gutterWidth() // start after gutter
 			for _, c := range ls {
 				draw(x, i, c, nil, th.Style("line-number"))
 				x++
 			}
+		}
+	}
+
+	for i, l := range lines {
+		d, ok := b.GetDiagnosticAt(l - 1)
+		ch := ' '
+		style := th.Default()
+		if ok {
+			ch = '>'
+			style = th.Style(d.Type.String())
+		}
+		for x := 0; x < b.gutterWidth(); x++ {
+			draw(x, i, ch, nil, style)
 		}
 	}
 }
@@ -247,8 +261,15 @@ func (b *BufPane) lnumWidth() int {
 	return len(strconv.Itoa(b.NumLines())) + 1
 }
 
+func (b *BufPane) gutterWidth() int {
+	if len(b.Diagnostics) > 0 {
+		return 2
+	}
+	return 0
+}
+
 func (b *BufPane) bufferWidth() int {
-	return b.width - b.lnumWidth()
+	return b.width - b.lnumWidth() - b.gutterWidth()
 }
 
 func max(a, b int) int {

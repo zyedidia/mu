@@ -15,7 +15,7 @@ func (b *BufferData) LoadLsp() {
 		server, err := lsp.StartServer(l)
 		if err != nil {
 			log.Println("error starting LSP", err)
-		} else {
+		} else if b.Len() < lspCutoff {
 			wd, _ := os.Getwd()
 			server.Initialize(wd)
 			b.Lsp = server

@@ -23,6 +23,7 @@ import (
 const (
 	hashCutoff = 4096 * 16
 	diffCutoff = 4096 * 64
+	lspCutoff  = 1024 * 512
 )
 
 type BufferData struct {
@@ -48,6 +49,8 @@ type BufferData struct {
 
 	Lsp        *lsp.Server
 	lspVersion int32
+
+	Diagnostics []Diagnostic
 
 	refs int
 
@@ -135,6 +138,10 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 	}
 
 	buf := &BufferData{
+		Diagnostics: []Diagnostic{{
+			Col:  5,
+			Text: "hello",
+		}},
 		Buffer:  b,
 		in:      r,
 		out:     out,
