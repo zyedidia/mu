@@ -8,6 +8,9 @@ import (
 )
 
 func (b *BufferData) LoadLsp() {
+	if b.Options["filetype"] == nil {
+		return
+	}
 	if l, ok := lsp.GetLanguage(b.Options["filetype"].(string)); ok {
 		server, err := lsp.StartServer(l)
 		if err != nil {
@@ -15,7 +18,9 @@ func (b *BufferData) LoadLsp() {
 		} else {
 			wd, _ := os.Getwd()
 			server.Initialize(wd)
-			b.lsp = server
+			b.Lsp = server
+
+			b.Lsp.DidOpen(b.in.FullName(), l.Ft, string(b.Bytes()), b.lspVersion)
 		}
 	}
 }

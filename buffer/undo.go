@@ -7,6 +7,8 @@ import (
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/mu/buffer/undo"
 	"github.com/zyedidia/mu/config"
+	"github.com/zyedidia/mu/lsp"
+	"go.lsp.dev/protocol"
 )
 
 // An Edit represents an edit to the document that can be undone.
@@ -67,11 +69,30 @@ func (b *BufferData) edit(start, end int, val []byte) {
 		}
 	}
 
+	b.lspSendEdit(start, end, val)
+
 	b.syntbl.ApplyEdit(memo.Edit{
 		Start: start,
 		End:   end,
 		Len:   len(val),
 	})
+}
+
+func (b *BufferData) lspSendEdit(start, end int, text []byte) {
+	if b.Lsp == nil {
+		return
+	}
+
+	b.lspVersion++
+	change := protocol.TextDocumentContentChangeEvent{
+		Range: protocol.Range{
+			Start: lsp.Position(b.LineColAt(start)),
+			End:   lsp.Position(b.LineColAt(end)),
+		},
+		Text: string(text),
+	}
+
+	b.Lsp.DidChange(b.in.FullName(), b.lspVersion, []protocol.TextDocumentContentChangeEvent{change})
 }
 
 // Insert val at pos and apply the change to the undo tree.
@@ -104,6 +125,17 @@ func (b *Buffer) Undo() {
 	b.undo.Undo()
 	if ok {
 		b.PutCursor(c)
+	}
+}
+
+func (b *Buffer) ApplyLspEdits(edits []protocol.TextEdit) {
+	for _, e := range edits {
+		start := b.OffsetAt(int(e.Range.Start.Line), int(e.Range.Start.Character))
+		end := b.OffsetAt(int(e.Range.End.Line), int(e.Range.End.Character))
+		b.Remove(start, end)
+		if len(e.NewText) != 0 {
+			b.Insert(start, []byte(e.NewText))
+		}
 	}
 }
 

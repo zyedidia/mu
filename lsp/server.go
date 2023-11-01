@@ -124,10 +124,11 @@ func (s *Server) Initialize(directory string) {
 
 	s.lock.Lock()
 	go func() {
-		resp, err := s.sendRequest(lsp.MethodInitialize, params)
+		defer s.lock.Unlock()
+
+		resp, err := s.sendRequestUnlocked(lsp.MethodInitialize, params)
 		if err != nil {
 			log.Println("[micro-lsp]", err)
-			s.lock.Unlock()
 			return
 		}
 
@@ -137,7 +138,7 @@ func (s *Server) Initialize(directory string) {
 		var r RPCInit
 		json.Unmarshal(resp, &r)
 
-		err = s.sendNotification(lsp.MethodInitialized, struct{}{})
+		err = s.sendNotificationUnlocked(lsp.MethodInitialized, struct{}{})
 		if err != nil {
 			log.Println("[micro-lsp]", err)
 		}
@@ -151,18 +152,18 @@ func (s *Server) Shutdown() {
 	s.sendNotification(lsp.MethodExit, nil)
 }
 
-func (s *Server) sendNotification(method string, params interface{}) error {
+func (s *Server) sendNotificationUnlocked(method string, params interface{}) error {
 	m := RPCNotification{
 		RPCVersion: "2.0",
 		Method:     method,
 		Params:     params,
 	}
 
-	go s.sendMessage(m)
+	s.sendMessage(m)
 	return nil
 }
 
-func (s *Server) sendRequest(method string, params interface{}) ([]byte, error) {
+func (s *Server) sendRequestUnlocked(method string, params interface{}) ([]byte, error) {
 	id := s.nextId
 	s.nextId++
 	r := make(chan []byte)
@@ -189,6 +190,18 @@ func (s *Server) sendRequest(method string, params interface{}) ([]byte, error) 
 	delete(s.responses, id)
 
 	return bytes, err
+}
+
+func (s *Server) sendNotification(method string, params interface{}) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.sendNotificationUnlocked(method, params)
+}
+
+func (s *Server) sendRequest(method string, params interface{}) ([]byte, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.sendRequestUnlocked(method, params)
 }
 
 func (s *Server) receive() {

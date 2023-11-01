@@ -46,7 +46,8 @@ type BufferData struct {
 	minvalid    bool
 	redraw      chan struct{}
 
-	lsp *lsp.Server
+	Lsp        *lsp.Server
+	lspVersion int32
 
 	refs int
 
@@ -306,9 +307,9 @@ func (b *Buffer) Close() {
 	// b.BufferData.refs--
 	if b.BufferData.refs == 0 {
 		close(b.Exited)
-		if b.lsp != nil {
-			b.lsp.Shutdown()
-			b.lsp = nil
+		if b.Lsp != nil {
+			b.Lsp.Shutdown()
+			b.Lsp = nil
 		}
 	}
 }

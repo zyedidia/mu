@@ -8,7 +8,7 @@ import (
 	"go.lsp.dev/uri"
 )
 
-var ErrNotSupported = errors.New("Operation not supported by language server")
+var ErrNotSupported = errors.New("lsp: operation not supported")
 
 type RPCCompletion struct {
 	RPCVersion string             `json:"jsonrpc"`
@@ -49,10 +49,10 @@ type RPCHoverAlternate struct {
 	Result     hoverAlternate `json:"result"`
 }
 
-func Position(x, y int) lsp.Position {
+func Position(line, col int) lsp.Position {
 	return lsp.Position{
-		Line:      uint32(y),
-		Character: uint32(x),
+		Line:      uint32(line),
+		Character: uint32(col),
 	}
 }
 

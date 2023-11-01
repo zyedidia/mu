@@ -10,8 +10,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/zyedidia/mu/lsp"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
+	"go.lsp.dev/protocol"
 )
 
 func (bp *BufPane) Save(args []string) error {
@@ -566,6 +568,46 @@ func (bp *BufPane) ScrollDown(amt int) {
 	bp.stpos = bp.OffsetAt(topl, 0)
 }
 
+// --- LSP ---
+
+func (bp *BufPane) LspHover() error {
+	info, err := bp.Lsp.Hover(bp.FullName(), lsp.Position(bp.LineColAt(bp.Cursor().Pos)))
+	if err != nil {
+		return err
+	}
+	info = strings.Split(info, "\n")[0]
+	bp.messager.Message(info)
+	return nil
+}
+
+func (bp *BufPane) LspFormat() error {
+	var err error
+	var edits []protocol.TextEdit
+
+	c := bp.Cursor()
+	if c.HasSelection() {
+		edits, err = bp.Lsp.DocumentRangeFormat(bp.FullName(), protocol.Range{
+			Start: lsp.Position(bp.LineColAt(c.Sel[0])),
+			End:   lsp.Position(bp.LineColAt(c.Sel[1])),
+		}, protocol.FormattingOptions{
+			InsertSpaces: false,
+			TabSize:      4,
+		})
+	} else {
+		edits, err = bp.Lsp.DocumentFormat(bp.FullName(), protocol.FormattingOptions{
+			InsertSpaces: false,
+			TabSize:      4,
+		})
+	}
+
+	if err != nil {
+		return err
+	}
+
+	bp.ApplyLspEdits(edits)
+	return nil
+}
+
 // --- Options ---
 
 func (bp *BufPane) Filetype() string {
@@ -926,6 +968,16 @@ var commands = []command{
 		Fn:       (*BufPane).MouseRelease,
 		Doc:      "mouse-release <pos>: handle a mouse release at <pos>",
 		Relocate: true,
+	},
+	{
+		Name: "lsp-hover",
+		Fn:   (*BufPane).LspHover,
+		Doc:  "lsp-hover: lists LSP hover information from the current cursor",
+	},
+	{
+		Name: "lsp-format",
+		Fn:   (*BufPane).LspFormat,
+		Doc:  "lsp-format: auto-format the current document",
 	},
 }
 

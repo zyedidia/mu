@@ -17,6 +17,8 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+n', 'find-next'}
           / {'ctrl+p', 'find-prev'}
           / {'ctrl+o', 'command-edit "open "'}
+          / {'alt+k', 'lsp-hover'}
+          / {'alt+j', 'lsp-format'}
           / {'mouseleft', 'mouse-click $0'}
           / {'mousenone', 'mouse-release $0'}
           / {'ctrl+mouseleft', 'spawn-cursor [visual-pos $0]'}
