@@ -138,10 +138,6 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 	}
 
 	buf := &BufferData{
-		Diagnostics: []Diagnostic{{
-			Col:  5,
-			Text: "hello",
-		}},
 		Buffer:  b,
 		in:      r,
 		out:     out,
