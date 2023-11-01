@@ -5,6 +5,7 @@ bindings <- {'ctrl+s', 'save'}
           / {'ctrl+b', 'shell'}
           / {'ctrl+y', 'redo'}
           / {'ctrl+v', 'paste'}
+          / {'ctrl+c', 'copy'}
           / {'ctrl+l', 'refresh'}
           / {'ctrl+w', 'split-select-next'}
           / {'ctrl+g' ('ctrl+w' / 'w'), 'split-select-next'}

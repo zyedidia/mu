@@ -138,6 +138,14 @@ func (bp *BufPane) Paste() error {
 	return nil
 }
 
+func (bp *BufPane) Copy() error {
+	if bp.Cursor().HasSelection() {
+		bp.messager.Message("copied to clipboard")
+		return bp.clip.SetClipboard("clipboard", bp.Cursor().Selection(bp.Buffer))
+	}
+	return nil
+}
+
 // --- Reading ---
 
 func (bp *BufPane) Read(from, to int) string {
@@ -853,6 +861,12 @@ var commands = []command{
 		Name:     "paste",
 		Fn:       (*BufPane).Paste,
 		Doc:      "paste: inserts the contents of the clipboard at the current cursor's position",
+		Relocate: true,
+	},
+	{
+		Name:     "copy",
+		Fn:       (*BufPane).Copy,
+		Doc:      "copy: copies the current selection to the clipboard",
 		Relocate: true,
 	},
 	{

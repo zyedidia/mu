@@ -35,6 +35,7 @@ func (b *Buffer) SwitchCursor(idx int) error {
 
 func (b *Buffer) SpawnCursor(at int) {
 	b.cursors = append(b.cursors, b.GetCursorAt(at))
+	b.SwitchCursor(len(b.cursors) - 1)
 }
 
 func (b *Buffer) RemoveCursors() {
