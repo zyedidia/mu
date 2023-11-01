@@ -26,6 +26,12 @@ proc repeat-fn {n fn} {
 		}
 	}
 }
+proc all-cursors {fn} {
+	for {set i 0} {$i < [num-cursors]} {incr i} {
+		switch-cursor $i
+		uplevel $fn
+	}
+}
 proc zero {} {
 	return 0
 }

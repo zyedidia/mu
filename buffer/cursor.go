@@ -39,6 +39,7 @@ func (b *Buffer) SpawnCursor(at int) {
 
 func (b *Buffer) RemoveCursors() {
 	b.cursors = b.cursors[:1]
+	b.cur = 0
 }
 
 func (b *Buffer) PutCursor(c Cursor) {

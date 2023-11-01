@@ -43,20 +43,27 @@ func (b *BufferData) edit(start, end int, val []byte) {
 	b.modified = true
 	b.minvalid = true
 
+	move := func(p int) int {
+		// move for deletion
+		if p >= start && p < end {
+			p = start
+		} else if p >= start {
+			p -= end - start
+		}
+		// move for insertion
+		if p >= start {
+			p += len(val)
+		}
+		return p
+	}
+
 	for _, pb := range b.parents {
 		for i, c := range pb.cursors {
-			p := c.Pos
-			// move for deletion
-			if c.Pos >= start && c.Pos < end {
-				p = start
-			} else if c.Pos >= start {
-				p -= end - start
-			}
-			// move for insertion
-			if p >= start {
-				p += len(val)
-			}
-			pb.cursors[i].Pos = p
+			pb.cursors[i].Orig[0] = move(c.Orig[0])
+			pb.cursors[i].Orig[1] = move(c.Orig[1])
+			pb.cursors[i].Sel[0] = move(c.Sel[0])
+			pb.cursors[i].Sel[1] = move(c.Sel[1])
+			pb.cursors[i].Pos = move(c.Pos)
 		}
 	}
 
