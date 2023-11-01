@@ -21,8 +21,6 @@ github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08/go.mod h1:QsM8Zpc
 github.com/jessevdk/go-flags v1.5.0/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
 github.com/jwalton/gchalk v1.0.3/go.mod h1:kmvsubrIhnHSklat2ZWNj7zlLs3SS2wGNgsBVPtill4=
 github.com/jwalton/go-supportscolor v1.0.0/go.mod h1:hFVUAZV2cWg+WFFC4v8pT2X/S2qUUBYMioBD9AINXGs=
-github.com/klauspost/cpuid/v2 v2.0.9 h1:lgaqFMSdTdQYdZ04uHyN2d/eKdOMyi2YLSvlQIBFYa4=
-github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/kr/pretty v0.2.1 h1:Fmg33tUaq4/8ym9TJN1x7sLJnHVwhP33CNkpYV/7rwI=
 github.com/kr/pretty v0.2.1/go.mod h1:ipq/a2n7PKx3OHsz4KJII5eveXtPO4qwEXGdVfWzfnI=
 github.com/kr/pty v1.1.1 h1:VkoXIwSboBpnk99O/KFauAEILuNHv5DVFKZMBN/gUgw=
@@ -33,10 +31,8 @@ github.com/lucasb-eyer/go-colorful v1.0.3 h1:QIbQXiugsb+q10B+MI+7DI1oQLdmnep86tW
 github.com/lucasb-eyer/go-colorful v1.0.3/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/mattn/go-runewidth v0.0.10 h1:CoZ3S2P7pvtP45xOtBw+/mDL2z0RKI576gSkzRRpdGg=
 github.com/mattn/go-runewidth v0.0.10/go.mod h1:RAqKPSqVFrSLVXbA8x7dzmKdmGzieGRCM46jaSJTDAk=
-github.com/micro-editor/tcell/v2 v2.2.4 h1:D1PTuWgI2v9FJyMd2klzYHiy7o/6fPW084iUb/M8p+Y=
-github.com/micro-editor/tcell/v2 v2.2.4/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
-github.com/micro-editor/tcell/v2 v2.2.5-0.20231030161318-aa1a5dfd0015 h1:fETPFs7te9rmZ41VNihWWOZJPR8S9k1afYzy9r5nEAQ=
-github.com/micro-editor/tcell/v2 v2.2.5-0.20231030161318-aa1a5dfd0015/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
+github.com/micro-editor/tcell/v2 v2.2.5-0.20231101062749-de8173222cbf h1:H5RPHp0vZm8fmCWYxw+OhofMOYVrsa4s9O1hrSMI8Us=
+github.com/micro-editor/tcell/v2 v2.2.5-0.20231101062749-de8173222cbf/go.mod h1:DTkF1mnZkz8EkerDG3ywxMsYAvbgZXZyYf/GjBgniPA=
 github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=
 github.com/pelletier/go-toml v1.9.5/go.mod h1:u1nR/EPcESfeI/szUZKdtJ0xRNbUoANCkoOuaOx1Y+c=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -49,7 +45,6 @@ github.com/segmentio/fasthash v1.0.3/go.mod h1:waKX8l2N8yckOgmSsXJi7x1ZfdKZ4x7KR
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 h1:QldyIu/L63oPpyvQmHgvgickp1Yw510KJOqX7H24mg8=
 github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778/go.mod h1:2MuV+tbUrU1zIOPMxZ5EncGwgmMJsa+9ucAQZXxsObs=
 github.com/zyedidia/clipper v0.1.0 h1:e16nhM1RgL3HYcugcHRUpMya1K830TS5uo6LlPJHySg=
 github.com/zyedidia/clipper v0.1.0/go.mod h1:7YApPNiiTZTXdKKZG92G50qj6mnWEX975Sdu65J7YpQ=
@@ -69,14 +64,6 @@ github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1/go.mod h1:4Hhqh6e8X
 github.com/zyedidia/gpeg v0.0.0-20211003220203-241091abc9c8/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80 h1:294fTzXJ1B4Cqu3DVQr9ll9uuIk7FXGVnktjjyEmVXY=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
-github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a h1:gwRvsOOci7caILFbozXZvfb2CNJ7ypagyYsPqVFaaEk=
-github.com/zyedidia/kbd v0.0.0-20231022115858-3b44feabe30a/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
-github.com/zyedidia/kbd v0.0.0-20231030152559-44a9fcbbc47f h1:lKGnRdYvl0fIbtO7EFWCvxRS5QfEc8cn6KDcN9g1Ffg=
-github.com/zyedidia/kbd v0.0.0-20231030152559-44a9fcbbc47f/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
-github.com/zyedidia/kbd v0.0.0-20231030192935-04bf9a2775a9 h1:4AM1nhBYZuFauZHcuNvaad6G9UA6fgkuzdImKh8NpIs=
-github.com/zyedidia/kbd v0.0.0-20231030192935-04bf9a2775a9/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
-github.com/zyedidia/kbd v0.0.0-20231030233501-a7f48e3331e4 h1:WFCEK6PNqx7LP6o3I2aBKH57/kZyJcqUdmVloco/ItM=
-github.com/zyedidia/kbd v0.0.0-20231030233501-a7f48e3331e4/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
 github.com/zyedidia/kbd v0.0.0-20231031223131-799b55808292 h1:QxVdZm7FkRxni7QPahWnDBkwuOOhfIWur+b3up4lnPI=
 github.com/zyedidia/kbd v0.0.0-20231031223131-799b55808292/go.mod h1:CfFKr9uU6E5xdExDU1eJWnG+FIaA98NbXoTf76H0DAY=
 github.com/zyedidia/rope v0.0.0-20210616205215-37fbf22eab3a/go.mod h1:IKo1js3O2gdESAUH9F3B33wlrRBnpJMJR/gXyY0a3ho=

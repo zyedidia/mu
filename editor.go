@@ -244,11 +244,14 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 	}
 
 	if mev, ok := ev.(*tcell.EventMouse); ok {
-		e.displayLock.Lock()
-		x, y := mev.Position()
-		e.ActiveTab().ActivateXY(e, x, y)
-		e.displayLock.Unlock()
-		e.SendRedraw()
+		if mev.Buttons() != tcell.ButtonNone && !e.infobar.active {
+			log.Println(mev.Buttons(), tcell.ButtonNone)
+			e.displayLock.Lock()
+			x, y := mev.Position()
+			mev.SetPosition(e.ActiveTab().ActivateXY(e, x, y))
+			e.displayLock.Unlock()
+			e.SendRedraw()
+		}
 	}
 
 	action, ok, more := e.mode.VM.Exec(ev)

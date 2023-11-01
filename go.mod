@@ -9,9 +9,7 @@ require (
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
 	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
-	github.com/klauspost/cpuid/v2 v2.0.9
-	github.com/mattn/go-runewidth v0.0.10
-	github.com/micro-editor/tcell/v2 v2.2.5-0.20231030161318-aa1a5dfd0015
+	github.com/micro-editor/tcell/v2 v2.2.5-0.20231101062749-de8173222cbf
 	github.com/pelletier/go-toml v1.9.5
 	github.com/zyedidia/clipper v0.1.0
 	github.com/zyedidia/flare v0.1.0
@@ -37,9 +35,9 @@ require (
 	github.com/kr/pty v1.1.1 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.0.3 // indirect
+	github.com/mattn/go-runewidth v0.0.10 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
-	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
 	golang.org/x/exp v0.0.0-20220218215828-6cf2b201936e // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
