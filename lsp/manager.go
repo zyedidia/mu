@@ -51,10 +51,10 @@ func (m *Manager) Open(ft, filename, contents string, version int32) (*Server, e
 		}
 		wd, _ := os.Getwd()
 		s.Initialize(wd, m.show, m.diagnostic)
-		m.servers[ft] = s
+		m.servers[l.Ft] = s
 	}
 
-	s := m.servers[ft]
+	s := m.servers[l.Ft]
 	s.DidOpen(filename, l.Ft, contents, version)
 
 	return m.servers[l.Ft], nil

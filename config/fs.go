@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/zyedidia/flare"
 )
 
 type WriteFS string
@@ -67,6 +69,10 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 	if _, err := os.Stat(filepath.Join(dir, "lsp.yaml")); os.IsNotExist(err) {
 		cfg.WriteDefaultLsp()
 	}
+	// TODO: this is a global setting in flare, which is bad
+	flare.SetLoader(func(name string) ([]byte, error) {
+		return fs.ReadFile(cfg, filepath.Join(highlighterDir, name+".lang"))
+	})
 
 	return cfg
 }
