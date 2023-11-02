@@ -262,7 +262,7 @@ func (b *BufPane) lnumWidth() int {
 }
 
 func (b *BufPane) gutterWidth() int {
-	return 1
+	return b.gutter
 }
 
 func (b *BufPane) bufferWidth() int {

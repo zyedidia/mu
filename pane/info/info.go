@@ -30,7 +30,7 @@ type InfoPane struct {
 
 func NewInfoPane(b *buffer.Buffer, msger buf.Messager, clip buf.Clipboard, cfg buf.Config, editor buf.Editor) *InfoPane {
 	ip := &InfoPane{
-		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, editor, false),
+		BufPane: buf.NewBufPaneOpts(b, msger, clip, cfg, editor, false, 0),
 		Done:    make(chan InfoResp),
 		history: loadHistory(cfg.CacheFS()),
 	}

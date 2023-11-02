@@ -55,6 +55,7 @@ type BufPane struct {
 	scrollmargin       int
 	hscrollmargin      int
 	linenums           bool
+	gutter             int
 
 	search *regexp.Regexp
 
@@ -96,6 +97,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		},
 		scrollmargin:  3,
 		hscrollmargin: 1,
+		gutter:        1,
 		linenums:      true,
 		softwrap:      false,
 		cfg:           cfg,
@@ -111,9 +113,10 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 	return bp
 }
 
-func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor, linenums bool) *BufPane {
+func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor, linenums bool, gutter int) *BufPane {
 	bp := NewBufPane(b, msger, clip, cfg, editor)
 	bp.linenums = linenums
+	bp.gutter = gutter
 	return bp
 }
 
