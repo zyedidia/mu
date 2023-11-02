@@ -967,10 +967,9 @@ var commands = []command{
 		Relocate: true,
 	},
 	{
-		Name:     "mouse-release",
-		Fn:       (*BufPane).MouseRelease,
-		Doc:      "mouse-release <pos>: handle a mouse release at <pos>",
-		Relocate: true,
+		Name: "mouse-release",
+		Fn:   (*BufPane).MouseRelease,
+		Doc:  "mouse-release <pos>: handle a mouse release at <pos>",
 	},
 	{
 		Name: "lsp-hover",
