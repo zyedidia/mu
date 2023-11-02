@@ -40,6 +40,8 @@ func (e *Edit) Undo(buf *BufferData) {
 }
 
 func (b *BufferData) edit(start, end int, val []byte) {
+	b.lspSendEdit(start, end, val)
+
 	b.Buffer.Remove(start, end)
 	b.Buffer.Insert(start, val)
 	b.modified = true
@@ -68,8 +70,6 @@ func (b *BufferData) edit(start, end int, val []byte) {
 			pb.cursors[i].Pos = move(c.Pos)
 		}
 	}
-
-	b.lspSendEdit(start, end, val)
 
 	b.syntbl.ApplyEdit(memo.Edit{
 		Start: start,
