@@ -101,5 +101,6 @@ func (b *Buffer) Save() error {
 	}
 	b.unmodified()
 	b.SerializeUndo(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".undo")
+	b.Lsp.DidSave(b.FullName())
 	return nil
 }

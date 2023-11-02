@@ -249,7 +249,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		style := th.Style("line-number")
 		if ok {
 			ch = '>'
-			style = th.Style(d.Type.String())
+			style = th.Style(d.Type.String()).Add(theme.AttrReverse)
 		}
 		for x := 0; x < b.gutterWidth(); x++ {
 			draw(x, i, ch, nil, style)

@@ -6,6 +6,10 @@ import (
 )
 
 func (s *Server) DidOpen(filename, language, text string, version int32) {
+	if s == nil {
+		return
+	}
+
 	doc := lsp.TextDocumentItem{
 		URI:        uri.File(filename),
 		LanguageID: lsp.LanguageIdentifier(language),
@@ -21,6 +25,10 @@ func (s *Server) DidOpen(filename, language, text string, version int32) {
 }
 
 func (s *Server) DidSave(filename string) {
+	if s == nil {
+		return
+	}
+
 	doc := lsp.TextDocumentIdentifier{
 		URI: uri.File(filename),
 	}
@@ -32,6 +40,10 @@ func (s *Server) DidSave(filename string) {
 }
 
 func (s *Server) DidChange(filename string, version int32, changes []lsp.TextDocumentContentChangeEvent) {
+	if s == nil {
+		return
+	}
+
 	doc := lsp.VersionedTextDocumentIdentifier{
 		TextDocumentIdentifier: lsp.TextDocumentIdentifier{
 			URI: uri.File(filename),
@@ -47,6 +59,10 @@ func (s *Server) DidChange(filename string, version int32, changes []lsp.TextDoc
 }
 
 func (s *Server) DidClose(filename string) {
+	if s == nil {
+		return
+	}
+
 	doc := lsp.TextDocumentIdentifier{
 		URI: uri.File(filename),
 	}

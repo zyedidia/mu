@@ -308,6 +308,7 @@ func (b *Buffer) Close() {
 	if !b.Modified() {
 		b.SerializeCursors(b.cfg.CacheFS(), input.EscapePath(b.FullName())+".cursors")
 	}
+	b.Lsp.DidClose(b.FullName())
 	// TODO: subtract refcount: requires us to close buffers in the main editor properly
 	// b.BufferData.refs--
 	if b.BufferData.refs == 0 {
