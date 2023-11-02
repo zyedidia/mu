@@ -1,5 +1,7 @@
 package buffer
 
+import "go.lsp.dev/protocol"
+
 type DiagnosticType byte
 
 func (t DiagnosticType) String() string {
@@ -39,4 +41,26 @@ func (b *Buffer) GetDiagnosticLineCol(line, col int) (Diagnostic, bool) {
 		}
 	}
 	return Diagnostic{}, false
+}
+
+func (b *Buffer) ClearDiagnostics() {
+	b.Diagnostics = b.Diagnostics[:0]
+}
+
+func (b *Buffer) AddLspDiagnostic(r protocol.Range, severity protocol.DiagnosticSeverity, message string) {
+	b.Diagnostics = append(b.Diagnostics, Diagnostic{
+		Line: int(r.Start.Line),
+		Col:  int(r.Start.Character),
+		Text: message,
+		Type: toType(severity),
+	})
+}
+
+func toType(s protocol.DiagnosticSeverity) DiagnosticType {
+	switch s {
+	case protocol.DiagnosticSeverityError:
+		return TypeError
+	default:
+		return TypeWarning
+	}
 }

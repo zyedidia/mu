@@ -48,6 +48,7 @@ type BufferData struct {
 	redraw      chan struct{}
 
 	Lsp        *lsp.Server
+	LspManager *lsp.Manager
 	lspVersion int32
 
 	Diagnostics []Diagnostic
@@ -74,7 +75,7 @@ type Input interface {
 
 type ShareFn func(name string) (*BufferData, Cursor)
 
-func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share ShareFn) (b *Buffer, err error) {
+func NewBuffer(in Input, out Output, cfg Config, man *lsp.Manager, redraw chan struct{}, share ShareFn) (b *Buffer, err error) {
 	if share != nil {
 		dat, c := share(in.FullName())
 		if dat != nil {
@@ -93,7 +94,7 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share Sha
 			input.EscapePath(in.FullName())+".cursors"),
 		cur: 0,
 	}
-	dat, err := NewBufferData(in, out, cfg, redraw, b)
+	dat, err := NewBufferData(in, out, cfg, man, redraw, b)
 	if err != nil {
 		return nil, err
 	}
@@ -101,18 +102,18 @@ func NewBuffer(in Input, out Output, cfg Config, redraw chan struct{}, share Sha
 	return b, nil
 }
 
-func NewEmptyBuffer(cfg Config, redraw chan struct{}) *Buffer {
-	b, err := NewBuffer(input.NewEmpty(), &output.Discard{}, cfg, redraw, nil)
+func NewEmptyBuffer(cfg Config, man *lsp.Manager, redraw chan struct{}) *Buffer {
+	b, err := NewBuffer(input.NewEmpty(), &output.Discard{}, cfg, man, redraw, nil)
 	if err != nil {
 		panic(fmt.Sprintf("opening an empty buffer caused an error: %v", err))
 	}
 	return b
 }
 
-func NewNamedEmptyBuffer(name string, cfg Config, redraw chan struct{}) *Buffer {
+func NewNamedEmptyBuffer(name string, cfg Config, man *lsp.Manager, redraw chan struct{}) *Buffer {
 	b, err := NewBuffer(
 		input.NewReader(strings.NewReader(""), name), &output.Discard{},
-		cfg, redraw, nil,
+		cfg, man, redraw, nil,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("opening an empty buffer caused an error: %v", err))
@@ -120,7 +121,7 @@ func NewNamedEmptyBuffer(name string, cfg Config, redraw chan struct{}) *Buffer 
 	return b
 }
 
-func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent *Buffer) (*BufferData, error) {
+func NewBufferData(r Input, out Output, cfg Config, man *lsp.Manager, redraw chan struct{}, parent *Buffer) (*BufferData, error) {
 	data, err := r.Read()
 	if err != nil {
 		return nil, err
@@ -138,16 +139,17 @@ func NewBufferData(r Input, out Output, cfg Config, redraw chan struct{}, parent
 	}
 
 	buf := &BufferData{
-		Buffer:  b,
-		in:      r,
-		out:     out,
-		cfg:     cfg,
-		Exited:  make(chan bool),
-		hisem:   semaphore.NewWeighted(1),
-		refs:    1,
-		Options: cfg.GetBufferOptions(r.Name(), ftdtct),
-		redraw:  redraw,
-		parents: []*Buffer{parent},
+		Buffer:     b,
+		LspManager: man,
+		in:         r,
+		out:        out,
+		cfg:        cfg,
+		Exited:     make(chan bool),
+		hisem:      semaphore.NewWeighted(1),
+		refs:       1,
+		Options:    cfg.GetBufferOptions(r.Name(), ftdtct),
+		redraw:     redraw,
+		parents:    []*Buffer{parent},
 	}
 
 	buf.loadUndo(cfg.CacheFS(), input.EscapePath(r.FullName())+".undo")

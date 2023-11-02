@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	goerrors "github.com/go-errors/errors"
+	"go.lsp.dev/protocol"
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/clipper"
@@ -15,6 +16,7 @@ import (
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
+	"github.com/zyedidia/mu/lsp"
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
@@ -55,6 +57,8 @@ type Editor struct {
 
 	clipboard clipper.Clipboard
 	termclip  TermClip
+
+	lsp *lsp.Manager
 
 	log *buffer.Buffer
 
@@ -110,13 +114,35 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		Redraw:   redraw,
 		w:        w,
 		h:        h,
-		log:      buffer.NewNamedEmptyBuffer("log", cfg, redraw),
+		log:      buffer.NewNamedEmptyBuffer("log", cfg, nil, redraw),
 		complete: &CompleteBar{},
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}, 1),
 	}
-	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, redraw), e)
+	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, nil, redraw), e)
+
+	e.lsp = lsp.NewManager(func(msg protocol.ShowMessageParams) {
+		e.displayLock.Lock()
+		defer e.SendRedraw()
+		defer e.displayLock.Unlock()
+
+		e.infobar.Message("lsp: " + msg.Message)
+	}, func(msg protocol.PublishDiagnosticsParams) {
+		e.displayLock.Lock()
+		defer e.SendRedraw()
+		defer e.displayLock.Unlock()
+
+		for _, b := range e.buffers {
+			if b.FullName() == msg.URI.Filename() {
+				b.ClearDiagnostics()
+				for _, d := range msg.Diagnostics {
+					b.AddLspDiagnostic(d.Range, d.Severity, d.Message)
+				}
+			}
+		}
+	})
+
 	e.MustSetMode("micro")
 	e.Register()
 	e.initClipboard()

@@ -52,6 +52,20 @@ type RPCResult struct {
 	Method     string `json:"method,omitempty"`
 }
 
+type RPCShowMessage struct {
+	RPCVersion string                `json:"jsonrpc"`
+	ID         int                   `json:"id,omitempty"`
+	Method     string                `json:"method,omitempty"`
+	Params     lsp.ShowMessageParams `json:"params"`
+}
+
+type RPCDiagnostic struct {
+	RPCVersion string                       `json:"jsonrpc"`
+	ID         int                          `json:"id,omitempty"`
+	Method     string                       `json:"method,omitempty"`
+	Params     lsp.PublishDiagnosticsParams `json:"params"`
+}
+
 func StartServer(l Language) (*Server, error) {
 	c := exec.Command(l.Command, l.Args...)
 
@@ -85,7 +99,7 @@ func StartServer(l Language) (*Server, error) {
 
 // Initialize performs the LSP initialization handshake
 // The directory must be an absolute path
-func (s *Server) Initialize(directory string) {
+func (s *Server) Initialize(directory string, show ShowFn, diagnostic DiagnosticFn) {
 	params := lsp.InitializeParams{
 		ProcessID: int32(os.Getpid()),
 		RootURI:   uri.File(directory),
@@ -120,7 +134,7 @@ func (s *Server) Initialize(directory string) {
 		},
 	}
 
-	go s.receive()
+	go s.receive(show, diagnostic)
 
 	s.lock.Lock()
 	go func() {
@@ -204,7 +218,7 @@ func (s *Server) sendRequest(method string, params interface{}) ([]byte, error) 
 	return s.sendRequestUnlocked(method, params)
 }
 
-func (s *Server) receive() {
+func (s *Server) receive(show ShowFn, diagnostic DiagnosticFn) {
 	for {
 		resp, err := s.receiveMessage()
 		if err == io.EOF {
@@ -225,10 +239,26 @@ func (s *Server) receive() {
 		}
 
 		switch r.Method {
-		case lsp.MethodWindowLogMessage:
-			// TODO
+		case lsp.MethodWindowShowMessage:
+			if show != nil {
+				var msg RPCShowMessage
+				err := json.Unmarshal(resp, &msg)
+				if err != nil {
+					log.Println("[micro-lsp]: error:", err)
+					break
+				}
+				show(msg.Params)
+			}
 		case lsp.MethodTextDocumentPublishDiagnostics:
-			// TODO
+			if diagnostic != nil {
+				var msg RPCDiagnostic
+				err := json.Unmarshal(resp, &msg)
+				if err != nil {
+					log.Println("[micro-lsp]: error:", err)
+					break
+				}
+				diagnostic(msg.Params)
+			}
 		case "":
 			// Response
 			if _, ok := s.responses[r.ID]; ok {
