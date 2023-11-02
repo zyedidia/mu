@@ -69,6 +69,7 @@ func (s *Server) DocumentFormat(filename string, options lsp.FormattingOptions) 
 		TextDocument: doc,
 	}
 
+	s.lock.Lock()
 	resp, err := s.sendRequest(lsp.MethodTextDocumentFormatting, params)
 	if err != nil {
 		return nil, err
@@ -98,6 +99,7 @@ func (s *Server) DocumentRangeFormat(filename string, r lsp.Range, options lsp.F
 		TextDocument: doc,
 	}
 
+	s.lock.Lock()
 	resp, err := s.sendRequest(lsp.MethodTextDocumentFormatting, params)
 	if err != nil {
 		return nil, err
@@ -132,6 +134,7 @@ func (s *Server) Completion(filename string, pos lsp.Position) ([]lsp.Completion
 		TextDocumentPositionParams: docpos,
 		Context:                    &cc,
 	}
+	s.lock.Lock()
 	resp, err := s.sendRequest(lsp.MethodTextDocumentCompletion, params)
 	if err != nil {
 		return nil, err
@@ -166,6 +169,7 @@ func (s *Server) Hover(filename string, pos lsp.Position) (string, error) {
 		Position: pos,
 	}
 
+	s.lock.Lock()
 	resp, err := s.sendRequest(lsp.MethodTextDocumentHover, params)
 	if err != nil {
 		return "", err

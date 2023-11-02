@@ -162,8 +162,10 @@ func (s *Server) Initialize(directory string, show ShowFn, diagnostic Diagnostic
 }
 
 func (s *Server) Shutdown() {
-	s.sendRequest(lsp.MethodShutdown, nil)
-	s.sendNotification(lsp.MethodExit, nil)
+	s.lock.Lock()
+	s.sendRequestUnlocked(lsp.MethodShutdown, nil)
+	s.sendNotificationUnlocked(lsp.MethodExit, nil)
+	s.lock.Unlock()
 }
 
 func (s *Server) sendNotificationUnlocked(method string, params interface{}) error {
@@ -207,13 +209,11 @@ func (s *Server) sendRequestUnlocked(method string, params interface{}) ([]byte,
 }
 
 func (s *Server) sendNotification(method string, params interface{}) error {
-	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.sendNotificationUnlocked(method, params)
 }
 
 func (s *Server) sendRequest(method string, params interface{}) ([]byte, error) {
-	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.sendRequestUnlocked(method, params)
 }

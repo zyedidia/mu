@@ -21,6 +21,7 @@ func (s *Server) DidOpen(filename, language, text string, version int32) {
 		TextDocument: doc,
 	}
 
+	s.lock.Lock()
 	go s.sendNotification(lsp.MethodTextDocumentDidOpen, params)
 }
 
@@ -36,6 +37,7 @@ func (s *Server) DidSave(filename string) {
 	params := lsp.DidSaveTextDocumentParams{
 		TextDocument: doc,
 	}
+	s.lock.Lock()
 	go s.sendNotification(lsp.MethodTextDocumentDidSave, params)
 }
 
@@ -55,6 +57,7 @@ func (s *Server) DidChange(filename string, version int32, changes []lsp.TextDoc
 		TextDocument:   doc,
 		ContentChanges: changes,
 	}
+	s.lock.Lock()
 	go s.sendNotification(lsp.MethodTextDocumentDidChange, params)
 }
 
@@ -70,5 +73,6 @@ func (s *Server) DidClose(filename string) {
 	params := lsp.DidCloseTextDocumentParams{
 		TextDocument: doc,
 	}
+	s.lock.Lock()
 	go s.sendNotification(lsp.MethodTextDocumentDidClose, params)
 }

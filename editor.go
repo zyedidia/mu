@@ -126,7 +126,6 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("LANGS", langs)
 
 	e.lsp = lsp.NewManager(func(msg protocol.ShowMessageParams) {
 		e.displayLock.Lock()
