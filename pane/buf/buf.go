@@ -61,6 +61,8 @@ type BufPane struct {
 
 	search *regexp.Regexp
 
+	mode string
+
 	mouse mouseState
 
 	// Vertical is a bit of a hack for cursor movements to indicate
@@ -102,6 +104,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 		gutter:        1,
 		linenums:      true,
 		softwrap:      false,
+		mode:          "micro",
 		cfg:           cfg,
 		clip:          clip,
 		messager:      msger,
@@ -122,6 +125,10 @@ func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config
 	return bp
 }
 
+func (bp *BufPane) SetMode(m string) {
+	bp.mode = m
+}
+
 func (bp *BufPane) Register(interp *tcl.Interp) string {
 	pre := func() error {
 		bp.CheckModified()
@@ -137,7 +144,7 @@ func (bp *BufPane) Register(interp *tcl.Interp) string {
 		}
 		tclutil.Register(interp, c.Name, c.Fn, bp, pre, post)
 	}
-	return "micro"
+	return bp.mode
 }
 
 func (bp *BufPane) Unregister(interp *tcl.Interp) {

@@ -147,6 +147,7 @@ func (t *TermPane) Name() string {
 	return t.name
 }
 
+func (t *TermPane) SetMode(m string) {}
 func (t *TermPane) Register(*gotcl.Interp) string {
 	return "term"
 }

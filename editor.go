@@ -101,7 +101,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		return nil, err
 	}
 	redraw := make(chan struct{}, 1)
-	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "term")
+	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "term", "vim-normal", "vim-insert")
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,6 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		}
 	}, langs)
 
-	e.MustSetMode("micro")
 	e.Register()
 	e.initClipboard()
 	return e, nil
@@ -241,6 +240,10 @@ func (e *Editor) SetMode(m string) error {
 		return fmt.Errorf("mode %s does not exist", m)
 	}
 	e.mode = &mode
+	p := e.ActivePane()
+	if p != nil && !e.infobar.active {
+		p.SetMode(m)
+	}
 	return nil
 }
 

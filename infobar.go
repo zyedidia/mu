@@ -63,7 +63,7 @@ func (i *InfoBar) Resize(w, h int) {
 func (i *InfoBar) Display(draw DrawFn, cursor CursorFn) {
 	msg := i.msg.data
 	err := i.msg.err
-	if i.dmsg != "" && !i.active {
+	if i.dmsg != "" && !i.active && !err {
 		msg = i.dmsg
 		err = false
 	}

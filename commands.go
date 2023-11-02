@@ -384,4 +384,9 @@ var commands = []tclutil.Command{
 		Fn:   (*Editor).Print,
 		Doc:  "print: displays a value",
 	},
+	{
+		Name: "set-mode",
+		Fn:   (*Editor).SetMode,
+		Doc:  "set-mode <mode>: change the current mode",
+	},
 }

@@ -10,6 +10,7 @@ import (
 type Pane interface {
 	Register(interp *gotcl.Interp) string
 	Unregister(interp *gotcl.Interp)
+	SetMode(mode string)
 	Help(w io.Writer)
 	Name() string
 

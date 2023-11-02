@@ -1,62 +1,48 @@
 bindings <- action
-          / { Num raction, 'repeat -n $1 $2' }
+          / { num raction, 'repeat-fn $1 { $2 }' }
 
 action <- { 'Z' 'Z', 'save; quit' }
-        / { 'i',  'set mode vim-insert' }
-        / { 'v',  'set mode vim-visual' }
-        / { 'o',  'cursor-line-end; insert \\n; set mode vim-insert' }
-        / { 'O',  'cursor-line-start; insert \\n; cursor-up; set mode vim-insert' }
+        / { 'i',  'set-mode vim-insert' }
+        / { 'a',  'move-to [right [cursor-pos]]; set-mode vim-insert' }
+        / { 'v',  'set-mode vim-visual' }
+        / { 'X', 'remove-to [left [cursor-pos]]'}
+        / { 'x', 'remove-to [right [cursor-pos]]'}
+        / { 's', 'remove-to [left [cursor-pos]]; set-mode vim-insert'}
+        / { 'S', 'remove-range [line-start [cursor-pos]] [line-end [cursor-pos]]; set-mode vim-insert'}
+        / { 'u', 'undo'}
+        / { 'ctrl+r', 'redo'}
+        / { 'ctrl+l', 'refresh'}
+        / { 'o',  'move-to [line-end [cursor-pos]]; insert \\n; set-mode vim-insert' }
+        / { 'O',  'move-to [line-start [cursor-pos]]; insert \\n; move-to [up [cursor-pos]]; set-mode vim-insert' }
         / { ':',  'command' }
 
-raction <- { Move         , 'cursor-to $pos+$1' }
-         / { 'd' TxtObj , 'delete-range $1[0] $1[1]' }
-         / { 'd' 'd'         , 'delete-line' }
-         / { 'd' Move   , 'delete-range $pos $pos+$1' }
-         / { 'D'          , 'exec "d$"' }
+raction <- { move       , 'move-to [$1]' }
+         / { 'd' 'd', 'remove-range [line-start [cursor-pos]] [next-line-start [cursor-pos]]' }
+         / { 'd' deletemove, 'remove-to [$1]' }
+         / { 'c' deletemove, 'remove-to [$1]; set-mode vim-insert' }
 
-Move <- { Num 'w'       , 'word-front -n $1' }
-      / { Num 'W'       , 'word-front-ws -n $1' }
-      / { Num 'b'       , 'word-back -n $1' }
-      / { Num 'B'       , 'word-back-ws -n $1' }
-      / { Num 'e'       , 'word-end -n $1' }
-      / { Num 'E'       , 'word-end-ws -n $1' }
-      / { Num 'f' Any , 'find-char -n $1 $2' }
-      / { Num 'F' Any , 'find-char-back -n $1 $2' }
-      / { Num 't' Any , 'find-till -n $1 $2' }
-      / { Num 'T' Any , 'find-till-back -n $1 $2' }
-      / { Num 'h'       , 'cursor-left -n $1' }
-      / { Num 'j'       , 'cursor-down -n $1' }
-      / { Num 'k'       , 'cursor-up -n $1' }
-      / { Num 'l'       , 'cursor-right -n $1' }
-      / { Num '$'       , 'line-end -n $1' }
-      / { Num '^'       , 'line-start -n $1' }
-      / { Num '0'       , 'line-start-char -n $1' }
-      / { 'g' 'g'          , 'cursor-start-buffer' }
-      / { 'G'           , 'cursor-end-buffer' }
-      / { Num 'g' 'g'      , 'cursor-line-to $1' }
-      / { Num 'G'       , 'cursor-line-to $1' }
-      / { '/'           , 'ifind' }
+deletemove <- { 'e'       , 'expr { [word-end [cursor-pos]] + 1 }' }
+            / { 'E'       , 'expr { [ws-end [cursor-pos]] + 1 }' }
+            / { move, '$1'}
 
-TxtObj <- { 'i' 'e'  , 'inside-all' }
-        / { 'a' 'e'  , 'around-all' }
-        / { 'i' 'w'  , 'inside-word' }
-        / { 'a' 'w'  , 'around-word' }
-        / { 'i' '"'  , 'inside-dquote' }
-        / { 'a' '"'  , 'around-dquote' }
-        / { 'i' '\'' , 'inside-squote' }
-        / { 'a' '\'' , 'around-squote' }
-        / { 'i' '('  , 'inside-paren' }
-        / { 'a' '('  , 'around-paren' }
-        / { 'i' ')'  , 'inside-paren' }
-        / { 'a' ')'  , 'around-paren' }
-        / { 'i' '{'  , 'inside-curly' }
-        / { 'a' '{'  , 'around-curly' }
-        / { 'i' '}'  , 'inside-curly' }
-        / { 'a' '}'  , 'around-curly' }
-        / { 'i' '['  , 'inside-square' }
-        / { 'a' '['  , 'around-square' }
-        / { 'i' ']'  , 'inside-square' }
-        / { 'a' ']'  , 'around-square' }
+move <- { 'w'       , 'word-right [cursor-pos]' }
+      / { 'W'       , 'ws-right [cursor-pos]' }
+      / { 'b'       , 'word-left [cursor-pos]' }
+      / { 'B'       , 'ws-left [cursor-pos]' }
+      / { 'e'       , 'word-end [cursor-pos]' }
+      / { 'E'       , 'ws-end [cursor-pos]' }
+      / { 'f' any   , 'find-char $1 [cursor-pos]' }
+      / { 'F' any   , 'find-char-back $1 [cursor-pos]' }
+      / { 'h'       , 'left [cursor-pos]' }
+      / { 'j'       , 'down [cursor-pos]' }
+      / { 'k'       , 'up [cursor-pos]' }
+      / { 'l'       , 'right [cursor-pos]' }
+      / { '$'       , 'line-end [cursor-pos]' }
+      / { '^'       , 'line-start [cursor-pos]' }
+      / { '0'       , 'line-start [cursor-pos]' }
+      / { 'g' 'g'          , 'zero' }
+      / { 'G'           , 'size' }
+      / { '/'           , 'find-prompt' }
 
-Num <- { [0-9]* , '$0' }
-Any <- { .      , '$0' }
+num <- { [0-9]* , '$0' }
+any <- { .      , '$0' }
