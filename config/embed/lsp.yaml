@@ -1,3 +1,32 @@
 go:
   command: gopls
   args: ["serve"]
+  ft: go
+c:
+  command: clangd
+  args: []
+  ft: c
+c++:
+  command: clangd
+  args: []
+  ft: cpp
+haskell:
+  command: hie
+  args: ["--lsp"]
+  ft: haskell
+python:
+  command: pyls
+  args: []
+  ft: python
+verilog:
+  command: svls
+  args: []
+  ft: verilog
+systemverilog:
+  command: svls
+  args: []
+  ft: verilog
+rust:
+  command: rust-analyzer
+  args: []
+  ft: rust

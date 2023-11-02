@@ -64,6 +64,9 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 	if _, err := os.Stat(filepath.Join(dir, "bindings")); os.IsNotExist(err) {
 		cfg.WriteDefaultBindings()
 	}
+	if _, err := os.Stat(filepath.Join(dir, "lsp.yaml")); os.IsNotExist(err) {
+		cfg.WriteDefaultLsp()
+	}
 
 	return cfg
 }
@@ -80,6 +83,18 @@ func (c *ConfigFS) WriteOpts() {
 			log.Printf("Could not write options.toml: %v\n", err)
 		}
 	}
+}
+
+func (c *ConfigFS) WriteDefaultLsp() {
+	if c.config == "" {
+		return
+	}
+	lsp, err := fs.ReadFile(c.embed, "lsp.yaml")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	c.config.WriteFile("lsp.yaml", lsp, 0666)
 }
 
 func (c *ConfigFS) WriteDefaultBindings() {

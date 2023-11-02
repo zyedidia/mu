@@ -578,7 +578,7 @@ func (bp *BufPane) LspHover() error {
 	if err != nil {
 		return err
 	}
-	info = strings.Split(info, "\n")[0]
+	info = strings.ReplaceAll(info, "\n", " ")
 	bp.messager.Message(info)
 	return nil
 }

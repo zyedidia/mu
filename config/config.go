@@ -12,7 +12,9 @@ import (
 	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/kbd/syntax"
+	"github.com/zyedidia/mu/lsp"
 	"github.com/zyedidia/mu/pkg/theme"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -80,6 +82,17 @@ func (cfs *ConfigFS) LoadBindings(name string) (kbd.Config, error) {
 		Core: name,
 		VM:   kbd.NewVM(prog.Compile()),
 	}, nil
+}
+
+func (cfs *ConfigFS) LoadLspLanguages() (map[string]lsp.Language, error) {
+	data, err := fs.ReadFile(cfs, "lsp.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	var langs map[string]lsp.Language
+	err = yaml.Unmarshal(data, &langs)
+	return langs, err
 }
 
 func (cfs *ConfigFS) MustLoadBindings(name string) kbd.Config {

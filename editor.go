@@ -122,6 +122,12 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	}
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, nil, redraw), e)
 
+	langs, err := cfg.LoadLspLanguages()
+	if err != nil {
+		return nil, err
+	}
+	log.Println("LANGS", langs)
+
 	e.lsp = lsp.NewManager(func(msg protocol.ShowMessageParams) {
 		e.displayLock.Lock()
 		defer e.SendRedraw()
@@ -141,7 +147,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 				}
 			}
 		}
-	})
+	}, langs)
 
 	e.MustSetMode("micro")
 	e.Register()

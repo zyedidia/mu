@@ -10,18 +10,27 @@ import (
 type ShowFn func(protocol.ShowMessageParams)
 type DiagnosticFn func(protocol.PublishDiagnosticsParams)
 
+type Language struct {
+	Command string   `yaml:"command"`
+	Args    []string `yaml:"args"`
+	Ft      string
+}
+
 type Manager struct {
 	servers map[string]*Server
 
 	show       ShowFn
 	diagnostic DiagnosticFn
+
+	langs map[string]Language
 }
 
-func NewManager(show ShowFn, diagnostic DiagnosticFn) *Manager {
+func NewManager(show ShowFn, diagnostic DiagnosticFn, langs map[string]Language) *Manager {
 	return &Manager{
 		servers:    make(map[string]*Server),
 		show:       show,
 		diagnostic: diagnostic,
+		langs:      langs,
 	}
 }
 
@@ -30,7 +39,7 @@ func (m *Manager) Open(ft, filename, contents string, version int32) (*Server, e
 		return nil, nil
 	}
 
-	l, ok := GetLanguage(ft)
+	l, ok := m.langs[ft]
 	if !ok {
 		return nil, fmt.Errorf("no lsp for filetype: %s", ft)
 	}
