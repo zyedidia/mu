@@ -19,7 +19,7 @@ require (
 	github.com/zyedidia/go-runewidth v0.0.12
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
-	github.com/zyedidia/kbd v0.0.0-20231031223131-799b55808292
+	github.com/zyedidia/kbd v0.0.0-20231102233511-e26cad8c5f67
 	go.lsp.dev/protocol v0.12.0
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
@@ -51,5 +51,3 @@ require (
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 )
-
-replace github.com/zyedidia/kbd => ../kbd
