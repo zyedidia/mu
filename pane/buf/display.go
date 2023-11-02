@@ -246,7 +246,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 	for i, l := range lines {
 		d, ok := b.GetDiagnosticAt(l - 1)
 		ch := ' '
-		style := th.Default()
+		style := th.Style("line-number")
 		if ok {
 			ch = '>'
 			style = th.Style(d.Type.String())
@@ -262,10 +262,7 @@ func (b *BufPane) lnumWidth() int {
 }
 
 func (b *BufPane) gutterWidth() int {
-	if len(b.Diagnostics) > 0 {
-		return 2
-	}
-	return 0
+	return 1
 }
 
 func (b *BufPane) bufferWidth() int {

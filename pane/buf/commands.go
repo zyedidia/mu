@@ -85,6 +85,7 @@ func (bp *BufPane) CheckModified() error {
 
 func (bp *BufPane) InsertAt(pos int, val string) {
 	bp.Buffer.Insert(pos, []byte(val))
+	bp.RecalcVX(bp.Cursor())
 }
 
 func (bp *BufPane) InsertCmd(val string) {
@@ -94,6 +95,7 @@ func (bp *BufPane) InsertCmd(val string) {
 		c.Deselect(0)
 	}
 	bp.Buffer.Insert(c.Pos, []byte(val))
+	bp.RecalcVX(bp.Cursor())
 }
 
 func (bp *BufPane) RemoveRange(from, to int) int {
@@ -104,6 +106,7 @@ func (bp *BufPane) RemoveRange(from, to int) int {
 		return from
 	}
 	bp.Buffer.Remove(from, to)
+	bp.RecalcVX(bp.Cursor())
 	return from
 }
 
