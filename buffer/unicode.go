@@ -1,10 +1,12 @@
 package buffer
 
 import (
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/zyedidia/generic"
 	"github.com/zyedidia/mu/pkg/grapheme"
+	"go.lsp.dev/protocol"
 )
 
 // DecodeGraphemeAt returns the grapheme information at the given offset, along
@@ -67,4 +69,36 @@ func (b *Buffer) VisualLoc(line, col int, displayer RuneVisualizer) int {
 	}
 
 	return off
+}
+
+func (b *BufferData) Utf16Loc(line, col8 int) (int, int) {
+	start := b.OffsetAt(line, 0)
+	total8 := 0
+	total16 := 0
+	for total8 < col8 {
+		r, sz := b.DecodeRuneAt(start + total8)
+		total8 += sz
+		total16 += len(utf16.Encode([]rune{r}))
+	}
+	return line, total16
+}
+
+func (b *BufferData) Utf8Loc(line, col16 int) (int, int) {
+	start := b.OffsetAt(line, 0)
+	total8 := 0
+	total16 := 0
+	for total16 < col16 {
+		r, sz := b.DecodeRuneAt(start + total8)
+		total8 += sz
+		total16 += len(utf16.Encode([]rune{r}))
+	}
+	return line, total8
+}
+
+func (b *BufferData) LspPosition(line, col int) protocol.Position {
+	line, col = b.Utf16Loc(line, col)
+	return protocol.Position{
+		Line:      uint32(line),
+		Character: uint32(col),
+	}
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/zyedidia/gpeg/memo"
 	"github.com/zyedidia/mu/buffer/undo"
 	"github.com/zyedidia/mu/config"
-	"github.com/zyedidia/mu/lsp"
 	"go.lsp.dev/protocol"
 )
 
@@ -86,8 +85,8 @@ func (b *BufferData) lspSendEdit(start, end int, text []byte) {
 	b.lspVersion++
 	change := protocol.TextDocumentContentChangeEvent{
 		Range: protocol.Range{
-			Start: lsp.Position(b.LineColAt(start)),
-			End:   lsp.Position(b.LineColAt(end)),
+			Start: b.LspPosition(b.LineColAt(start)),
+			End:   b.LspPosition(b.LineColAt(end)),
 		},
 		Text: string(text),
 	}
@@ -130,8 +129,8 @@ func (b *Buffer) Undo() {
 
 func (b *Buffer) ApplyLspEdits(edits []protocol.TextEdit) {
 	for _, e := range edits {
-		start := b.OffsetAt(int(e.Range.Start.Line), int(e.Range.Start.Character))
-		end := b.OffsetAt(int(e.Range.End.Line), int(e.Range.End.Character))
+		start := b.OffsetAt(b.Utf8Loc(int(e.Range.Start.Line), int(e.Range.Start.Character)))
+		end := b.OffsetAt(b.Utf8Loc(int(e.Range.End.Line), int(e.Range.End.Character)))
 		b.Remove(start, end)
 		if len(e.NewText) != 0 {
 			b.Insert(start, []byte(e.NewText))

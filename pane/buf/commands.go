@@ -10,7 +10,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/zyedidia/mu/lsp"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"go.lsp.dev/protocol"
@@ -574,7 +573,7 @@ func (bp *BufPane) ScrollDown(amt int) {
 // --- LSP ---
 
 func (bp *BufPane) LspHover() error {
-	info, err := bp.Lsp.Hover(bp.FullName(), lsp.Position(bp.LineColAt(bp.Cursor().Pos)))
+	info, err := bp.Lsp.Hover(bp.FullName(), bp.LspPosition(bp.LineColAt(bp.Cursor().Pos)))
 	if err != nil {
 		return err
 	}
@@ -590,8 +589,8 @@ func (bp *BufPane) LspFormat() error {
 	c := bp.Cursor()
 	if c.HasSelection() {
 		edits, err = bp.Lsp.DocumentRangeFormat(bp.FullName(), protocol.Range{
-			Start: lsp.Position(bp.LineColAt(c.Sel[0])),
-			End:   lsp.Position(bp.LineColAt(c.Sel[1])),
+			Start: bp.LspPosition(bp.LineColAt(c.Sel[0])),
+			End:   bp.LspPosition(bp.LineColAt(c.Sel[1])),
 		}, protocol.FormattingOptions{
 			InsertSpaces: false,
 			TabSize:      4,

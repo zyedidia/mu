@@ -49,13 +49,6 @@ type RPCHoverAlternate struct {
 	Result     hoverAlternate `json:"result"`
 }
 
-func Position(line, col int) lsp.Position {
-	return lsp.Position{
-		Line:      uint32(line),
-		Character: uint32(col),
-	}
-}
-
 func (s *Server) DocumentFormat(filename string, options lsp.FormattingOptions) ([]lsp.TextEdit, error) {
 	if s == nil || s.capabilities.DocumentFormattingProvider == nil {
 		return nil, ErrNotSupported

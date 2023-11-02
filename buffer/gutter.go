@@ -48,9 +48,10 @@ func (b *Buffer) ClearDiagnostics() {
 }
 
 func (b *Buffer) AddLspDiagnostic(r protocol.Range, severity protocol.DiagnosticSeverity, message string) {
+	line, col := b.Utf8Loc(int(r.Start.Line), int(r.Start.Character))
 	b.Diagnostics = append(b.Diagnostics, Diagnostic{
-		Line: int(r.Start.Line),
-		Col:  int(r.Start.Character),
+		Line: line,
+		Col:  col,
 		Text: message,
 		Type: toType(severity),
 	})
