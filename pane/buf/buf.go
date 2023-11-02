@@ -28,6 +28,8 @@ type Messager interface {
 	IPrompt(typ, p string, cb func(string)) (string, bool)
 	CharPrompt(p string) (string, bool)
 	Message(msg string)
+	DiagnosticMessage(msg string)
+	ClearDiagnostic()
 	Error(msg string)
 	Clear()
 }

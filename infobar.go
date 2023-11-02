@@ -18,6 +18,7 @@ type InfoBar struct {
 	w, h int
 
 	msg    message
+	dmsg   string
 	cmd    *info.InfoPane
 	active bool
 	ed     *Editor
@@ -33,6 +34,15 @@ func NewInfoBar(b *buffer.Buffer, ed *Editor) *InfoBar {
 func (i *InfoBar) Message(msg string) {
 	i.msg = message{msg, false}
 	log.Println("info:", msg)
+}
+
+func (i *InfoBar) DiagnosticMessage(msg string) {
+	i.dmsg = msg
+	log.Println("diagnostic:", msg)
+}
+
+func (i *InfoBar) ClearDiagnostic() {
+	i.dmsg = ""
 }
 
 func (i *InfoBar) Error(msg string) {
@@ -52,11 +62,17 @@ func (i *InfoBar) Resize(w, h int) {
 
 func (i *InfoBar) Display(draw DrawFn, cursor CursorFn) {
 	msg := i.msg.data
+	err := i.msg.err
+	if i.dmsg != "" && !i.active {
+		msg = i.dmsg
+		err = false
+	}
+
 	x, y := 0, 0
 	for len(msg) > 0 {
 		r, combc, size := grapheme.DecodeInString(msg)
 		st := i.ed.theme.Default()
-		if i.msg.err {
+		if err {
 			st = i.ed.theme.Style("error")
 		}
 		draw(x, y, r, combc, st)

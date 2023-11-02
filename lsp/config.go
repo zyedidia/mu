@@ -6,6 +6,31 @@ var langs = map[string]Language{
 		Args:    []string{"serve"},
 		Ft:      "go",
 	},
+	"c": Language{
+		Command: "clangd",
+		Args:    []string{},
+		Ft:      "c",
+	},
+	"c++": Language{
+		Command: "clangd",
+		Args:    []string{},
+		Ft:      "cpp",
+	},
+	"haskell": Language{
+		Command: "hie",
+		Args:    []string{"--lsp"},
+		Ft:      "haskell",
+	},
+	"python": Language{
+		Command: "pyls",
+		Args:    []string{},
+		Ft:      "python",
+	},
+	"verilog": Language{
+		Command: "svls",
+		Args:    []string{},
+		Ft:      "verilog",
+	},
 }
 
 type Language struct {

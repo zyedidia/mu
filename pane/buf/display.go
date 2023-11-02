@@ -243,11 +243,23 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		}
 	}
 
+	if b.gutter == 0 {
+		return
+	}
+
+	c := b.Cursor()
+	cline, _ := b.LineColAt(c.Pos)
+	if b.messager != nil {
+		b.messager.ClearDiagnostic()
+	}
 	for i, l := range lines {
 		d, ok := b.GetDiagnosticAt(l - 1)
 		ch := ' '
 		style := th.Style("line-number")
 		if ok {
+			if d.Line == cline && b.messager != nil {
+				b.messager.DiagnosticMessage(d.Text)
+			}
 			ch = '>'
 			style = th.Style(d.Type.String()).Add(theme.AttrReverse)
 		}
