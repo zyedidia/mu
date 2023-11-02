@@ -84,9 +84,9 @@ func loadHistory(fs config.WriteFS) (hist map[string][]string) {
 	return hist
 }
 
-func (ip *InfoPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int), th *theme.Theme) {
+func (ip *InfoPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style theme.Style), showCursor func(x, y int, main bool), th *theme.Theme) {
 	if ip.typ == "password" {
-		showCursor(0, 0)
+		showCursor(0, 0, true)
 		return
 	}
 	ip.BufPane.Display(draw, showCursor, th)
