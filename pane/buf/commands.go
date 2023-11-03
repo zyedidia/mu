@@ -125,6 +125,10 @@ func (bp *BufPane) RemoveSelection() {
 	}
 }
 
+func (bp *BufPane) Deselect() {
+	bp.Cursor().HasSel = false
+}
+
 func (bp *BufPane) Undo() {
 	bp.Buffer.Undo()
 }
@@ -979,6 +983,11 @@ var commands = []command{
 		Name: "lsp-format",
 		Fn:   (*BufPane).LspFormat,
 		Doc:  "lsp-format: auto-format the current document",
+	},
+	{
+		Name: "deselect",
+		Fn:   (*BufPane).Deselect,
+		Doc:  "deselect: removes the current selection",
 	},
 }
 

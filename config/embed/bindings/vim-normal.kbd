@@ -4,7 +4,7 @@ bindings <- action
 action <- { 'Z' 'Z', 'save; quit' }
         / { 'i',  'set-mode vim-insert' }
         / { 'a',  'move-to [right [cursor-pos]]; set-mode vim-insert' }
-        / { 'v',  'set-mode vim-visual' }
+        / { 'v',  'set-mode vim-visual; select-to [right [cursor-pos]]' }
         / { 'X', 'remove-to [left [cursor-pos]]'}
         / { 'x', 'remove-to [right [cursor-pos]]'}
         / { 's', 'remove-to [left [cursor-pos]]; set-mode vim-insert'}

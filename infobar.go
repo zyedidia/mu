@@ -32,6 +32,10 @@ func NewInfoBar(b *buffer.Buffer, ed *Editor) *InfoBar {
 }
 
 func (i *InfoBar) Message(msg string) {
+	if i.active {
+		return
+	}
+
 	i.msg = message{msg, false}
 	log.Println("info:", msg)
 }
@@ -46,6 +50,9 @@ func (i *InfoBar) ClearDiagnostic() {
 }
 
 func (i *InfoBar) Error(msg string) {
+	if i.active {
+		return
+	}
 	i.msg = message{msg, true}
 	log.Println("error:", msg)
 }

@@ -1,0 +1,39 @@
+bindings <- action
+          / { num raction, 'repeat-fn $1 { $2 }' }
+
+action <- { 'v',  'deselect; set-mode vim-normal' }
+        / { 'X', 'remove-selection; set-mode vim-normal'}
+        / { 'ctrl+c', 'deselect; set-mode vim-normal'}
+        / { 'escape', 'deselect; set-mode vim-normal'}
+        / { 'x', 'remove-selection; set-mode vim-normal'}
+        / { 's', 'remove-selection; set-mode vim-insert'}
+        / { 'S', 'remove-range [line-start [cursor-pos]] [line-end [cursor-pos]]; set-mode vim-insert'}
+        / { 'u', 'deselect; set-mode vim-normal'}
+        / { 'd', 'remove-selection; set-mode vim-normal' }
+        / { 'c', 'remove-selection; set-mode vim-insert' }
+        / { 'ctrl+l', 'refresh'}
+        / { ':',  'command' }
+
+raction <- { move       , 'select-to [$1]' }
+
+move <- { 'w'       , 'word-right [cursor-pos]' }
+      / { 'W'       , 'ws-right [cursor-pos]' }
+      / { 'b'       , 'word-left [cursor-pos]' }
+      / { 'B'       , 'ws-left [cursor-pos]' }
+      / { 'e'       , 'word-end [cursor-pos]' }
+      / { 'E'       , 'ws-end [cursor-pos]' }
+      / { 'f' any   , 'find-char $1 [cursor-pos]' }
+      / { 'F' any   , 'find-char-back $1 [cursor-pos]' }
+      / { 'h'       , 'left [cursor-pos]' }
+      / { 'j'       , 'down [cursor-pos]' }
+      / { 'k'       , 'up [cursor-pos]' }
+      / { 'l'       , 'right [cursor-pos]' }
+      / { '$'       , 'line-end [cursor-pos]' }
+      / { '^'       , 'line-start [cursor-pos]' }
+      / { '0'       , 'line-start [cursor-pos]' }
+      / { 'g' 'g'   , 'zero' }
+      / { 'G'       , 'size' }
+      / { '/'       , 'find-prompt' }
+
+num <- { [0-9]* , '$0' }
+any <- { .      , '$0' }
