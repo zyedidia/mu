@@ -17,6 +17,7 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/lsp"
+	"github.com/zyedidia/mu/lua"
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
@@ -42,6 +43,7 @@ type Editor struct {
 	curtab      int
 	active      pane.Pane
 	interp      *tcl.Interp
+	lua         *lua.State
 	displayLock sync.Mutex
 
 	buffers []*buffer.Buffer
@@ -107,6 +109,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	}
 	e := &Editor{
 		interp:   interp,
+		lua:      lua.NewState(),
 		modes:    modes,
 		config:   cfg,
 		theme:    th,
@@ -150,6 +153,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 
 	e.Register()
 	e.initClipboard()
+	e.initLua()
 	return e, nil
 }
 

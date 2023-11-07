@@ -11,6 +11,7 @@ require (
 	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
 	github.com/micro-editor/tcell/v2 v2.2.5-0.20231101062749-de8173222cbf
 	github.com/pelletier/go-toml v1.9.5
+	github.com/yuin/gopher-lua v1.1.0
 	github.com/zyedidia/clipper v0.1.0
 	github.com/zyedidia/flare v0.1.0
 	github.com/zyedidia/ftdetect v0.1.0
@@ -27,10 +28,10 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/readline.v1 v1.0.0-20160726135117-62c6fe619375
 	gopkg.in/yaml.v2 v2.4.0
+	layeh.com/gopher-luar v1.0.11
 )
 
 require (
-	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
