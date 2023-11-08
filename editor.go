@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"sort"
 	"sync"
 
@@ -17,10 +18,10 @@ import (
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/config"
 	"github.com/zyedidia/mu/lsp"
-	"github.com/zyedidia/mu/lua"
 	"github.com/zyedidia/mu/pane"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"github.com/zyedidia/mu/pkg/theme"
+	"github.com/zyedidia/mu/plugin"
 )
 
 type TermClip interface {
@@ -43,7 +44,7 @@ type Editor struct {
 	curtab      int
 	active      pane.Pane
 	interp      *tcl.Interp
-	lua         *lua.State
+	plugins     *plugin.Manager
 	displayLock sync.Mutex
 
 	buffers []*buffer.Buffer
@@ -107,9 +108,13 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
+	pm, err := plugin.NewManager(filepath.Join(cfg.ConfigDir()))
+	if err != nil {
+		return nil, err
+	}
 	e := &Editor{
 		interp:   interp,
-		lua:      lua.NewState(),
+		plugins:  pm,
 		modes:    modes,
 		config:   cfg,
 		theme:    th,
@@ -153,7 +158,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 
 	e.Register()
 	e.initClipboard()
-	e.initLua()
+	e.plugins.Load()
 	return e, nil
 }
 

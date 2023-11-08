@@ -27,10 +27,14 @@ type State struct {
 	L *lua.LState
 }
 
-func NewState() *State {
-	return &State{
-		L: lua.NewState(),
-	}
+func NewState(dir string) *State {
+	s := new(State)
+	s.L = lua.NewState()
+	s.L.SetField(s.L.GetGlobal("package"), "path", lua.LString(filepath.Join(dir, "?", "init.lua")))
+	s.L.SetGlobal("import", luar.New(s.L, func(pkg string) *lua.LTable {
+		return s.importPkg(pkg)
+	}))
+	return s
 }
 
 // LoadFile loads a lua file
@@ -46,7 +50,7 @@ func (s *State) LoadFile(module string, file string, data []byte) error {
 }
 
 // Import allows a lua plugin to import a package
-func (s *State) Import(pkg string) *lua.LTable {
+func (s *State) importPkg(pkg string) *lua.LTable {
 	switch pkg {
 	case "fmt":
 		return s.importFmt()
