@@ -1,10 +1,12 @@
 package plugin
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
@@ -17,6 +19,7 @@ type Info struct {
 	Url      string
 	Version  string
 	Inactive bool
+	Custom   string
 }
 
 func (i *Info) Installed(dir string) bool {
@@ -25,6 +28,17 @@ func (i *Info) Installed(dir string) bool {
 }
 
 func (i *Info) Install(dir string) error {
+	if i.Custom != "" {
+		buf := &bytes.Buffer{}
+		cmd := exec.Command("sh", "-c", i.Custom)
+		cmd.Stderr = buf
+		err := cmd.Run()
+		if err != nil {
+			return fmt.Errorf("%w: %s", err, buf.String())
+		}
+		return nil
+	}
+
 	_, err := git.PlainClone(filepath.Join(dir, i.Name), false, &git.CloneOptions{
 		URL: i.Url,
 	})
