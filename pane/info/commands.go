@@ -1,7 +1,6 @@
 package info
 
 import (
-	"github.com/zyedidia/mu/pkg/completer"
 	"github.com/zyedidia/mu/pkg/tclutil"
 )
 
@@ -49,39 +48,6 @@ func (ip *InfoPane) HistoryNext() {
 	}
 }
 
-func (ip *InfoPane) NextCompletion() bool {
-	if ip.Editor.ActiveCompletion() {
-		ip.Editor.NextCompletion()
-		ip.Editor.KeepCompleting()
-		return true
-	}
-	return false
-}
-
-func (ip *InfoPane) PrevCompletion() bool {
-	if ip.Editor.ActiveCompletion() {
-		ip.Editor.PrevCompletion()
-		ip.Editor.KeepCompleting()
-		return true
-	}
-	return false
-}
-
-func (ip *InfoPane) Complete() bool {
-	if ip.Editor.ActiveCompletion() {
-		return false
-	}
-	prefix := ip.WordStart()
-	comps := completer.FileComplete(prefix, ".")
-	if len(comps) == 1 {
-		ip.Insert(ip.Cursor().Pos, []byte(comps[0][len(prefix):]))
-	} else {
-		ip.Editor.StartCompletion(comps)
-	}
-	ip.Editor.KeepCompleting()
-	return true
-}
-
 var commands = []tclutil.Command{
 	{
 		Name: "history-prev",
@@ -107,20 +73,5 @@ var commands = []tclutil.Command{
 		Name: "enter-char",
 		Fn:   (*InfoPane).EnterChar,
 		Doc:  "enter-char: enter a single character as the prompt response",
-	},
-	{
-		Name: "complete",
-		Fn:   (*InfoPane).Complete,
-		Doc:  "complete: make an autocompletion suggestion",
-	},
-	{
-		Name: "next-completion",
-		Fn:   (*InfoPane).NextCompletion,
-		Doc:  "next-completion: select the next completion",
-	},
-	{
-		Name: "prev-completion",
-		Fn:   (*InfoPane).PrevCompletion,
-		Doc:  "prev-completion: select the previous completion",
 	},
 }

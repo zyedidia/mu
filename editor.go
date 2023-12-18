@@ -13,6 +13,7 @@ import (
 
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/clipper"
+	"github.com/zyedidia/generic/stack"
 	tcl "github.com/zyedidia/gotcl"
 	"github.com/zyedidia/kbd"
 	"github.com/zyedidia/mu/buffer"
@@ -50,10 +51,8 @@ type Editor struct {
 	buffers []*buffer.Buffer
 
 	modes    map[string]kbd.Config
-	mode     *kbd.Config
+	mode     stack.Stack[*kbd.Config]
 	modeLock sync.Mutex
-
-	complete *CompleteBar
 
 	theme  *theme.Theme
 	config *config.ConfigFS
@@ -104,7 +103,7 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		return nil, err
 	}
 	redraw := make(chan struct{}, 1)
-	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "term", "vim-normal", "vim-insert", "vim-visual")
+	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "complete", "term", "vim-normal", "vim-insert", "vim-visual")
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +122,6 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		w:        w,
 		h:        h,
 		log:      buffer.NewNamedEmptyBuffer("log", cfg, nil, redraw),
-		complete: &CompleteBar{},
 		Errors:   make(chan error, 16),
 		Suspend:  make(chan func(), 16),
 		Resume:   make(chan struct{}, 1),
@@ -248,24 +246,41 @@ func (e *Editor) SetMode(m string) error {
 	if !ok {
 		return fmt.Errorf("mode %s does not exist", m)
 	}
-	e.mode = &mode
+	e.mode.Pop()
+	e.mode.Push(&mode)
 	p := e.ActivePane()
-	if p != nil && !e.infobar.active {
+	if e.infobar.active {
+		e.infobar.cmd.SetMode(m)
+	} else if p != nil {
 		p.SetMode(m)
 	}
 	return nil
 }
 
+func (e *Editor) PopMode() {
+	e.modeLock.Lock()
+	defer e.modeLock.Unlock()
+	e.mode.Pop()
+	m := e.mode.Peek()
+	p := e.ActivePane()
+	if e.infobar.active {
+		e.infobar.cmd.SetMode(m.Core)
+	} else if p != nil {
+		p.SetMode(m.Core)
+	}
+	log.Println("pop mode to", m.Core)
+}
+
 func (e *Editor) GetMode() string {
 	e.modeLock.Lock()
 	defer e.modeLock.Unlock()
-	return e.mode.Core
+	return e.mode.Peek().Core
 }
 
 func (e *Editor) HasMode() bool {
 	e.modeLock.Lock()
 	defer e.modeLock.Unlock()
-	return e.mode != nil
+	return e.mode.Peek() != nil
 }
 
 type EventConsumer interface {
@@ -297,9 +312,13 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		}
 	}
 
-	action, ok, more := e.mode.VM.Exec(ev)
+	action, ok, more := e.mode.Peek().VM.Exec(ev)
+	log.Println(action, ok, more)
 	if !more {
-		e.mode.VM.Reset()
+		e.mode.Peek().VM.Reset()
+		if !ok && e.mode.Size() > 1 {
+			e.PopMode()
+		}
 	}
 	if ok {
 		e.displayLock.Lock()
@@ -307,7 +326,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 			defer e.SendRedraw()
 			defer e.displayLock.Unlock()
 
-			e.complete.next = false
 			defer func() {
 				if err := recover(); err != nil {
 					e.Errors <- PanicErr{goerrors.Wrap(err, 2).ErrorStack()}
@@ -321,7 +339,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 				e.Errors <- err
 				e.Error(err.Error())
 			}
-			e.complete.active = e.complete.next
 
 			if e.infobar.active {
 				e.infobar.cmd.PostEvent()
@@ -391,9 +408,9 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 	}, func(x, y int, main bool) {
 		cursor(x, e.h+y-1, main)
 	})
-	e.complete.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
-		draw(x, e.h+y-2, mainc, combc, style)
-	}, e.w, e.theme)
+	// e.complete.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+	// 	draw(x, e.h+y-2, mainc, combc, style)
+	// }, e.w, e.theme)
 }
 
 func (e *Editor) ActivatePane(pane pane.Pane) {

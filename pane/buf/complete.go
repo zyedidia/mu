@@ -1,4 +1,4 @@
-package mu
+package buf
 
 import (
 	"bytes"
@@ -8,11 +8,16 @@ import (
 	"github.com/zyedidia/mu/pkg/theme"
 )
 
+const suggestionMax = 20
+
+type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
+
 type CompleteBar struct {
 	suggestions []string
 	cur         int
 	active      bool
-	next        bool
+	pos         int
+	prefix      string
 }
 
 func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
@@ -22,6 +27,9 @@ func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
 
 	b := &bytes.Buffer{}
 	for i, s := range c.suggestions {
+		if len(s) >= suggestionMax {
+			s = s[:suggestionMax] + "..."
+		}
 		if i == c.cur {
 			fmt.Fprintf(b, "[%s]", s)
 		} else {
@@ -48,35 +56,40 @@ func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
 	}
 }
 
-func (e *Editor) StartCompletion(suggestions []string) {
-	e.complete.suggestions = suggestions
-	e.complete.cur = 0
+func (c *CompleteBar) StartCompletion(suggestions []string, pos int, prefix string) {
+	c.suggestions = suggestions
+	c.cur = 0
+	c.pos = pos
+	c.prefix = prefix
+	c.active = true
 }
 
-func (e *Editor) StopCompletion() {
-	e.complete.suggestions = nil
+func (c *CompleteBar) StopCompletion() {
+	c.suggestions = nil
+	c.active = false
+	c.cur = 0
 }
 
-func (e *Editor) NextCompletion() {
-	if e.complete.cur < len(e.complete.suggestions)-1 {
-		e.complete.cur++
+func (c *CompleteBar) NextCompletion() {
+	if c.cur < len(c.suggestions)-1 {
+		c.cur++
 	} else {
-		e.complete.cur = 0
+		c.cur = 0
 	}
 }
 
-func (e *Editor) PrevCompletion() {
-	if e.complete.cur > 0 {
-		e.complete.cur--
+func (c *CompleteBar) PrevCompletion() {
+	if c.cur > 0 {
+		c.cur--
 	} else {
-		e.complete.cur = len(e.complete.suggestions) - 1
+		c.cur = len(c.suggestions) - 1
 	}
 }
 
-func (e *Editor) ActiveCompletion() bool {
-	return e.complete.active
+func (c *CompleteBar) ActiveCompletion() bool {
+	return c.active
 }
 
-func (e *Editor) KeepCompleting() {
-	e.complete.next = true
+func (c *CompleteBar) Suggestion() string {
+	return c.suggestions[c.cur]
 }

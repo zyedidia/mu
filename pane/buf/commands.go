@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/zyedidia/mu/pkg/completer"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"go.lsp.dev/protocol"
@@ -614,6 +615,45 @@ func (bp *BufPane) LspFormat() error {
 	return nil
 }
 
+// --- Autocompletion ---
+
+func (bp *BufPane) fillCompletion(comp []byte) {
+	if !bp.complete.ActiveCompletion() {
+		return
+	}
+	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
+	bp.Insert(bp.Cursor().Pos, comp[len(bp.complete.prefix):])
+}
+
+func (bp *BufPane) Complete() bool {
+	prefix := bp.WordStart()
+	comps := completer.FileComplete(prefix, ".")
+	if len(comps) == 0 {
+		return false
+	}
+	bp.complete.StartCompletion(comps, bp.Cursor().Pos, prefix)
+	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+	return true
+}
+
+func (bp *BufPane) NextCompletion() {
+	bp.complete.NextCompletion()
+	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+}
+
+func (bp *BufPane) PrevCompletion() {
+	bp.complete.PrevCompletion()
+	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+}
+
+func (bp *BufPane) CancelCompletion() {
+	if !bp.complete.ActiveCompletion() {
+		return
+	}
+	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
+	bp.complete.StopCompletion()
+}
+
 // --- Options ---
 
 func (bp *BufPane) Filetype() string {
@@ -988,6 +1028,26 @@ var commands = []command{
 		Name: "deselect",
 		Fn:   (*BufPane).Deselect,
 		Doc:  "deselect: removes the current selection",
+	},
+	{
+		Name: "complete",
+		Fn:   (*BufPane).Complete,
+		Doc:  "complete: make an autocompletion suggestion",
+	},
+	{
+		Name: "next-completion",
+		Fn:   (*BufPane).NextCompletion,
+		Doc:  "next-completion: select the next completion",
+	},
+	{
+		Name: "prev-completion",
+		Fn:   (*BufPane).PrevCompletion,
+		Doc:  "prev-completion: select the previous completion",
+	},
+	{
+		Name: "cancel-completion",
+		Fn:   (*BufPane).CancelCompletion,
+		Doc:  "cancel-completion: cancel the current completion",
 	},
 }
 

@@ -1,0 +1,3 @@
+bindings <- {'tab',     'next-completion'}
+          / {'backtab', 'prev-completion'}
+          / {'ctrl+c',  'cancel-completion; pop-mode'}

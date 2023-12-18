@@ -37,13 +37,6 @@ type Messager interface {
 type Editor interface {
 	EvalRet(cmd string, vars []interface{}) (string, error)
 	SuspendResume() (chan func(), chan struct{})
-
-	StartCompletion(s []string)
-	StopCompletion()
-	ActiveCompletion() bool
-	NextCompletion()
-	PrevCompletion()
-	KeepCompleting()
 }
 
 type BufPane struct {
@@ -58,6 +51,8 @@ type BufPane struct {
 	hscrollmargin      int
 	linenums           bool
 	gutter             int
+
+	complete *CompleteBar
 
 	search *regexp.Regexp
 
@@ -99,6 +94,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 				' ':  " ",
 			},
 		},
+		complete:      &CompleteBar{},
 		scrollmargin:  3,
 		hscrollmargin: 1,
 		gutter:        1,
