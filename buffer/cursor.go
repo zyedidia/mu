@@ -9,12 +9,14 @@ import (
 )
 
 type Cursor struct {
-	Pos    int
-	HasSel bool
-	Orig   [2]int
-	Sel    [2]int
-	Vx     int
-	Num    int
+	Pos         int
+	HasSel      bool
+	Orig        [2]int
+	Sel         [2]int
+	Vx          int
+	Num         int
+	Complete    int
+	CompleteCur int
 }
 
 func (b *Buffer) NumCursors() int {

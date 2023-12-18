@@ -14,8 +14,6 @@ type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
 
 type CompleteBar struct {
 	suggestions []string
-	cur         int
-	pos         int
 	prefix      string
 }
 
@@ -27,17 +25,17 @@ func (bp *BufPane) DisplayStatus(draw func(x, y int, mainc rune, combc []rune, s
 	if !bp.activeComplete() {
 		return false
 	}
-	bp.complete.Display(draw, w, theme)
+	bp.complete.Display(draw, w, theme, bp.Cursor().CompleteCur)
 	return true
 }
 
-func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
+func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme, choice int) {
 	b := &bytes.Buffer{}
 	for i, s := range c.suggestions {
 		if len(s) > suggestionMax {
 			s = "..." + s[len(s)-suggestionMax:]
 		}
-		if i == c.cur {
+		if i == choice {
 			fmt.Fprintf(b, "[%s]", s)
 		} else {
 			fmt.Fprint(b, s)
@@ -63,34 +61,11 @@ func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
 	}
 }
 
-func (c *CompleteBar) StartCompletion(suggestions []string, pos int, prefix string) {
+func (c *CompleteBar) StartCompletion(suggestions []string, prefix string) {
 	c.suggestions = suggestions
-	c.cur = 0
-	c.pos = pos
 	c.prefix = prefix
 }
 
 func (c *CompleteBar) StopCompletion() {
 	c.suggestions = nil
-	c.cur = 0
-}
-
-func (c *CompleteBar) NextCompletion() {
-	if c.cur < len(c.suggestions)-1 {
-		c.cur++
-	} else {
-		c.cur = 0
-	}
-}
-
-func (c *CompleteBar) PrevCompletion() {
-	if c.cur > 0 {
-		c.cur--
-	} else {
-		c.cur = len(c.suggestions) - 1
-	}
-}
-
-func (c *CompleteBar) Suggestion() string {
-	return c.suggestions[c.cur]
 }

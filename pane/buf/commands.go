@@ -618,7 +618,7 @@ func (bp *BufPane) LspFormat() error {
 // --- Autocompletion ---
 
 func (bp *BufPane) fillCompletion(comp []byte) {
-	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
+	bp.Remove(bp.Cursor().Complete, bp.Cursor().Pos)
 	bp.Insert(bp.Cursor().Pos, comp[len(bp.complete.prefix):])
 }
 
@@ -628,26 +628,38 @@ func (bp *BufPane) Complete() bool {
 	if len(comps) == 0 {
 		return false
 	}
-	bp.complete.StartCompletion(comps, bp.Cursor().Pos, prefix)
-	bp.Insert(bp.Cursor().Pos, []byte(bp.complete.Suggestion())[len(bp.complete.prefix):])
+	bp.complete.StartCompletion(comps, prefix)
+	bp.Cursor().Complete = bp.Cursor().Pos
+	bp.Cursor().CompleteCur = 0
+	bp.Insert(bp.Cursor().Pos, []byte(comps[0])[len(bp.complete.prefix):])
 	return true
 }
 
 func (bp *BufPane) NextCompletion() {
-	bp.complete.NextCompletion()
-	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+	c := bp.Cursor()
+	if c.CompleteCur < len(bp.complete.suggestions)-1 {
+		c.CompleteCur++
+	} else {
+		c.CompleteCur = 0
+	}
+	bp.fillCompletion([]byte(bp.complete.suggestions[c.CompleteCur]))
 }
 
 func (bp *BufPane) PrevCompletion() {
-	bp.complete.PrevCompletion()
-	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+	c := bp.Cursor()
+	if c.CompleteCur > 0 {
+		c.CompleteCur--
+	} else {
+		c.CompleteCur = len(bp.complete.suggestions) - 1
+	}
+	bp.fillCompletion([]byte(bp.complete.suggestions[c.CompleteCur]))
 }
 
 func (bp *BufPane) CancelCompletion() {
 	if !bp.activeComplete() {
 		return
 	}
-	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
+	bp.Remove(bp.Cursor().Complete, bp.Cursor().Pos)
 	bp.complete.StopCompletion()
 }
 

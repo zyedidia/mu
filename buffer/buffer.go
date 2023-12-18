@@ -62,6 +62,7 @@ type BufferData struct {
 type Buffer struct {
 	*BufferData
 
+	marks   []*int
 	cursors []Cursor
 	cur     int
 }
@@ -202,6 +203,22 @@ func getTextOpts(opts map[string]interface{}) text.Options {
 	return text.Options{
 		Charset: charset,
 		Endings: ends,
+	}
+}
+
+func (b *Buffer) AddMark(pos int) *int {
+	p := &pos
+	b.marks = append(b.marks, p)
+	return p
+}
+
+func (b *Buffer) RemoveMark(mark *int) {
+	for i, m := range b.marks {
+		if mark == m {
+			b.marks[i] = b.marks[len(b.marks)-1]
+			b.marks = b.marks[:len(b.marks)-1]
+			return
+		}
 	}
 }
 
