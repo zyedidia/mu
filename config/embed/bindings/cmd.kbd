@@ -6,6 +6,7 @@ bindings <- {'ctrl+z', 'undo'}
           / {'ctrl+q', 'cancel'}
           / {'ctrl+c', 'cancel'}
           / {'escape', 'cancel'}
+          / {'tab',   'if {[complete]} { push-mode complete } else { insert \\t }' }
           / {'backspace', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [left [cursor-pos]] }'}
           / {'delete', 'if { [cursor-has-selection] } { remove-selection } else { remove-to [right [cursor-pos]] }'}
           / {., 'insert $0'}

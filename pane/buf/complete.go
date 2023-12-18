@@ -8,27 +8,34 @@ import (
 	"github.com/zyedidia/mu/pkg/theme"
 )
 
-const suggestionMax = 20
+const suggestionMax = 25
 
 type DrawFn func(x, y int, mainc rune, combc []rune, style theme.Style)
 
 type CompleteBar struct {
 	suggestions []string
 	cur         int
-	active      bool
 	pos         int
 	prefix      string
 }
 
-func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
-	if !c.active || len(c.suggestions) == 0 {
-		return
-	}
+func (bp *BufPane) activeComplete() bool {
+	return bp.mode == "complete"
+}
 
+func (bp *BufPane) DisplayStatus(draw func(x, y int, mainc rune, combc []rune, style theme.Style), w int, theme *theme.Theme) bool {
+	if !bp.activeComplete() {
+		return false
+	}
+	bp.complete.Display(draw, w, theme)
+	return true
+}
+
+func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme) {
 	b := &bytes.Buffer{}
 	for i, s := range c.suggestions {
-		if len(s) >= suggestionMax {
-			s = s[:suggestionMax] + "..."
+		if len(s) > suggestionMax {
+			s = "..." + s[len(s)-suggestionMax:]
 		}
 		if i == c.cur {
 			fmt.Fprintf(b, "[%s]", s)
@@ -61,12 +68,10 @@ func (c *CompleteBar) StartCompletion(suggestions []string, pos int, prefix stri
 	c.cur = 0
 	c.pos = pos
 	c.prefix = prefix
-	c.active = true
 }
 
 func (c *CompleteBar) StopCompletion() {
 	c.suggestions = nil
-	c.active = false
 	c.cur = 0
 }
 
@@ -84,10 +89,6 @@ func (c *CompleteBar) PrevCompletion() {
 	} else {
 		c.cur = len(c.suggestions) - 1
 	}
-}
-
-func (c *CompleteBar) ActiveCompletion() bool {
-	return c.active
 }
 
 func (c *CompleteBar) Suggestion() string {

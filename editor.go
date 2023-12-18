@@ -257,6 +257,23 @@ func (e *Editor) SetMode(m string) error {
 	return nil
 }
 
+func (e *Editor) PushMode(m string) error {
+	e.modeLock.Lock()
+	defer e.modeLock.Unlock()
+	mode, ok := e.modes[m]
+	if !ok {
+		return fmt.Errorf("mode %s does not exist", m)
+	}
+	e.mode.Push(&mode)
+	p := e.ActivePane()
+	if e.infobar.active {
+		e.infobar.cmd.SetMode(m)
+	} else if p != nil {
+		p.SetMode(m)
+	}
+	return nil
+}
+
 func (e *Editor) PopMode() {
 	e.modeLock.Lock()
 	defer e.modeLock.Unlock()
@@ -268,7 +285,6 @@ func (e *Editor) PopMode() {
 	} else if p != nil {
 		p.SetMode(m.Core)
 	}
-	log.Println("pop mode to", m.Core)
 }
 
 func (e *Editor) GetMode() string {
@@ -303,7 +319,6 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		if mev.Buttons() != tcell.ButtonNone && !e.infobar.active {
-			log.Println(mev.Buttons(), tcell.ButtonNone)
 			e.displayLock.Lock()
 			x, y := mev.Position()
 			mev.SetPosition(e.ActiveTab().ActivateXY(e, x, y))
@@ -312,12 +327,13 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		}
 	}
 
+process:
 	action, ok, more := e.mode.Peek().VM.Exec(ev)
-	log.Println(action, ok, more)
 	if !more {
 		e.mode.Peek().VM.Reset()
 		if !ok && e.mode.Size() > 1 {
 			e.PopMode()
+			goto process
 		}
 	}
 	if ok {
@@ -402,15 +418,18 @@ func (e *Editor) Display(fill FillFn, draw DrawFn, cursor CursorFn) {
 
 	if e.curtab >= 0 && e.curtab < len(e.tabs) {
 		e.tabs[e.curtab].Display(draw, cursor, e.theme)
+		e.tabs[e.curtab].ActivePane().DisplayStatus(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+			draw(x, e.h+y-2, mainc, combc, style)
+		}, e.w, e.theme)
 	}
 	e.infobar.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
 		draw(x, e.h+y-1, mainc, combc, style)
 	}, func(x, y int, main bool) {
 		cursor(x, e.h+y-1, main)
 	})
-	// e.complete.Display(func(x, y int, mainc rune, combc []rune, style theme.Style) {
-	// 	draw(x, e.h+y-2, mainc, combc, style)
-	// }, e.w, e.theme)
+	e.infobar.cmd.DisplayStatus(func(x, y int, mainc rune, combc []rune, style theme.Style) {
+		draw(x, e.h+y-2, mainc, combc, style)
+	}, e.w, e.theme)
 }
 
 func (e *Editor) ActivatePane(pane pane.Pane) {

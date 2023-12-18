@@ -389,4 +389,14 @@ var commands = []tclutil.Command{
 		Fn:   (*Editor).SetMode,
 		Doc:  "set-mode <mode>: change the current mode",
 	},
+	{
+		Name: "push-mode",
+		Fn:   (*Editor).PushMode,
+		Doc:  "push-mode <mode>: change the current mode by pushing",
+	},
+	{
+		Name: "pop-mode",
+		Fn:   (*Editor).PopMode,
+		Doc:  "pop-mode: pop the current mode",
+	},
 }

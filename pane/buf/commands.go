@@ -618,9 +618,6 @@ func (bp *BufPane) LspFormat() error {
 // --- Autocompletion ---
 
 func (bp *BufPane) fillCompletion(comp []byte) {
-	if !bp.complete.ActiveCompletion() {
-		return
-	}
 	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
 	bp.Insert(bp.Cursor().Pos, comp[len(bp.complete.prefix):])
 }
@@ -632,7 +629,7 @@ func (bp *BufPane) Complete() bool {
 		return false
 	}
 	bp.complete.StartCompletion(comps, bp.Cursor().Pos, prefix)
-	bp.fillCompletion([]byte(bp.complete.Suggestion()))
+	bp.Insert(bp.Cursor().Pos, []byte(bp.complete.Suggestion())[len(bp.complete.prefix):])
 	return true
 }
 
@@ -647,7 +644,7 @@ func (bp *BufPane) PrevCompletion() {
 }
 
 func (bp *BufPane) CancelCompletion() {
-	if !bp.complete.ActiveCompletion() {
+	if !bp.activeComplete() {
 		return
 	}
 	bp.Remove(bp.complete.pos, bp.Cursor().Pos)
