@@ -115,10 +115,11 @@ func (i *InfoBar) prompt(typ, msg, partial, mode string, cb func(cur string)) (r
 	i.cmd.SetType(typ)
 	i.cmd.Callback = cb
 
+	i.active = true
 	m := i.ed.GetMode()
 	i.ed.MustSetMode(mode)
-	i.active = true
 	i.ed.ActivePane().Unregister(i.ed.interp)
+
 	i.cmd.Register(i.ed.interp)
 
 	i.ed.displayLock.Unlock()
