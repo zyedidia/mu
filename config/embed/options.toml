@@ -2,6 +2,13 @@ theme = "monokai"
 syntax = true
 tabsize = 4
 tabstospaces = true
+charmap = "|  "
+scrollmargin = 3
+hscrollmargin = 1
+linenums = true
+softwrap = false
+mode = "micro"
+clipboard = "external"
 
 [makefile]
 

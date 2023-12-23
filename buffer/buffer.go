@@ -148,7 +148,7 @@ func NewBufferData(r Input, out Output, cfg Config, man *lsp.Manager, redraw cha
 		Exited:     make(chan bool),
 		hisem:      semaphore.NewWeighted(1),
 		refs:       1,
-		Options:    cfg.GetBufferOptions(r.Name(), ftdtct),
+		Options:    opts,
 		redraw:     redraw,
 		parents:    []*Buffer{parent},
 	}

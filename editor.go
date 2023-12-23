@@ -194,24 +194,10 @@ func init() {
 }
 
 func (e *Editor) initClipboard() {
-	switch e.config.GlobalStrOpt("clipboard") {
-	case "external":
-		c, err := clipper.GetClipboard(clipper.Clipboards...)
-		if err == nil {
-			e.clipboard = c
-			return
-		}
-		e.config.SetGlobalOpt("clipboard", "internal")
-		log.Printf("error loading external clipboard: %v\n", err)
-	case "terminal":
-		if e.termclip == nil {
-			e.config.SetGlobalOpt("clipboard", "internal")
-			log.Printf("terminal clipboard is unavailable")
-		}
+	clip := e.config.GlobalStrOpt("clipboard")
+	if err := e.setClipboard(clip); err != nil {
+		e.setClipboard("internal")
 	}
-	c := &clipper.Internal{}
-	c.Init()
-	e.clipboard = c
 }
 
 func (e *Editor) GetClipboard(reg string) ([]byte, error) {

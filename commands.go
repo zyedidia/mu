@@ -218,7 +218,7 @@ func (e *Editor) Run(args []string) error {
 
 func (e *Editor) Opt(name string, val string) error {
 	if v, err := strconv.Atoi(val); err == nil {
-		return e.setOpt(name, v)
+		return e.setOpt(name, int64(v))
 	} else if v, err := parseBoolOpt(val); err == nil {
 		return e.setOpt(name, v)
 	}
@@ -233,13 +233,6 @@ func parseBoolOpt(val string) (bool, error) {
 		return false, nil
 	}
 	return strconv.ParseBool(val)
-}
-
-func (e *Editor) setOpt(name string, val interface{}) error {
-	if e.config.IsGlobalOpt(name) {
-		return e.config.SetGlobalOpt(name, val)
-	}
-	return e.ActivePane().SetOpt(name, val)
 }
 
 func (e *Editor) Get(name string) (string, error) {

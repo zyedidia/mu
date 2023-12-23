@@ -50,6 +50,7 @@ type BufPane struct {
 	scrollmargin       int
 	hscrollmargin      int
 	linenums           bool
+	tabsize            int
 	gutter             int
 
 	complete *CompleteBar
@@ -87,30 +88,27 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 	bp := &BufPane{
 		Buffer: b,
 		vis: &buffer.Visualizer{
-			TabSize: 4,
-			CharMap: map[rune]string{
-				'\t': "|",
-				'\n': " ",
-				' ':  " ",
-			},
+			TabSize: b.IntOpt("tabsize"),
+			CharMap: parseCharMap(b.StrOpt("charmap")),
 		},
+		tabsize:       b.IntOpt("tabsize"),
 		complete:      &CompleteBar{},
-		scrollmargin:  3,
-		hscrollmargin: 1,
+		scrollmargin:  b.IntOpt("scrollmargin"),
+		hscrollmargin: b.IntOpt("hscrollmargin"),
 		gutter:        1,
-		linenums:      true,
-		softwrap:      false,
-		mode:          "micro",
+		linenums:      b.BoolOpt("linenums"),
+		softwrap:      b.BoolOpt("softwrap"),
+		wordwrap:      b.BoolOpt("wordwrap"),
+		mode:          b.StrOpt("mode"),
 		cfg:           cfg,
 		clip:          clip,
 		messager:      msger,
-		Editor:        editor,
 		status:        tcl.NewInterp(),
+		Editor:        editor,
 	}
 	for _, c := range statuscmds {
 		tclutil.Register(bp.status, c.Name, c.Fn, bp, nil, nil)
 	}
-	bp.InitOpts()
 	return bp
 }
 

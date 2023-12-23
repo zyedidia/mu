@@ -1,7 +1,9 @@
 package buffer
 
 import (
+	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
@@ -57,21 +59,16 @@ func (b *BufferData) GetStrOpt(name string) (o string, v bool) {
 	return
 }
 
-func (b *BufferData) GetBoolOpt(name string) (o bool, v bool) {
+func (b *BufferData) IntOpt(name string) int {
 	if opt, ok := b.Options[name]; ok {
-		if bl, ok := opt.(bool); ok {
-			return bl, true
+		if bl, ok := opt.(int64); ok {
+			return int(bl)
 		}
-		log.Printf("error getting option %s: not a bool\n", name)
-		return
 	}
-	log.Printf("error getting option %s: not found\n", name)
-	return
+	return 0
 }
 
-// DefGetBoolOpt is the same as GetBoolOpt but returns the default value if it
-// is not found
-func (b *BufferData) DefGetBoolOpt(name string) bool {
+func (b *BufferData) BoolOpt(name string) bool {
 	if opt, ok := b.Options[name]; ok {
 		if bl, ok := opt.(bool); ok {
 			return bl
@@ -80,7 +77,30 @@ func (b *BufferData) DefGetBoolOpt(name string) bool {
 	return false
 }
 
+func (b *BufferData) StrOpt(name string) string {
+	o, ok := b.GetStrOpt(name)
+	if !ok {
+		return ""
+	}
+	return o
+}
+
+func Opt[T any](b *Buffer, name string) (t T) {
+	if opt, ok := b.Options[name]; ok {
+		if bl, ok := opt.(T); ok {
+			return bl
+		}
+	}
+	return
+}
+
 func (b *BufferData) SetOpt(name string, val interface{}) error {
+	if _, ok := b.Options[name]; !ok {
+		return fmt.Errorf("%s: option not found", name)
+	}
+	if reflect.TypeOf(val) != reflect.TypeOf(b.Options[name]) {
+		return fmt.Errorf("%w: expected %v, got %v", config.ErrTypeMismatch, reflect.TypeOf(b.Options[name]), reflect.TypeOf(val))
+	}
 	b.Options[name] = val
 	return nil
 }
