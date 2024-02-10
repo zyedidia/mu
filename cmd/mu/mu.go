@@ -113,7 +113,7 @@ func main() {
 		}
 	}()
 
-	s.EnableMouse()
+	s.EnableMouse(tcell.MouseDragEvents)
 	s.EnablePaste()
 
 	w, h := s.Size()

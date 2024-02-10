@@ -3,6 +3,7 @@ package buf
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/pkg/completer"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
@@ -446,9 +448,9 @@ func (bp *BufPane) MoveTo(pos int) {
 	bp.vertical = false
 }
 
-func (bp *BufPane) ReselectTo(pos int) {
+func (bp *BufPane) SelectWithModeTo(pos int) {
 	c := bp.Cursor()
-	*c = c.SelectTo(pos)
+	*c = c.SelectWithModeTo(pos, bp.Buffer, isWord)
 	if !bp.vertical {
 		bp.RecalcVX(c)
 	}
@@ -520,32 +522,47 @@ func (bp *BufPane) MouseClick(loc string) error {
 	}
 	line, col := bp.MouseLoc(x, y)
 	off := bp.OffsetAt(line, col)
+	log.Println("HELLO", off)
+
+	if bp.mouse.click && bp.mouse.last != off {
+		bp.mouse.drag = true
+	}
 
 	if bp.mouse.drag {
-		bp.SelectTo(off)
+		bp.messager.Message("DRAG")
+		bp.SelectWithModeTo(off)
 	} else {
-		if time.Since(bp.mouse.release) < mouseClickThreshold {
+		if !bp.mouse.click && bp.mouse.last == off && time.Since(bp.mouse.clicktm) < mouseClickThreshold {
 			if bp.mouse.double {
 				bp.mouse.triple = true
 			} else {
 				bp.mouse.double = true
 			}
 		} else {
+			bp.Cursor().SelectMode(buffer.SelectChar)
 			bp.mouse.double = false
 			bp.mouse.triple = false
 		}
 
 		bp.MoveTo(off)
+		if bp.mouse.triple {
+			bp.Cursor().SelectMode(buffer.SelectLine)
+			bp.SelectWithModeTo(off)
+		} else if bp.mouse.double {
+			bp.Cursor().SelectMode(buffer.SelectWord)
+			bp.SelectWithModeTo(off)
+		}
+
+		bp.mouse.clicktm = time.Now()
+		bp.mouse.click = true
 	}
 
-	bp.mouse.drag = true
+	bp.mouse.last = off
 	return nil
 }
 
 func (bp *BufPane) MouseRelease(loc string) error {
-	if bp.mouse.drag {
-		bp.mouse.release = time.Now()
-	}
+	bp.mouse.click = false
 	bp.mouse.drag = false
 	return nil
 }
@@ -632,7 +649,7 @@ func (bp *BufPane) fillCompletion(comp []byte) {
 }
 
 func (bp *BufPane) Complete() bool {
-	prefix := bp.WordStart()
+	prefix := bp.WordPrefix()
 	comps := completer.FileComplete(prefix, ".")
 	if len(comps) == 0 {
 		return false

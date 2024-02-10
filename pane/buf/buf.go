@@ -76,7 +76,9 @@ type BufPane struct {
 }
 
 type mouseState struct {
-	release time.Time
+	click   bool
+	clicktm time.Time
+	last    int
 	drag    bool
 	double  bool
 	triple  bool
@@ -179,7 +181,7 @@ func (bp *BufPane) Closed() bool {
 	return false
 }
 
-func (bp *BufPane) WordStart() string {
+func (bp *BufPane) WordPrefix() string {
 	start := bp.Cursor()
 	consumed := 0
 	for {
@@ -190,4 +192,16 @@ func (bp *BufPane) WordStart() string {
 		consumed += sz
 	}
 	return string(bp.Slice(start.Pos-consumed, start.Pos))
+}
+
+func (bp *BufPane) WordStart(from int) int {
+	consumed := 0
+	for {
+		r, _, sz := bp.DecodeGraphemeBefore(from - consumed)
+		if !isNotSpace(r) || sz == 0 {
+			break
+		}
+		consumed += sz
+	}
+	return from - consumed
 }

@@ -9,6 +9,12 @@ import (
 	"github.com/zyedidia/mu/config"
 )
 
+const (
+	SelectChar = iota
+	SelectWord
+	SelectLine
+)
+
 type Cursor struct {
 	Pos         int
 	HasSel      bool
@@ -18,6 +24,7 @@ type Cursor struct {
 	Num         int
 	Complete    int
 	CompleteCur int
+	Select      byte
 }
 
 func (b *Buffer) NumCursors() int {
@@ -108,10 +115,51 @@ func (c Cursor) SelectTo(pos int) Cursor {
 	c.Sel[1] = max(c.Orig, pos)
 
 	c.HasSel = c.Sel[0] != c.Sel[1]
-	log.Println(c.Orig, c.Sel)
 
 	c.Pos = pos
 	return c
+}
+
+func (c *Cursor) SelectMode(mode byte) {
+	c.Select = mode
+}
+
+func (c Cursor) SelectWithModeTo(pos int, b *Buffer, wordc func(r rune) bool) Cursor {
+	switch c.Select {
+	case SelectWord:
+		if !c.HasSel {
+			c.Orig = c.WordStart(b, wordc).Pos
+		}
+		c = c.MoveTo(pos)
+		var to Cursor
+		if pos > c.Orig {
+			to = c.WordEnd(b, wordc).Right(b)
+		} else {
+			to = c.WordStart(b, wordc)
+		}
+		c.Sel[0] = min(c.Orig, to.Pos)
+		c.Sel[1] = max(c.Orig, to.Pos)
+		c.HasSel = c.Sel[0] != c.Sel[1]
+		return c
+	case SelectLine:
+		if !c.HasSel {
+			c.Orig = c.LineStart(b).Pos
+		}
+		c = c.MoveTo(pos)
+		var to Cursor
+		if pos > c.Orig {
+			to = c.LineEnd(b).Right(b)
+		} else {
+			to = c.LineStart(b)
+		}
+		log.Println(c.Orig, to.Pos)
+		c.Sel[0] = min(c.Orig, to.Pos)
+		c.Sel[1] = max(c.Orig, to.Pos)
+		c.HasSel = c.Sel[0] != c.Sel[1]
+		return c
+	default:
+		return c.SelectTo(pos)
+	}
 }
 
 func (c Cursor) Clamp(b *Buffer) Cursor {
@@ -252,6 +300,20 @@ func (c Cursor) WordLeft(b *Buffer, wordc func(r rune) bool) Cursor {
 	return c
 }
 
+func (c Cursor) WordStart(b *Buffer, wordc func(r rune) bool) Cursor {
+	from := c.Pos
+	consumed := 0
+	for {
+		r, _, sz := b.DecodeGraphemeBefore(from - consumed)
+		if !wordc(r) || sz == 0 {
+			break
+		}
+		consumed += sz
+	}
+	c.Pos = from - consumed
+	return c
+}
+
 func (c Cursor) WordEnd(b *Buffer, wordc func(r rune) bool) Cursor {
 	p := c.Pos
 	_, _, sz := b.DecodeGraphemeAt(p)
@@ -285,6 +347,30 @@ func (c Cursor) WordEnd(b *Buffer, wordc func(r rune) bool) Cursor {
 
 	c.Pos = p
 	return c
+}
+
+func (c Cursor) LineStart(b *Buffer) Cursor {
+	from := c.Pos
+	for {
+		r, sz := b.DecodeRuneBefore(from)
+		if r == '\n' || sz == 0 {
+			c.Pos = from
+			return c
+		}
+		from -= sz
+	}
+}
+
+func (c Cursor) LineEnd(b *Buffer) Cursor {
+	from := c.Pos
+	for {
+		r, sz := b.DecodeRuneAt(from)
+		if r == '\n' || sz == 0 {
+			c.Pos = from
+			return c
+		}
+		from += sz
+	}
 }
 
 func (b *Buffer) SerializeCursors(fs config.WriteFS, fname string) error {
