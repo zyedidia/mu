@@ -3,6 +3,7 @@ package buffer
 import (
 	"encoding/gob"
 	"fmt"
+	"log"
 	"unicode"
 
 	"github.com/zyedidia/mu/config"
@@ -11,7 +12,7 @@ import (
 type Cursor struct {
 	Pos         int
 	HasSel      bool
-	Orig        [2]int
+	Orig        int
 	Sel         [2]int
 	Vx          int
 	Num         int
@@ -73,7 +74,7 @@ func SpawnCursorAt(pos int) Cursor {
 func SpawnCursorSelect(start, end int) Cursor {
 	return Cursor{
 		HasSel: true,
-		Orig:   [2]int{start, end},
+		Orig:   start,
 		Sel:    [2]int{start, end},
 	}
 }
@@ -101,22 +102,14 @@ func (c Cursor) MoveTo(pos int) Cursor {
 
 func (c Cursor) SelectTo(pos int) Cursor {
 	if !c.HasSel {
-		c.Orig[0] = c.Pos
-		c.Orig[1] = c.Pos
-		c.Sel[0] = c.Pos
-		c.Sel[1] = c.Pos
+		c.Orig = c.Pos
 	}
+	c.Sel[0] = min(c.Orig, pos)
+	c.Sel[1] = max(c.Orig, pos)
 
-	c.HasSel = true
-	if pos < c.Orig[0] {
-		c.Sel[0] = pos
-	} else if pos > c.Orig[1] {
-		c.Sel[1] = pos
-	} else if pos > c.Orig[0] {
-		c.Sel[1] = c.Orig[1]
-	} else if pos < c.Orig[1] {
-		c.Sel[0] = c.Orig[0]
-	}
+	c.HasSel = c.Sel[0] != c.Sel[1]
+	log.Println(c.Orig, c.Sel)
+
 	c.Pos = pos
 	return c
 }
@@ -127,12 +120,24 @@ func (c Cursor) Clamp(b *Buffer) Cursor {
 	if c.HasSel {
 		c.Pos = clamp(c.Pos, 0, sz-1)
 	} else {
-		c.Orig[0] = clamp(c.Orig[0], 0, sz-1)
-		c.Orig[1] = clamp(c.Orig[1], 0, sz-1)
+		c.Orig = clamp(c.Orig, 0, sz-1)
 		c.Sel[0] = clamp(c.Sel[0], 0, sz-1)
 		c.Sel[1] = clamp(c.Sel[1], 0, sz-1)
 	}
 	return c
+}
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+func max(a, b int) int {
+	if b > a {
+		return b
+	}
+	return a
 }
 
 func (c *Cursor) Deselect(idx int) {

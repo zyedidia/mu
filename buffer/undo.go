@@ -62,8 +62,7 @@ func (b *BufferData) edit(start, end int, val []byte) {
 
 	for _, pb := range b.parents {
 		for i, c := range pb.cursors {
-			pb.cursors[i].Orig[0] = move(c.Orig[0], true)
-			pb.cursors[i].Orig[1] = move(c.Orig[1], true)
+			pb.cursors[i].Orig = move(c.Orig, true)
 			pb.cursors[i].Sel[0] = move(c.Sel[0], true)
 			pb.cursors[i].Sel[1] = move(c.Sel[1], true)
 			pb.cursors[i].Pos = move(c.Pos, true)

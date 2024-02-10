@@ -446,6 +446,15 @@ func (bp *BufPane) MoveTo(pos int) {
 	bp.vertical = false
 }
 
+func (bp *BufPane) ReselectTo(pos int) {
+	c := bp.Cursor()
+	*c = c.SelectTo(pos)
+	if !bp.vertical {
+		bp.RecalcVX(c)
+	}
+	bp.vertical = false
+}
+
 func (bp *BufPane) SelectTo(pos int) {
 	c := bp.Cursor()
 	*c = c.SelectTo(pos)
