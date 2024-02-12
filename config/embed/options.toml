@@ -1,3 +1,4 @@
+autoindent = true
 theme = "monokai"
 syntax = true
 tabsize = 4

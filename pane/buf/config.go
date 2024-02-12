@@ -31,6 +31,8 @@ func (bp *BufPane) SetOpt(opt string, val interface{}) error {
 		bp.vis.(*buffer.Visualizer).TabSize = bp.tabsize
 	case "charmap":
 		bp.vis.(*buffer.Visualizer).CharMap = parseCharMap(val.(string))
+	case "autoindent":
+		bp.autoindent = val.(bool)
 	}
 	return nil
 }

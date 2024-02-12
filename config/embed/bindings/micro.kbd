@@ -26,8 +26,8 @@ bindings <- {'ctrl+s', 'save'}
           / {'mousewheelup', 'scroll-up 2'}
           / {'mousewheeldown', 'scroll-down 2'}
           / {'paste', 'all-cursors { insert $0 }'}
-          / {'tab',   'all-cursors { if {[complete]} { push-mode complete } else { insert \\t } }' }
-          / {'enter', 'all-cursors { insert \\n }'}
+          / {'tab',   'all-cursors { if {[complete]} { push-mode complete } else { indent } }' }
+          / {'enter', 'all-cursors { newline }'}
           / {'backspace', 'all-cursors { if { [cursor-has-selection] } { remove-selection } else { remove-to [left [cursor-pos]] } }'}
           / {'delete', 'all-cursors { if { [cursor-has-selection] } { remove-selection } else { remove-to [right [cursor-pos]] } }'}
           / {., 'all-cursors { insert $0 }'}

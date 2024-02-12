@@ -1,6 +1,7 @@
 package buf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/pkg/completer"
@@ -97,6 +99,45 @@ func (bp *BufPane) InsertCmd(val string) {
 	}
 	bp.Buffer.Insert(c.Pos, []byte(val))
 	bp.RecalcVX(bp.Cursor())
+}
+
+func (bp *BufPane) Newline() {
+	bp.InsertCmd("\n")
+	if bp.autoindent {
+		bp.Autoindent()
+	}
+}
+
+func leadingws(b []byte) []byte {
+	i := 0
+	for i < len(b) {
+		r, sz := utf8.DecodeRune(b[i:])
+		if !unicode.IsSpace(r) {
+			return b[0:i]
+		}
+		i += sz
+	}
+	return b[0:i]
+}
+
+func (bp *BufPane) Indent() {
+	bp.InsertCmd("\t")
+}
+
+func (bp *BufPane) Autoindent() {
+	line, _ := bp.LineColAt(bp.Cursor().Pos)
+	if line > 0 {
+		bline := bp.GetLine(line - 1)
+		bp.messager.Message(strconv.Quote(string(leadingws(bline))))
+		bp.Insert(bp.Offset(line, 0), leadingws(bline))
+		switch {
+		case bytes.HasSuffix(bline, []byte{'{'}),
+			bytes.HasSuffix(bline, []byte{'('}),
+			bytes.HasSuffix(bline, []byte{'['}),
+			bytes.HasSuffix(bline, []byte{':'}):
+			bp.Indent()
+		}
+	}
 }
 
 func (bp *BufPane) RemoveRange(from, to int) int {
@@ -731,6 +772,24 @@ var commands = []command{
 		Name:     "insert",
 		Fn:       (*BufPane).InsertCmd,
 		Doc:      "insert-at <text>: insert <text> at the current cursor",
+		Relocate: true,
+	},
+	{
+		Name:     "newline",
+		Fn:       (*BufPane).Newline,
+		Doc:      "newline: insert a newline at the current cursor",
+		Relocate: true,
+	},
+	{
+		Name:     "indent",
+		Fn:       (*BufPane).Indent,
+		Doc:      "indent: increase the current indentation level",
+		Relocate: true,
+	},
+	{
+		Name:     "autoindent",
+		Fn:       (*BufPane).Autoindent,
+		Doc:      "autoindent: automatically indent the current line",
 		Relocate: true,
 	},
 	{
