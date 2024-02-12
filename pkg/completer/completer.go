@@ -9,8 +9,8 @@ import (
 
 func FileComplete(prefix, wd string) (candidates []string) {
 	dslash := ""
-	if strings.HasPrefix(prefix, "./") {
-		dslash = "./"
+	if strings.HasPrefix(prefix, "."+string(os.PathSeparator)) || strings.HasPrefix(prefix, "./") {
+		dslash = "." + string(os.PathSeparator)
 		prefix = prefix[2:]
 	}
 

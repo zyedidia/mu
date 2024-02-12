@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
 	"sort"
 	"sync"
 
@@ -109,7 +108,7 @@ func newEditor(w, h int, clip TermClip, cursor func(string) error) (*Editor, err
 	if err != nil {
 		return nil, err
 	}
-	pm, err := plugin.NewManager(filepath.Join(cfg.ConfigDir()))
+	pm, err := plugin.NewManager(cfg.ConfigDir())
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +158,8 @@ func newEditor(w, h int, clip TermClip, cursor func(string) error) (*Editor, err
 
 	e.Register()
 	e.initClipboard()
+	e.initPlugins()
 	e.SetCursor(e.config.GlobalStrOpt("cursor"))
-	e.plugins.Load()
 	return e, nil
 }
 
@@ -197,10 +196,27 @@ func init() {
 	})
 }
 
+func (e *Editor) initPlugins() {
+	e.plugins.AddPackage("micro", map[string]any{
+		"Editor": func() *Editor {
+			return e
+		},
+	})
+	err := e.plugins.Load()
+	if err != nil {
+		log.Println("error loading plugins:", err)
+	}
+}
+
 func (e *Editor) initClipboard() {
 	clip := e.config.GlobalStrOpt("clipboard")
 	if err := e.setClipboard(clip); err != nil {
-		e.setClipboard("internal")
+		err = e.setClipboard("internal")
+		if err != nil {
+			log.Println("error using internal clipboard:", err)
+		} else {
+			log.Printf("error using %s clipboard: %v\n", clip, err)
+		}
 	}
 }
 

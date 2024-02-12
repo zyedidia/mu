@@ -262,6 +262,16 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 			}
 			ch = '>'
 			style = th.Style(d.Type.String()).Add(theme.AttrReverse)
+		} else if i == 0 {
+			if d, ok := b.GetDiagnosticBelow(l - 1); ok {
+				ch = '^'
+				style = th.Style(d.Type.String()).Add(theme.AttrReverse)
+			}
+		} else if i == len(lines)-1 {
+			if d, ok := b.GetDiagnosticAbove(l - 1); ok {
+				ch = 'v'
+				style = th.Style(d.Type.String()).Add(theme.AttrReverse)
+			}
 		}
 		for x := 0; x < b.gutterWidth(); x++ {
 			draw(x, i, ch, nil, style)

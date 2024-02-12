@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -24,7 +25,8 @@ import (
 )
 
 type State struct {
-	L *lua.LState
+	L    *lua.LState
+	pkgs map[string]*lua.LTable
 }
 
 func NewState(dir string) *State {
@@ -34,6 +36,7 @@ func NewState(dir string) *State {
 	s.L.SetGlobal("import", luar.New(s.L, func(pkg string) *lua.LTable {
 		return s.importPkg(pkg)
 	}))
+	s.pkgs = make(map[string]*lua.LTable)
 	return s
 }
 
@@ -51,9 +54,15 @@ func (s *State) LoadFile(module string, file string, data []byte) error {
 
 // Import allows a lua plugin to import a package
 func (s *State) importPkg(pkg string) *lua.LTable {
+	if p, ok := s.pkgs[pkg]; ok {
+		return p
+	}
+
 	switch pkg {
 	case "fmt":
 		return s.importFmt()
+	case "log":
+		return s.importLog()
 	case "io":
 		return s.importIo()
 	case "io/ioutil", "ioutil":
@@ -89,6 +98,16 @@ func (s *State) importPkg(pkg string) *lua.LTable {
 	}
 }
 
+func (s *State) AddPackage(name string, vals map[string]any) {
+	pkg := s.L.NewTable()
+
+	for k, v := range vals {
+		s.L.SetField(pkg, k, luar.New(s.L, v))
+	}
+
+	s.pkgs[name] = pkg
+}
+
 func (s *State) importFmt() *lua.LTable {
 	pkg := s.L.NewTable()
 
@@ -111,6 +130,16 @@ func (s *State) importFmt() *lua.LTable {
 	s.L.SetField(pkg, "Sscan", luar.New(s.L, fmt.Sscan))
 	s.L.SetField(pkg, "Sscanf", luar.New(s.L, fmt.Sscanf))
 	s.L.SetField(pkg, "Sscanln", luar.New(s.L, fmt.Sscanln))
+
+	return pkg
+}
+
+func (s *State) importLog() *lua.LTable {
+	pkg := s.L.NewTable()
+
+	s.L.SetField(pkg, "Print", luar.New(s.L, log.Print))
+	s.L.SetField(pkg, "Printf", luar.New(s.L, log.Printf))
+	s.L.SetField(pkg, "Println", luar.New(s.L, log.Println))
 
 	return pkg
 }

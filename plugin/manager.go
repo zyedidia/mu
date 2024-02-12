@@ -14,6 +14,15 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+func load(module, file string, lstate *lua.State) error {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	log.Println("loading", file)
+	return lstate.LoadFile(module, file, b)
+}
+
 type Info struct {
 	Name     string
 	Url      string
@@ -47,17 +56,13 @@ func (i *Info) Install(dir string) error {
 
 func (i *Info) Load(dir string, lstate *lua.State) error {
 	init := filepath.Join(dir, i.Name, "init.lua")
-	b, err := os.ReadFile(init)
-	if err != nil {
-		return err
-	}
-	log.Println("loading", init)
-	return lstate.LoadFile(i.Name, init, b)
+	return load(i.Name, init, lstate)
 }
 
 type Manager struct {
 	manifest []Info
 	dir      string
+	base     string
 	lua      *lua.State
 }
 
@@ -74,8 +79,13 @@ func NewManager(dir string) (*Manager, error) {
 	return &Manager{
 		lua:      lua.NewState(dir),
 		dir:      filepath.Join(dir, "plugins"),
+		base:     dir,
 		manifest: manifest,
 	}, nil
+}
+
+func (m *Manager) AddPackage(pkg string, vals map[string]any) {
+	m.lua.AddPackage(pkg, vals)
 }
 
 func (m *Manager) Install(w io.Writer) (err error) {
@@ -100,6 +110,10 @@ func (m *Manager) Load() (err error) {
 				err = e
 			}
 		}
+	}
+	e := load("init", filepath.Join(m.base, "init.lua"), m.lua)
+	if e != nil {
+		err = e
 	}
 	return err
 }

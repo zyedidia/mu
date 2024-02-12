@@ -1,6 +1,10 @@
 package buffer
 
-import "go.lsp.dev/protocol"
+import (
+	"sort"
+
+	"go.lsp.dev/protocol"
+)
 
 type DiagnosticType byte
 
@@ -28,6 +32,30 @@ type Diagnostic struct {
 func (b *Buffer) GetDiagnosticAt(line int) (Diagnostic, bool) {
 	for _, d := range b.Diagnostics {
 		if d.Line == line {
+			return d, true
+		}
+	}
+	return Diagnostic{}, false
+}
+
+func (b *Buffer) GetDiagnosticBelow(line int) (Diagnostic, bool) {
+	sort.Slice(b.Diagnostics, func(i, j int) bool {
+		return b.Diagnostics[i].Line > b.Diagnostics[i].Line
+	})
+	for _, d := range b.Diagnostics {
+		if d.Line < line {
+			return d, true
+		}
+	}
+	return Diagnostic{}, false
+}
+
+func (b *Buffer) GetDiagnosticAbove(line int) (Diagnostic, bool) {
+	sort.Slice(b.Diagnostics, func(i, j int) bool {
+		return b.Diagnostics[i].Line < b.Diagnostics[i].Line
+	})
+	for _, d := range b.Diagnostics {
+		if d.Line > line {
 			return d, true
 		}
 	}
