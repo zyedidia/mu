@@ -12,6 +12,7 @@ import (
 var globals = map[string]bool{
 	"theme":     true,
 	"clipboard": true,
+	"cursor":    true,
 }
 
 var verify = map[string]func(interface{}) error{

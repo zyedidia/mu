@@ -118,11 +118,33 @@ func main() {
 
 	w, h := s.Size()
 
+	setcursor := func(sstyle string) error {
+		var style tcell.CursorStyle
+		switch sstyle {
+		case "block":
+			style = tcell.CursorStyleSteadyBlock
+		case "blinking-block":
+			style = tcell.CursorStyleBlinkingBlock
+		case "bar":
+			style = tcell.CursorStyleSteadyBar
+		case "blinking-bar":
+			style = tcell.CursorStyleBlinkingBar
+		case "underline":
+			style = tcell.CursorStyleSteadyUnderline
+		case "blinking-underline":
+			style = tcell.CursorStyleBlinkingUnderline
+		default:
+			return fmt.Errorf("%s: invalid cursor style", sstyle)
+		}
+		s.SetCursorStyle(style)
+		return nil
+	}
+
 	var ed *mu.Editor
 	if len(args) > 0 {
-		ed, err = mu.NewEditorFromPath(args[0], w, h, s)
+		ed, err = mu.NewEditorFromPath(args[0], w, h, s, setcursor)
 	} else {
-		ed, err = mu.NewEditor(w, h, s)
+		ed, err = mu.NewEditor(w, h, s, setcursor)
 	}
 	if err != nil {
 		s.Fini()

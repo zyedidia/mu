@@ -23,6 +23,13 @@ func (e *Editor) setOpt(name string, val interface{}) error {
 			if err := e.setClipboard(val.(string)); err != nil {
 				return err
 			}
+		case "cursor":
+			if e.SetCursor == nil {
+				return fmt.Errorf("unable to set cursor style")
+			}
+			if err := e.SetCursor(val.(string)); err != nil {
+				return err
+			}
 		}
 		return nil
 	}

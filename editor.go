@@ -67,6 +67,8 @@ type Editor struct {
 	w, h    int
 	infobar *InfoBar
 
+	SetCursor func(string) error
+
 	Redraw  chan struct{}
 	Errors  chan error
 	Suspend chan func()
@@ -89,7 +91,7 @@ func loadBindings(cfg *config.ConfigFS, modes ...string) (map[string]kbd.Config,
 	return modemap, nil
 }
 
-func newEditor(w, h int, clip TermClip) (*Editor, error) {
+func newEditor(w, h int, clip TermClip, cursor func(string) error) (*Editor, error) {
 	cfg := config.NewConfigFS(config.DefaultConfigDir(), "")
 
 	interp := tcl.NewInterp()
@@ -112,19 +114,20 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 		return nil, err
 	}
 	e := &Editor{
-		interp:   interp,
-		plugins:  pm,
-		modes:    modes,
-		config:   cfg,
-		theme:    th,
-		termclip: clip,
-		Redraw:   redraw,
-		w:        w,
-		h:        h,
-		log:      buffer.NewNamedEmptyBuffer("log", cfg, nil, redraw),
-		Errors:   make(chan error, 16),
-		Suspend:  make(chan func(), 16),
-		Resume:   make(chan struct{}, 1),
+		interp:    interp,
+		plugins:   pm,
+		modes:     modes,
+		config:    cfg,
+		theme:     th,
+		termclip:  clip,
+		Redraw:    redraw,
+		w:         w,
+		h:         h,
+		log:       buffer.NewNamedEmptyBuffer("log", cfg, nil, redraw),
+		SetCursor: cursor,
+		Errors:    make(chan error, 16),
+		Suspend:   make(chan func(), 16),
+		Resume:    make(chan struct{}, 1),
 	}
 	e.infobar = NewInfoBar(buffer.NewNamedEmptyBuffer("command", cfg, nil, redraw), e)
 
@@ -156,12 +159,13 @@ func newEditor(w, h int, clip TermClip) (*Editor, error) {
 
 	e.Register()
 	e.initClipboard()
+	e.SetCursor(e.config.GlobalStrOpt("cursor"))
 	e.plugins.Load()
 	return e, nil
 }
 
-func NewEditor(w, h int, clip TermClip) (*Editor, error) {
-	e, err := newEditor(w, h, clip)
+func NewEditor(w, h int, clip TermClip, cursor func(string) error) (*Editor, error) {
+	e, err := newEditor(w, h, clip, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -169,8 +173,8 @@ func NewEditor(w, h int, clip TermClip) (*Editor, error) {
 	return e, nil
 }
 
-func NewEditorFromPath(path string, w, h int, clip TermClip) (*Editor, error) {
-	e, err := newEditor(w, h, clip)
+func NewEditorFromPath(path string, w, h int, clip TermClip, cursor func(string) error) (*Editor, error) {
+	e, err := newEditor(w, h, clip, cursor)
 	if err != nil {
 		return nil, err
 	}
