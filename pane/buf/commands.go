@@ -3,7 +3,6 @@ package buf
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -522,14 +521,12 @@ func (bp *BufPane) MouseClick(loc string) error {
 	}
 	line, col := bp.MouseLoc(x, y)
 	off := bp.OffsetAt(line, col)
-	log.Println("HELLO", off)
 
 	if bp.mouse.click && bp.mouse.last != off {
 		bp.mouse.drag = true
 	}
 
 	if bp.mouse.drag {
-		bp.messager.Message("DRAG")
 		bp.SelectWithModeTo(off)
 	} else {
 		if !bp.mouse.click && bp.mouse.last == off && time.Since(bp.mouse.clicktm) < mouseClickThreshold {

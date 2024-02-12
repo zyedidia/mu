@@ -1,5 +1,5 @@
 module version
 
-go 1.21.0
+go 1.18
 
 require github.com/blang/semver v3.5.1+incompatible

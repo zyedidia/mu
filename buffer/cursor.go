@@ -18,7 +18,7 @@ const (
 type Cursor struct {
 	Pos         int
 	HasSel      bool
-	Orig        int
+	Orig        [2]int
 	Sel         [2]int
 	Vx          int
 	Num         int
@@ -81,7 +81,7 @@ func SpawnCursorAt(pos int) Cursor {
 func SpawnCursorSelect(start, end int) Cursor {
 	return Cursor{
 		HasSel: true,
-		Orig:   start,
+		Orig:   [2]int{start, start},
 		Sel:    [2]int{start, end},
 	}
 }
@@ -109,10 +109,11 @@ func (c Cursor) MoveTo(pos int) Cursor {
 
 func (c Cursor) SelectTo(pos int) Cursor {
 	if !c.HasSel {
-		c.Orig = c.Pos
+		c.Orig[0] = c.Pos
+		c.Orig[1] = c.Pos
 	}
-	c.Sel[0] = min(c.Orig, pos)
-	c.Sel[1] = max(c.Orig, pos)
+	c.Sel[0] = min(c.Orig[0], pos)
+	c.Sel[1] = max(c.Orig[1], pos)
 
 	c.HasSel = c.Sel[0] != c.Sel[1]
 
@@ -128,33 +129,35 @@ func (c Cursor) SelectWithModeTo(pos int, b *Buffer, wordc func(r rune) bool) Cu
 	switch c.Select {
 	case SelectWord:
 		if !c.HasSel {
-			c.Orig = c.WordStart(b, wordc).Pos
+			c.Orig[0] = c.wordStartCur(b, wordc).Pos
+			c.Orig[1] = c.wordEndCur(b, wordc).Right(b).Pos
 		}
 		c = c.MoveTo(pos)
 		var to Cursor
-		if pos > c.Orig {
-			to = c.WordEnd(b, wordc).Right(b)
+		if pos > c.Orig[0] {
+			to = c.wordEndCur(b, wordc).Right(b)
 		} else {
-			to = c.WordStart(b, wordc)
+			to = c.wordStartCur(b, wordc)
 		}
-		c.Sel[0] = min(c.Orig, to.Pos)
-		c.Sel[1] = max(c.Orig, to.Pos)
+		c.Sel[0] = min(c.Orig[0], to.Pos)
+		c.Sel[1] = max(c.Orig[1], to.Pos)
 		c.HasSel = c.Sel[0] != c.Sel[1]
 		return c
 	case SelectLine:
 		if !c.HasSel {
-			c.Orig = c.LineStart(b).Pos
+			c.Orig[0] = c.LineStart(b).Pos
+			c.Orig[1] = c.LineEnd(b).Right(b).Pos
 		}
 		c = c.MoveTo(pos)
 		var to Cursor
-		if pos > c.Orig {
+		if pos > c.Orig[0] {
 			to = c.LineEnd(b).Right(b)
 		} else {
 			to = c.LineStart(b)
 		}
 		log.Println(c.Orig, to.Pos)
-		c.Sel[0] = min(c.Orig, to.Pos)
-		c.Sel[1] = max(c.Orig, to.Pos)
+		c.Sel[0] = min(c.Orig[0], to.Pos)
+		c.Sel[1] = max(c.Orig[1], to.Pos)
 		c.HasSel = c.Sel[0] != c.Sel[1]
 		return c
 	default:
@@ -168,7 +171,8 @@ func (c Cursor) Clamp(b *Buffer) Cursor {
 	if c.HasSel {
 		c.Pos = clamp(c.Pos, 0, sz-1)
 	} else {
-		c.Orig = clamp(c.Orig, 0, sz-1)
+		c.Orig[0] = clamp(c.Orig[0], 0, sz-1)
+		c.Orig[1] = clamp(c.Orig[1], 0, sz-1)
 		c.Sel[0] = clamp(c.Sel[0], 0, sz-1)
 		c.Sel[1] = clamp(c.Sel[1], 0, sz-1)
 	}
@@ -300,6 +304,14 @@ func (c Cursor) WordLeft(b *Buffer, wordc func(r rune) bool) Cursor {
 	return c
 }
 
+func (c Cursor) wordStartCur(b *Buffer, wordc func(r rune) bool) Cursor {
+	r, _, _ := b.DecodeGraphemeAt(c.Pos)
+	if !unicode.IsSpace(r) && !wordc(r) {
+		return c
+	}
+	return c.WordStart(b, wordc)
+}
+
 func (c Cursor) WordStart(b *Buffer, wordc func(r rune) bool) Cursor {
 	from := c.Pos
 	consumed := 0
@@ -312,6 +324,18 @@ func (c Cursor) WordStart(b *Buffer, wordc func(r rune) bool) Cursor {
 	}
 	c.Pos = from - consumed
 	return c
+}
+
+func (c Cursor) wordEndCur(b *Buffer, wordc func(r rune) bool) Cursor {
+	r, _, _ := b.DecodeGraphemeAt(c.Pos)
+	if !unicode.IsSpace(r) && !wordc(r) {
+		return c
+	}
+	r, _, _ = b.DecodeGraphemeAt(c.Right(b).Pos)
+	if !wordc(r) {
+		return c
+	}
+	return c.WordEnd(b, wordc)
 }
 
 func (c Cursor) WordEnd(b *Buffer, wordc func(r rune) bool) Cursor {
