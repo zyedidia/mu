@@ -128,7 +128,6 @@ func (bp *BufPane) Autoindent() {
 	line, _ := bp.LineColAt(bp.Cursor().Pos)
 	if line > 0 {
 		bline := bp.GetLine(line - 1)
-		bp.messager.Message(strconv.Quote(string(leadingws(bline))))
 		bp.Insert(bp.Offset(line, 0), leadingws(bline))
 		switch {
 		case bytes.HasSuffix(bline, []byte{'{'}),

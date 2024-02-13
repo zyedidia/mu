@@ -1,36 +1,82 @@
-default:
-    fg: "#C5C8C6"
-    bg: "#1D1F21"
+color-column:
+  fg: '#2d2f31'
+  bg: '#1d1f21'
 comment:
-    fg: "#7C7C7C"
-    bg: "#1D1F21"
+  fg: '#7c7c7c'
+  bg: '#1d1f21'
 constant:
-    fg: "#FF73FD"
-    bg: "#1D1F21"
+  fg: '#ff73fd'
+  bg: '#1d1f21'
 constant.string:
-    fg: "#A8FF60"
-    bg: "#1D1F21"
-keyword:
-    fg: "#96CBFE"
-    bg: "#1D1F21"
-preproc:
-    fg: "#62B1FE"
-    bg: "#1D1F21"
-type:
-    fg: "#C6C5FE"
-    bg: "#1D1F21"
-special:
-    fg: "#A6E22E"
-    bg: "#1D1F21"
-underlined:
-    fg: "#D33682"
-    bg: "#1D1F21"
-    attr: ["underline"]
+  fg: '#a8ff60'
+  bg: '#1d1f21'
+current-line-number:
+  fg: '#656866'
+  bg: '#1d1f21'
+cursor-line:
+  fg: '#2d2f31'
+  bg: '#1d1f21'
+default:
+  fg: '#c5c8c6'
+  bg: '#1d1f21'
+diff-added:
+  fg: '#00af00'
+  bg: '#1d1f21'
+diff-deleted:
+  fg: '#d70000'
+  bg: '#1d1f21'
+diff-modified:
+  fg: '#ffaf00'
+  bg: '#1d1f21'
 error:
-    fg: "#FF4444"
-    bg: "#1D1F21"
-    attr: ["bold"]
+  fg: '#ff4444'
+  bg: '#1d1f21'
+  attr:
+  - bold
+function:
+  fg: '#a6e22e'
+  bg: '#1d1f21'
+gutter-error:
+  fg: '#ff4444'
+  bg: '#1d1f21'
+gutter-warning:
+  fg: '#eeee77'
+  bg: '#1d1f21'
+hidden-char:
+  fg: '#505050'
+  bg: '#1d1f21'
+hlsearch:
+  fg: '#000000'
+  bg: '#b4ec85'
+keyword:
+  fg: '#96cbfe'
+  bg: '#1d1f21'
+line-number:
+  fg: '#656866'
+  bg: '#232526'
+preproc:
+  fg: '#62b1fe'
+  bg: '#1d1f21'
+special:
+  fg: '#a6e22e'
+  bg: '#1d1f21'
+statusline:
+  fg: '#1d1f21'
+  bg: '#c5c8c6'
+tabbar:
+  fg: '#1d1f21'
+  bg: '#c5c8c6'
 todo:
-    fg: "#FF8844"
-    bg: "#1D1F21"
-    attr: ["bold"]
+  fg: '#ff8844'
+  bg: '#1d1f21'
+  attr:
+  - bold
+type:
+  fg: '#c6c5fe'
+  bg: '#1d1f21'
+type.extended:
+  fg: '#-00001'
+  bg: '#1d1f21'
+underlined:
+  fg: '#d33682'
+  bg: '#1d1f21'

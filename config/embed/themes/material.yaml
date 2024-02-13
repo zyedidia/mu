@@ -1,0 +1,93 @@
+color-column:
+  fg: '#263238'
+  bg: '#263238'
+comment:
+  fg: '#4f6875'
+  bg: '#263238'
+constant:
+  fg: '#f07178'
+  bg: '#263238'
+constant.number:
+  fg: '#f78c6a'
+  bg: '#263238'
+constant.specialChar:
+  fg: '#89ddf3'
+  bg: '#263238'
+constant.string:
+  fg: '#c3e88d'
+  bg: '#263238'
+current-line-number:
+  fg: '#80deea'
+  bg: '#263238'
+cursor-line:
+  fg: '#283942'
+  bg: '#263238'
+default:
+  fg: '#eeffff'
+  bg: '#263238'
+diff-added:
+  fg: '#00af00'
+  bg: '#263238'
+diff-deleted:
+  fg: '#d70000'
+  bg: '#263238'
+diff-modified:
+  fg: '#ffaf00'
+  bg: '#263238'
+divider:
+  fg: '#263238'
+  bg: '#80deea'
+error:
+  fg: '#263238'
+  bg: '#f07178'
+  attr:
+  - bold
+function:
+  fg: '#c792ea'
+  bg: '#263238'
+gutter-error:
+  fg: '#eeffff'
+  bg: '#f07178'
+gutter-warning:
+  fg: '#eeffff'
+  bg: '#fff176'
+hidden-char:
+  fg: '#505050'
+  bg: '#263238'
+hlsearch:
+  fg: '#ffffff'
+  bg: '#546e7a'
+identifier.macro:
+  fg: '#ffcb6b'
+  bg: '#263238'
+keyword:
+  fg: '#c792ea'
+  bg: '#263238'
+line-number:
+  fg: '#656866'
+  bg: '#283942'
+preproc:
+  fg: '#c792ea'
+  bg: '#263238'
+special:
+  fg: '#c792ea'
+  bg: '#263238'
+statusline:
+  fg: '#80deea'
+  bg: '#3b4d56'
+tabbar:
+  fg: '#80deea'
+  bg: '#3b4d56'
+todo:
+  fg: '#c792ea'
+  bg: '#263238'
+  attr:
+  - bold
+type:
+  fg: '#ffcb6b'
+  bg: '#263238'
+underlined:
+  fg: '#eeffff'
+  bg: '#263238'
+  attr:
+  - underline

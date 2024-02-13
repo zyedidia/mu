@@ -52,7 +52,6 @@ func (t *Theme) Style(group string) Style {
 
 	st := t.def
 	parts := strings.Split(group, ":")
-	fg := false
 
 	for _, p := range parts {
 		if r, ok := t.rules[p]; ok {
@@ -62,11 +61,7 @@ func (t *Theme) Style(group string) Style {
 		} else {
 			i := strings.LastIndexByte(p, '.')
 			if i == -1 {
-				if fg {
-					st.Bg = NewNamedColor(p)
-				} else {
-					st.Fg = NewNamedColor(p)
-				}
+				continue
 			} else {
 				st = t.Style(group[:i])
 			}
