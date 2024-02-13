@@ -86,11 +86,11 @@ type ColorSegment struct {
 var parseReRaw = `\{\{[a-z0-9:_-]+\}\}`
 var parseRe = regexp.MustCompile(`(?i)` + parseReRaw)
 
-func (th *Theme) ColorString(v string) []ColorSegment {
+func (th *Theme) ColorString(v string, defstyle Style) []ColorSegment {
 	matches := parseRe.FindAllStringIndex(v, -1)
 	if len(matches) == 0 {
 		return []ColorSegment{{
-			Style: th.Default().Add(AttrReverse),
+			Style: defstyle,
 			Text:  v,
 		}}
 	}
@@ -117,4 +117,9 @@ func (th *Theme) ColorString(v string) []ColorSegment {
 	})
 
 	return segments
+}
+
+func (th *Theme) HasStyle(group string) bool {
+	_, ok := th.rules[group]
+	return ok
 }

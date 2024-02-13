@@ -685,8 +685,11 @@ func (bp *BufPane) fillCompletion(comp []byte) {
 	bp.Insert(bp.Cursor().Pos, comp[len(bp.complete.prefix):])
 }
 
-func (bp *BufPane) Complete() bool {
+func (bp *BufPane) Complete(allowEmpty bool) bool {
 	prefix := bp.WordPrefix()
+	if !allowEmpty && prefix == "" {
+		return false
+	}
 	comps := completer.FileComplete(prefix, ".")
 	if len(comps) == 0 {
 		return false
@@ -1122,7 +1125,7 @@ var commands = []command{
 	{
 		Name: "complete",
 		Fn:   (*BufPane).Complete,
-		Doc:  "complete: make an autocompletion suggestion",
+		Doc:  "complete <allow-empty>: make an autocompletion suggestion; allow-empty specifies whether the autocomplete may provide suggestions even without any input",
 	},
 	{
 		Name: "next-completion",

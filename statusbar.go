@@ -19,7 +19,11 @@ func NewStatusBar(e *Editor, p pane.Pane) *StatusBar {
 
 func (s *StatusBar) Display(draw DrawFn, w int, th *theme.Theme) {
 	l, r := s.pane.Status()
-	leftseg, rightseg := th.ColorString(l), th.ColorString(r)
+	def := th.Default()
+	if th.HasStyle("statusline") {
+		def = th.Style("statusline")
+	}
+	leftseg, rightseg := th.ColorString(l, def), th.ColorString(r, def)
 
 	x := 0
 	var style theme.Style

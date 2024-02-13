@@ -58,6 +58,8 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 
 			for i := range args {
 				switch t.In(i + 1).Kind() {
+				case reflect.Bool:
+					argv = append(argv, reflect.ValueOf(args[i].AsBool()))
 				case reflect.String:
 					argv = append(argv, reflect.ValueOf(args[i].AsString()))
 				case reflect.Int:
