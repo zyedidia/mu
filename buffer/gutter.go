@@ -51,6 +51,9 @@ func (b *Buffer) GetDiagnosticBelow(line int) (Diagnostic, bool) {
 }
 
 func (b *Buffer) GetDiagnosticAbove(line int) (Diagnostic, bool) {
+	if line < 0 {
+		return Diagnostic{}, false
+	}
 	sort.Slice(b.Diagnostics, func(i, j int) bool {
 		return b.Diagnostics[i].Line < b.Diagnostics[i].Line
 	})
