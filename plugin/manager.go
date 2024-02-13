@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/zyedidia/mu/lua"
+	"github.com/zyedidia/mu/pkg/shell"
 	"gopkg.in/yaml.v2"
 )
 
@@ -48,10 +48,12 @@ func (i *Info) Install(dir string) error {
 		return nil
 	}
 
-	_, err := git.PlainClone(filepath.Join(dir, i.Name), false, &git.CloneOptions{
-		URL: i.Url,
-	})
-	return err
+	stderr := &bytes.Buffer{}
+	err := shell.RunWith(fmt.Sprintf("git clone %s %s", i.Url, filepath.Join(dir, i.Name)), nil, io.Discard, stderr, false)
+	if err != nil {
+		return fmt.Errorf("failed to clone: %s", stderr.String())
+	}
+	return nil
 }
 
 func (i *Info) Load(dir string, lstate *lua.State) error {
