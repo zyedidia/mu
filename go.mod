@@ -9,6 +9,7 @@ require (
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
 	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
+	github.com/mattn/go-runewidth v0.0.15
 	github.com/micro-editor/tcell/v2 v2.2.2-0.20240212075734-20b75e27dba7
 	github.com/pelletier/go-toml v1.9.5
 	github.com/yuin/gopher-lua v1.1.0
@@ -40,7 +41,6 @@ require (
 	github.com/kr/pty v1.1.8 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect

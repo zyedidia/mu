@@ -14,6 +14,7 @@ import (
 
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/pkg/completer"
+	"github.com/zyedidia/mu/pkg/format"
 	"github.com/zyedidia/mu/pkg/output"
 	"github.com/zyedidia/mu/pkg/tclutil"
 	"go.lsp.dev/protocol"
@@ -91,18 +92,22 @@ func (bp *BufPane) InsertAt(pos int, val string) {
 	bp.RecalcVX(bp.Cursor())
 }
 
-func (bp *BufPane) InsertCmd(val string) {
+func (bp *BufPane) InsertString(val string) {
+	bp.InsertBytes([]byte(val))
+}
+
+func (bp *BufPane) InsertBytes(val []byte) {
 	c := bp.Cursor()
 	if c.HasSelection() {
 		bp.Buffer.Remove(c.Sel[0], c.Sel[1])
 		c.Deselect(0)
 	}
-	bp.Buffer.Insert(c.Pos, []byte(val))
+	bp.Buffer.Insert(c.Pos, val)
 	bp.RecalcVX(bp.Cursor())
 }
 
 func (bp *BufPane) Newline() {
-	bp.InsertCmd("\n")
+	bp.InsertString("\n")
 	if bp.autoindent {
 		bp.Autoindent()
 	}
@@ -121,7 +126,7 @@ func leadingws(b []byte) []byte {
 }
 
 func (bp *BufPane) Indent() {
-	bp.InsertCmd("\t")
+	bp.InsertString("\t")
 }
 
 func (bp *BufPane) Autoindent() {
@@ -194,6 +199,15 @@ func (bp *BufPane) Copy() error {
 		return bp.clip.SetClipboard("clipboard", bp.Cursor().Selection(bp.Buffer))
 	}
 	return nil
+}
+
+func (bp *BufPane) WordWrap() {
+	if bp.Cursor().HasSelection() {
+		sel := bp.Cursor().Selection(bp.Buffer)
+		wrapped := format.WrapWords(sel, 80)
+		bp.InsertBytes(wrapped)
+		bp.InsertBytes([]byte{'\n'})
+	}
 }
 
 // --- Reading ---
@@ -772,7 +786,7 @@ var commands = []command{
 	},
 	{
 		Name:     "insert",
-		Fn:       (*BufPane).InsertCmd,
+		Fn:       (*BufPane).InsertString,
 		Doc:      "insert-at <text>: insert <text> at the current cursor",
 		Relocate: true,
 	},
@@ -1141,6 +1155,11 @@ var commands = []command{
 		Name: "cancel-completion",
 		Fn:   (*BufPane).CancelCompletion,
 		Doc:  "cancel-completion: cancel the current completion",
+	},
+	{
+		Name: "word-wrap",
+		Fn:   (*BufPane).WordWrap,
+		Doc:  "word-wrap: word-wrap the current selection",
 	},
 }
 
