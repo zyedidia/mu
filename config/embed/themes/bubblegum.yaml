@@ -13,9 +13,8 @@ constant.number:
 constant.string:
   fg: '#af8700'
   bg: '#ffffff'
-cursor-line:
-  fg: '#e4e4e4'
-  bg: '#ffffff'
+cursorline:
+  bg: '#e4e4e4'
 default:
   fg: '#626262'
   bg: '#ffffff'

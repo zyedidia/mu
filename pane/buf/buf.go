@@ -46,6 +46,7 @@ type BufPane struct {
 	stpos, stcol  int
 	width, height int
 
+	cursorline         bool
 	autoindent         bool
 	softwrap, wordwrap bool
 	scrollmargin       int
@@ -95,7 +96,8 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 			CharMap: parseCharMap(b.StrOpt("charmap")),
 		},
 		tabsize:       b.IntOpt("tabsize"),
-		autoindent:    true,
+		autoindent:    b.BoolOpt("autoindent"),
+		cursorline:    b.BoolOpt("cursorline"),
 		complete:      &CompleteBar{},
 		scrollmargin:  b.IntOpt("scrollmargin"),
 		hscrollmargin: b.IntOpt("hscrollmargin"),

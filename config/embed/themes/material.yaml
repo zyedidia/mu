@@ -19,9 +19,8 @@ constant.string:
 current-line-number:
   fg: '#80deea'
   bg: '#263238'
-cursor-line:
-  fg: '#283942'
-  bg: '#263238'
+cursorline:
+  bg: '#283942'
 default:
   fg: '#eeffff'
   bg: '#263238'

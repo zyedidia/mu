@@ -618,6 +618,11 @@ func (bp *BufPane) MouseRelease(loc string) error {
 	return nil
 }
 
+func (bp *BufPane) SpawnCursor(at int) {
+	bp.Buffer.SpawnCursor(at)
+	bp.RecalcVX(bp.Cursor())
+}
+
 // --- Locations ---
 
 func (bp *BufPane) LineCol(pos int) []int {

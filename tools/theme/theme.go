@@ -87,6 +87,8 @@ func main() {
 				class = "keyword"
 			case "identifier":
 				continue
+			case "cursor-line":
+				class = "cursorline"
 			}
 			if strings.Contains(class, "symbol") {
 				continue
@@ -95,6 +97,12 @@ func main() {
 			if class == "special" {
 				// also add function
 				th["function"] = parseOldStyle(style)
+			}
+			if class == "cursorline" {
+				th["cursorline"] = theme.Style{
+					Fg: th["cursorline"].Fg,
+					Bg: th["cursorline"].Fg,
+				}
 			}
 		}
 	}

@@ -13,9 +13,8 @@ constant.specialChar:
 current-line-number:
   fg: '#586e75'
   bg: '#002833'
-cursor-line:
-  fg: '#003541'
-  bg: '#002833'
+cursorline:
+  bg: '#003541'
 default:
   fg: '#839496'
   bg: '#002833'

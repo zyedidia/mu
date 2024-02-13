@@ -24,9 +24,8 @@ current-line-number:
   bg: '#f0f0f0'
   attr:
   - bold
-cursor-line:
-  fg: '#e6e6e6'
-  bg: '#f0f0f0'
+cursorline:
+  bg: '#e6e6e6'
 default:
   fg: '#000000'
   bg: '#f0f0f0'

@@ -33,6 +33,8 @@ func (bp *BufPane) SetOpt(opt string, val interface{}) error {
 		bp.vis.(*buffer.Visualizer).CharMap = parseCharMap(val.(string))
 	case "autoindent":
 		bp.autoindent = val.(bool)
+	case "cursorline":
+		bp.cursorline = val.(bool)
 	}
 	return nil
 }

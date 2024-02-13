@@ -55,3 +55,8 @@ statusline:
 hidden-char:
     fg: "#505050"
     bg: 233
+cursorline:
+    bg: 234
+current-line-number:
+    fg: 208
+    bg: 233

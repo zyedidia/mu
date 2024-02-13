@@ -202,10 +202,23 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 	}
 	gutter := b.gutterWidth() + linewid
 
+	cursorline := th.Style("cursorline")
+	cursorlines := make(map[int]bool)
+
+	if b.cursorline {
+		for _, c := range b.Cursors() {
+			line, _ := b.LineColAt(c.Pos)
+			cursorlines[line] = true
+		}
+	}
+
 	b.Buffer.RenderForward(buffer.RenderTracker{
-		Draw: func(vx, vy int, mainc rune, combc []rune, style theme.Style) {
+		Draw: func(bx, by, vx, vy int, mainc rune, combc []rune, style theme.Style) {
 			if gutter+vx-b.stcol >= b.width || vy >= b.height {
 				return
+			}
+			if cursorlines[by] {
+				style.Bg = cursorline.Bg
 			}
 			draw(gutter+vx-b.stcol, vy, mainc, combc, style)
 		},
@@ -223,6 +236,17 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		},
 	}, b.bufferWidth(), b.height, b.stpos, b.vis, b.softwrap, b.wordwrap, th)
 
+	lnumstyle := func(l int) theme.Style {
+		style := th.Style("line-number")
+		if !th.HasStyle("current-line-number") {
+			return style
+		}
+		if cursorlines[l] {
+			style = th.Style("current-line-number")
+		}
+		return style
+	}
+
 	if b.linenums {
 		strfmt := fmt.Sprintf("%%%dd ", linewid-1)
 		for i, l := range lines {
@@ -237,7 +261,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 
 			x := b.gutterWidth() // start after gutter
 			for _, c := range ls {
-				draw(x, i, c, nil, th.Style("line-number"))
+				draw(x, i, c, nil, lnumstyle(l-1))
 				x++
 			}
 		}
@@ -253,9 +277,12 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		b.messager.ClearDiagnostic()
 	}
 	for i, l := range lines {
+		if l == 0 {
+			break
+		}
 		d, ok := b.GetDiagnosticAt(l - 1)
 		ch := ' '
-		style := th.Style("line-number")
+		style := lnumstyle(l - 1)
 		if ok {
 			if d.Line == cline && b.messager != nil {
 				b.messager.DiagnosticMessage(d.Text)

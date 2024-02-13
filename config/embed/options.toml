@@ -9,8 +9,10 @@ scrollmargin = 3
 hscrollmargin = 1
 linenums = true
 softwrap = false
+wordwrap = false
 mode = "micro"
 clipboard = "external"
+cursorline = true
 
 [makefile]
 

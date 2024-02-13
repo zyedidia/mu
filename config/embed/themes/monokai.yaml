@@ -50,8 +50,8 @@ line-number:
     fg: "#AAAAAA"
     bg: "#323232"
 statusline:
-    fg: "#F8F8F2"
-    bg: "#282828"
+    fg: "#282828"
+    bg: "#F8F8F2"
 hidden-char:
     fg: "#505050"
     bg: "#282828"

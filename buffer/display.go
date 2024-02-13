@@ -16,7 +16,7 @@ import (
 // and indicates the styling, and Track is used to keep track of conversions
 // between buffer locations and visual locations.
 type RenderTracker struct {
-	Draw  func(vx, vy int, mainc rune, combc []rune, style theme.Style)
+	Draw  func(bx, by, vx, vy int, mainc rune, combc []rune, style theme.Style)
 	Track func(off, bx, by, vx, vy int) bool
 }
 
@@ -127,7 +127,7 @@ func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, di
 			if _, ok := b.GetDiagnosticLineCol(by, bx); ok {
 				style = style.Add(theme.AttrUnderline)
 			}
-			tracker.Draw(x, y, c, combc, style)
+			tracker.Draw(bx, by, x, y, c, combc, style)
 		}
 		x += rwidth
 		vx += rwidth
@@ -178,7 +178,7 @@ loop:
 		}
 
 		// get rune at off
-		r, combc, size, width := b.DecodeGraphemeWidthAt(off)
+		r, combc, size, gwidth := b.DecodeGraphemeWidthAt(off)
 		by, bx := b.LineColAt(off)
 		if tracker.Track(off, bx, by, x, y) {
 			return
@@ -188,8 +188,16 @@ loop:
 			str, style := displayer.String(r, x, th)
 			if str != "\n" {
 				for _, c := range str {
-					drawRune(off, c, nil, width, bx, by, style)
+					drawRune(off, c, nil, gwidth, bx, by, style)
 				}
+			}
+			// Draw to the end of the line for cursorline.
+			// TODO: in the future, we could do this only for lines with cursors
+			// and/or if the cursorline option is enabled.
+			for x < width {
+				tracker.Draw(bx, by, x, y, ' ', nil, style)
+				x++
+				vx++
 			}
 			end := newline()
 			vx = 0
@@ -207,7 +215,7 @@ loop:
 				}
 			}
 		} else {
-			done, loop := drawRune(off, r, combc, width, bx, by, th.Default())
+			done, loop := drawRune(off, r, combc, gwidth, bx, by, th.Default())
 			if done {
 				return
 			} else if loop {
