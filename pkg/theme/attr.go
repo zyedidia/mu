@@ -1,6 +1,8 @@
 package theme
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type AttrMask int
 
@@ -53,4 +55,43 @@ func (a *AttrMask) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		*a |= attr
 	}
 	return nil
+}
+
+func (a AttrMask) MarshalYAML() (interface{}, error) {
+	var arr []string
+	kinds := []AttrMask{
+		AttrBold,
+		AttrBlink,
+		AttrReverse,
+		AttrUnderline,
+		AttrDim,
+		AttrItalic,
+		AttrStrikethrough,
+		AttrHidden,
+	}
+	for _, k := range kinds {
+		if (a & k) != 0 {
+			var name string
+			switch k {
+			case AttrBold:
+				name = "bold"
+			case AttrBlink:
+				name = "blink"
+			case AttrReverse:
+				name = "reverse"
+			case AttrUnderline:
+				name = "underline"
+			case AttrDim:
+				name = "dim"
+			case AttrItalic:
+				name = "italic"
+			case AttrStrikethrough:
+				name = "strikethrough"
+			case AttrHidden:
+				name = "hidden"
+			}
+			arr = append(arr, name)
+		}
+	}
+	return arr, nil
 }

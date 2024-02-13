@@ -6,7 +6,7 @@ import (
 
 type Style struct {
 	Fg, Bg Color
-	Attr   AttrMask
+	Attr   AttrMask `yaml:"attr,omitempty"`
 }
 
 func (s Style) Add(a AttrMask) Style {
@@ -16,13 +16,14 @@ func (s Style) Add(a AttrMask) Style {
 
 func (s Style) ParseStyle(v string) Style {
 	parts := strings.Split(v, ":")
-	fg := false
+	fg := true
 	for _, p := range parts {
 		if a, err := Attr(p); err != nil {
 			if fg {
-				s.Bg = NewNamedColor(p)
-			} else {
 				s.Fg = NewNamedColor(p)
+				fg = false
+			} else {
+				s.Bg = NewNamedColor(p)
 			}
 		} else {
 			s = s.Add(a)

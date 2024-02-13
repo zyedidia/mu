@@ -80,3 +80,7 @@ func (c *Color) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	*c = NewHexColor(v)
 	return nil
 }
+
+func (c Color) MarshalYAML() (interface{}, error) {
+	return fmt.Sprintf("#%06x", c.Hex()), nil
+}
