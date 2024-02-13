@@ -1,57 +1,82 @@
-default:
-    fg: "#F8F8F2"
-    bg: "#282828"
+color-column:
+  fg: '#323232'
+  bg: '#282828'
 comment:
-    fg: "#75715E"
-    bg: "#282828"
+  fg: '#75715e'
+  bg: '#282828'
 constant:
-    fg: "#AE81FF"
-    bg: "#282828"
+  fg: '#ae81ff'
+  bg: '#282828'
 constant.string:
-    fg: "#E6DB74"
-    bg: "#282828"
+  fg: '#e6db74'
+  bg: '#282828'
 constant.string.char:
-    fg: "#BDE6AD"
-    bg: "#282828"
-constant.string.escape:
-    fg: "#AE81FF"
-    bg: "#282828"
-symbol.tag:
-    fg: "#AE81FF"
-    bg: "#282828"
-preproc:
-    fg: "#CB4B16"
-    bg: "#282828"
-function:
-    fg: "#A6E22E"
-    bg: "#282828"
-keyword:
-    fg: "#F92672"
-    bg: "#282828"
-type:
-    fg: "#66D9EF"
-    bg: "#282828"
-special:
-    fg: "#A6E22E"
-    bg: "#282828"
-underlined:
-    fg: "#D33672"
-    bg: "#282828"
-    attr: ["underline"]
+  fg: '#bde6ad'
+  bg: '#282828'
+current-line-number:
+  fg: '#aaaaaa'
+  bg: '#282828'
+cursorline:
+  fg: '#323232'
+  bg: '#323232'
+default:
+  fg: '#f8f8f2'
+  bg: '#282828'
+diff-added:
+  fg: '#00af00'
+  bg: '#282828'
+diff-deleted:
+  fg: '#d70000'
+  bg: '#282828'
+diff-modified:
+  fg: '#ffaf00'
+  bg: '#282828'
 error:
-    fg: "#CB4B16"
-    bg: "#282828"
-    attr: ["bold"]
-todo:
-    fg: "#D33682"
-    bg: "#282828"
-    attr: ["bold"]
-line-number:
-    fg: "#AAAAAA"
-    bg: "#323232"
-statusline:
-    fg: "#282828"
-    bg: "#F8F8F2"
+  fg: '#cb4b16'
+  bg: '#282828'
+  attr:
+  - bold
+function:
+  fg: '#a6e22e'
+  bg: '#282828'
+gutter-error:
+  fg: '#cb4b16'
+  bg: '#282828'
+gutter-warning:
+  fg: '#e6db74'
+  bg: '#282828'
 hidden-char:
-    fg: "#505050"
-    bg: "#282828"
+  fg: '#505050'
+  bg: '#282828'
+keyword:
+  fg: '#f92672'
+  bg: '#282828'
+line-number:
+  fg: '#aaaaaa'
+  bg: '#323232'
+preproc:
+  fg: '#cb4b16'
+  bg: '#282828'
+special:
+  fg: '#a6e22e'
+  bg: '#282828'
+statusline:
+  fg: '#282828'
+  bg: '#f8f8f2'
+tabbar:
+  fg: '#282828'
+  bg: '#f8f8f2'
+todo:
+  fg: '#d33682'
+  bg: '#282828'
+  attr:
+  - bold
+type:
+  fg: '#66d9ef'
+  bg: '#282828'
+type.extended:
+  fg: '#-00001'
+  bg: '#282828'
+underlined:
+  fg: '#d33682'
+  bg: '#282828'
