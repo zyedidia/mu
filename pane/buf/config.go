@@ -44,8 +44,8 @@ func (bp *BufPane) GetOpt(opt string) (interface{}, bool) {
 }
 
 func parseCharMap(s string) map[rune]string {
-	// charmap encoded as rune for '\t', '\n', ' '
-	runes := []rune{'\t', '\n', ' '}
+	// charmap encoded as rune for '\t', '\n'
+	runes := []rune{'\t', '\n'}
 	m := make(map[rune]string)
 	for i, r := range s {
 		if i >= len(runes) {
