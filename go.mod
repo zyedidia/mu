@@ -14,7 +14,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5
 	github.com/yuin/gopher-lua v1.1.0
 	github.com/zyedidia/clipper v0.1.0
-	github.com/zyedidia/flare v0.1.0
+	github.com/zyedidia/flare v0.1.1-0.20240213024608-1a9b6d2b5063
 	github.com/zyedidia/ftdetect v0.1.0
 	github.com/zyedidia/generic v1.0.0
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3

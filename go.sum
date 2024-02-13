@@ -138,6 +138,8 @@ github.com/zyedidia/clipper v0.1.0 h1:e16nhM1RgL3HYcugcHRUpMya1K830TS5uo6LlPJHyS
 github.com/zyedidia/clipper v0.1.0/go.mod h1:7YApPNiiTZTXdKKZG92G50qj6mnWEX975Sdu65J7YpQ=
 github.com/zyedidia/flare v0.1.0 h1:lOEuJKfSMP2yzWLvu4lA99NzkgR4vzEo0qMCIURpvl0=
 github.com/zyedidia/flare v0.1.0/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
+github.com/zyedidia/flare v0.1.1-0.20240213024608-1a9b6d2b5063 h1:Fwz+QrUpaVveYRGnQTej28LMvRAg2AmDvdqtYJFETgk=
+github.com/zyedidia/flare v0.1.1-0.20240213024608-1a9b6d2b5063/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/ftdetect v0.1.0 h1:vid9p+sAXbu20dbdvdn953+7FB4FA9pzy51pAbA2F78=
 github.com/zyedidia/ftdetect v0.1.0/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
