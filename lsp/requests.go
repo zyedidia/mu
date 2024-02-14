@@ -28,6 +28,12 @@ type RPCHover struct {
 	Result     lsp.Hover `json:"result"`
 }
 
+type RPCDefinition struct {
+	RPCVersion string         `json:"jsonrpc"`
+	ID         int            `json:"id"`
+	Result     []lsp.Location `json:"result"`
+}
+
 type RPCFormat struct {
 	RPCVersion string         `json:"jsonrpc"`
 	ID         int            `json:"id"`
@@ -148,6 +154,33 @@ func (s *Server) Completion(filename string, pos lsp.Position) ([]lsp.Completion
 
 func (s *Server) CompletionResolve() {
 
+}
+
+func (s *Server) Definition(filename string, pos lsp.Position) ([]lsp.Location, error) {
+	if s == nil || s.capabilities.DefinitionProvider == nil {
+		return nil, ErrNotSupported
+	}
+
+	params := lsp.DefinitionParams{
+		TextDocumentPositionParams: lsp.TextDocumentPositionParams{
+			TextDocument: lsp.TextDocumentIdentifier{
+				URI: uri.File(filename),
+			},
+			Position: pos,
+		},
+	}
+
+	s.lock.Lock()
+	resp, err := s.sendRequest(lsp.MethodTextDocumentDefinition, params)
+	if err != nil {
+		return nil, err
+	}
+	var r RPCDefinition
+	err = json.Unmarshal(resp, &r)
+	if err != nil {
+		return nil, err
+	}
+	return r.Result, nil
 }
 
 func (s *Server) Hover(filename string, pos lsp.Position) (string, error) {

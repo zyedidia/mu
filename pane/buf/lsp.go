@@ -1,6 +1,8 @@
 package buf
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -41,5 +43,21 @@ func (bp *BufPane) LspFormat() error {
 	}
 
 	bp.ApplyLspEdits(edits)
+	return nil
+}
+
+func (bp *BufPane) LspDefinition() error {
+	locs, err := bp.Lsp.Definition(bp.FullName(), bp.LspPosition(bp.LineColAt(bp.Cursor().Pos)))
+	if err != nil {
+		return err
+	}
+	if len(locs) == 0 {
+		return errors.New("no definition found")
+	}
+	if bp.FullName() != locs[0].URI.Filename() {
+		return fmt.Errorf("defined in %s", locs[0].URI.Filename())
+	}
+	pos := locs[0].Range.Start
+	bp.MoveTo(bp.FromLspPosition(pos))
 	return nil
 }

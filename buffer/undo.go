@@ -128,10 +128,14 @@ func (b *Buffer) Undo() {
 	}
 }
 
+func (b *Buffer) FromLspPosition(pos protocol.Position) int {
+	return b.OffsetAt(b.Utf8Loc(int(pos.Line), int(pos.Character)))
+}
+
 func (b *Buffer) ApplyLspEdits(edits []protocol.TextEdit) {
 	for _, e := range edits {
-		start := b.OffsetAt(b.Utf8Loc(int(e.Range.Start.Line), int(e.Range.Start.Character)))
-		end := b.OffsetAt(b.Utf8Loc(int(e.Range.End.Line), int(e.Range.End.Character)))
+		start := b.FromLspPosition(e.Range.Start)
+		end := b.FromLspPosition(e.Range.End)
 		b.Remove(start, end)
 		if len(e.NewText) != 0 {
 			b.Insert(start, []byte(e.NewText))

@@ -383,6 +383,11 @@ var commands = []command{
 		Doc:  "lsp-hover: lists LSP hover information from the current cursor",
 	},
 	{
+		Name: "lsp-definition",
+		Fn:   (*BufPane).LspDefinition,
+		Doc:  "lsp-definition: goes to the definition of the current object",
+	},
+	{
 		Name: "lsp-format",
 		Fn:   (*BufPane).LspFormat,
 		Doc:  "lsp-format: auto-format the current document",

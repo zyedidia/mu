@@ -194,7 +194,7 @@ loop:
 			// Draw to the end of the line for cursorline.
 			// TODO: in the future, we could do this only for lines with cursors
 			// and/or if the cursorline option is enabled.
-			for x < width {
+			for x < width && tracker.Draw != nil {
 				tracker.Draw(bx, by, x, y, ' ', nil, style)
 				x++
 				vx++

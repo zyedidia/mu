@@ -112,12 +112,12 @@ func (s *Server) Initialize(directory string, show ShowFn, diagnostic Diagnostic
 				ApplyEdit: true,
 			},
 			TextDocument: &lsp.TextDocumentClientCapabilities{
-				Formatting: &lsp.TextDocumentClientCapabilitiesFormatting{
+				Formatting: &lsp.DocumentFormattingClientCapabilities{
 					DynamicRegistration: false,
 				},
-				Completion: &lsp.TextDocumentClientCapabilitiesCompletion{
+				Completion: &lsp.CompletionTextDocumentClientCapabilities{
 					DynamicRegistration: false,
-					CompletionItem: &lsp.TextDocumentClientCapabilitiesCompletionItem{
+					CompletionItem: &lsp.CompletionTextDocumentClientCapabilitiesItem{
 						SnippetSupport:          false,
 						CommitCharactersSupport: false,
 						DocumentationFormat:     []lsp.MarkupKind{lsp.PlainText},
@@ -126,10 +126,14 @@ func (s *Server) Initialize(directory string, show ShowFn, diagnostic Diagnostic
 					},
 					ContextSupport: false,
 				},
-				Hover: &lsp.TextDocumentClientCapabilitiesHover{
+				Hover: &lsp.HoverTextDocumentClientCapabilities{
 					DynamicRegistration: false,
 					ContentFormat:       []lsp.MarkupKind{lsp.PlainText},
 				},
+				Declaration:    &lsp.DeclarationTextDocumentClientCapabilities{},
+				Definition:     &lsp.DefinitionTextDocumentClientCapabilities{},
+				TypeDefinition: &lsp.TypeDefinitionTextDocumentClientCapabilities{},
+				Implementation: &lsp.ImplementationTextDocumentClientCapabilities{},
 			},
 		},
 	}
