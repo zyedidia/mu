@@ -9,10 +9,10 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/james4k/terminal"
 	"github.com/micro-editor/tcell/v2"
 	"github.com/zyedidia/gotcl"
 	"github.com/zyedidia/mu/pkg/theme"
+	"github.com/zyedidia/terminal"
 )
 
 type TermPane struct {

@@ -8,7 +8,6 @@ require (
 	github.com/go-errors/errors v1.4.1
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/renameio v1.0.1
-	github.com/james4k/terminal v0.0.0-20140729193110-b4bcb6ee7c08
 	github.com/mattn/go-runewidth v0.0.15
 	github.com/micro-editor/tcell/v2 v2.2.2-0.20240212075734-20b75e27dba7
 	github.com/pelletier/go-toml v1.9.5
@@ -22,6 +21,7 @@ require (
 	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
 	github.com/zyedidia/kbd v0.0.0-20231102233511-e26cad8c5f67
+	github.com/zyedidia/terminal v0.0.0-20230315200948-4b3bcf6dddef
 	go.lsp.dev/protocol v0.12.0
 	go.lsp.dev/uri v0.3.0
 	golang.org/x/sync v0.3.0
@@ -34,11 +34,10 @@ require (
 
 require (
 	github.com/chzyer/test v0.0.0-20210722231415-061457976a23 // indirect
-	github.com/creack/pty v1.1.9 // indirect
+	github.com/creack/pty v1.1.18 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
-	github.com/kr/pty v1.1.8 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
