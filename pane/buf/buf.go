@@ -122,6 +122,7 @@ func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config
 	bp := NewBufPane(b, msger, clip, cfg, editor)
 	bp.linenums = linenums
 	bp.gutter = gutter
+	bp.cursorline = false
 	return bp
 }
 

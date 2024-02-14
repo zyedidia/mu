@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/zyedidia/mu/pkg/completer"
 	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
 )
@@ -68,4 +69,53 @@ func (c *CompleteBar) StartCompletion(suggestions []string, prefix string) {
 
 func (c *CompleteBar) StopCompletion() {
 	c.suggestions = nil
+}
+
+func (bp *BufPane) fillCompletion(comp []byte) {
+	bp.Remove(bp.Cursor().Complete, bp.Cursor().Pos)
+	bp.Insert(bp.Cursor().Pos, comp[len(bp.complete.prefix):])
+}
+
+func (bp *BufPane) Complete(allowEmpty bool) bool {
+	prefix := bp.WordPrefix()
+	if !allowEmpty && prefix == "" {
+		return false
+	}
+	comps := completer.FileComplete(prefix, ".")
+	if len(comps) == 0 {
+		return false
+	}
+	bp.complete.StartCompletion(comps, prefix)
+	bp.Cursor().Complete = bp.Cursor().Pos
+	bp.Cursor().CompleteCur = 0
+	bp.Insert(bp.Cursor().Pos, []byte(comps[0])[len(bp.complete.prefix):])
+	return true
+}
+
+func (bp *BufPane) NextCompletion() {
+	c := bp.Cursor()
+	if c.CompleteCur < len(bp.complete.suggestions)-1 {
+		c.CompleteCur++
+	} else {
+		c.CompleteCur = 0
+	}
+	bp.fillCompletion([]byte(bp.complete.suggestions[c.CompleteCur]))
+}
+
+func (bp *BufPane) PrevCompletion() {
+	c := bp.Cursor()
+	if c.CompleteCur > 0 {
+		c.CompleteCur--
+	} else {
+		c.CompleteCur = len(bp.complete.suggestions) - 1
+	}
+	bp.fillCompletion([]byte(bp.complete.suggestions[c.CompleteCur]))
+}
+
+func (bp *BufPane) CancelCompletion() {
+	if !bp.activeComplete() {
+		return
+	}
+	bp.Remove(bp.Cursor().Complete, bp.Cursor().Pos)
+	bp.complete.StopCompletion()
 }

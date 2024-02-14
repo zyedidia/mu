@@ -55,3 +55,18 @@ func parseCharMap(s string) map[rune]string {
 	}
 	return m
 }
+
+func (bp *BufPane) Filetype() string {
+	return bp.Buffer.Filetype()
+}
+
+func (bp *BufPane) Name() string {
+	return bp.Buffer.Name()
+}
+
+func (bp *BufPane) Modified() string {
+	if bp.Buffer.Modified() {
+		return "+ "
+	}
+	return ""
+}
