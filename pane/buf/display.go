@@ -11,6 +11,14 @@ import (
 
 func (bp *BufPane) Resize(w, h int) {
 	bp.width, bp.height = w, h
+
+	if bp.needsReloc {
+		line, _ := bp.LineColAt(bp.Cursor().Pos)
+		line -= bp.height / 2
+		bp.stpos = bp.OffsetAt(line, 0)
+		bp.Relocate(bLoc{line, 0})
+		bp.needsReloc = false
+	}
 }
 
 // A vLine is a visual representation of a line, which is needed because

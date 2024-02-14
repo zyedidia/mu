@@ -45,6 +45,7 @@ type BufPane struct {
 
 	stpos, stcol  int
 	width, height int
+	needsReloc    bool
 
 	cursorline         bool
 	autoindent         bool
@@ -90,7 +91,8 @@ const mouseClickThreshold = 500 * time.Millisecond
 
 func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor) *BufPane {
 	bp := &BufPane{
-		Buffer: b,
+		Buffer:     b,
+		needsReloc: true,
 		vis: &buffer.Visualizer{
 			TabSize: b.IntOpt("tabsize"),
 			CharMap: parseCharMap(b.StrOpt("charmap")),
