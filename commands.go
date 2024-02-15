@@ -293,9 +293,9 @@ var commands = []tclutil.Command{
 		Doc:  "quit-all: close all panes",
 	},
 	{
-		Name: "opt",
+		Name: "set",
 		Fn:   (*Editor).Opt,
-		Doc:  "opt <name> <val>: assign option <name> to <val>",
+		Doc:  "set <name> <val>: assign option <name> to <val>",
 	},
 	{
 		Name: "get",

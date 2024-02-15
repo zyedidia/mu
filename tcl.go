@@ -10,9 +10,9 @@ proc repeat-move {n fn} {
 	if { [== "" $n] } {
 		return [uplevel [concat $fn [cursor-pos]]]
 	} else {
-		set p [cursor-pos]
-		for { set i 0 } { $i < $n } { incr i } {
-			set p [uplevel [concat $fn $p]]
+		setvar p [cursor-pos]
+		for { setvar i 0 } { $i < $n } { incr i } {
+			setvar p [uplevel [concat $fn $p]]
 		}
 		return $p
 	}
@@ -21,13 +21,13 @@ proc repeat-fn {n fn} {
 	if { [== "" $n] } {
 		uplevel $fn
 	} else {
-		for { set i 0 } { $i < $n } { incr i } {
+		for { setvar i 0 } { $i < $n } { incr i } {
 			uplevel $fn
 		}
 	}
 }
 proc all-cursors {fn} {
-	for {set i 0} {$i < [num-cursors]} {incr i} {
+	for {setvar i 0} {$i < [num-cursors]} {incr i} {
 		switch-cursor $i
 		uplevel $fn
 	}

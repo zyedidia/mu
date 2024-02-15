@@ -18,7 +18,6 @@ require (
 	github.com/zyedidia/generic v1.0.0
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3
 	github.com/zyedidia/go-runewidth v0.0.12
-	github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1
 	github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80
 	github.com/zyedidia/kbd v0.0.0-20231102233511-e26cad8c5f67
 	github.com/zyedidia/terminal v0.0.0-20230315200948-4b3bcf6dddef
@@ -46,6 +45,7 @@ require (
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.3.4 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
+	github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 // indirect
 	go.lsp.dev/jsonrpc2 v0.10.0 // indirect
 	go.lsp.dev/pkg v0.0.0-20210717090340-384b27a52fb2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

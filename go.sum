@@ -89,6 +89,8 @@ github.com/zyedidia/go-runewidth v0.0.12 h1:aHWj8qL3aH7caRzoPBJXe1pEaZBXHpKtfTui
 github.com/zyedidia/go-runewidth v0.0.12/go.mod h1:vF8djYdLmG8BJaUZ4CznFYCJ3pFR8m4B4VinTvTTarU=
 github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1 h1:r8ejfsOjBvgTnzu9Oms5wrJ+zYLYhEEm2o31pZh/CN0=
 github.com/zyedidia/gotcl v0.0.0-20231020034018-735a56682ff1/go.mod h1:4Hhqh6e8X8FRGVQwM0eb2YZVcJ7W4zgTOCOQmpFGPKM=
+github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 h1:Y4YaeD2C+eyDI2JqvweJ7OW06j7mcjTfaaR8VFb7e+k=
+github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7/go.mod h1:4Hhqh6e8X8FRGVQwM0eb2YZVcJ7W4zgTOCOQmpFGPKM=
 github.com/zyedidia/gpeg v0.0.0-20211003220203-241091abc9c8/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80 h1:294fTzXJ1B4Cqu3DVQr9ll9uuIk7FXGVnktjjyEmVXY=
 github.com/zyedidia/gpeg v0.0.0-20211118095656-b73cf96bdf80/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
