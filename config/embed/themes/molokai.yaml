@@ -28,6 +28,9 @@ preproc:
 function:
     fg: "#A6E22E"
     bg: 233
+function.builtin:
+    fg: 208
+    bg: 233
 keyword:
     fg: "#F92672"
     bg: 233

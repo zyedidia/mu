@@ -39,6 +39,9 @@ error:
 function:
   fg: '#a6e22e'
   bg: '#282828'
+function.builtin:
+  fg: '#fd971f'
+  bg: '#282828'
 gutter-error:
   fg: '#cb4b16'
   bg: '#282828'
