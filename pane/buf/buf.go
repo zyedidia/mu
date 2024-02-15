@@ -47,6 +47,7 @@ type BufPane struct {
 	width, height int
 	needsReloc    bool
 
+	tabstospaces       bool
 	cursorline         bool
 	autoindent         bool
 	softwrap, wordwrap bool
@@ -97,6 +98,7 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 			TabSize: b.IntOpt("tabsize"),
 			CharMap: parseCharMap(b.StrOpt("charmap")),
 		},
+		tabstospaces:  b.BoolOpt("tabstospaces"),
 		tabsize:       b.IntOpt("tabsize"),
 		autoindent:    b.BoolOpt("autoindent"),
 		cursorline:    b.BoolOpt("cursorline"),

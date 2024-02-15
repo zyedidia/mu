@@ -422,6 +422,11 @@ var commands = []command{
 		Fn:   (*BufPane).WordWrap,
 		Doc:  "word-wrap: word-wrap the current selection",
 	},
+	{
+		Name: "retab",
+		Fn:   (*BufPane).Retab,
+		Doc:  "retab: convert between tabs and spaces according to the tabstospaces option",
+	},
 }
 
 var statuscmds = []tclutil.Command{

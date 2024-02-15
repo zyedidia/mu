@@ -2,6 +2,7 @@ package buf
 
 import (
 	"bytes"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -34,6 +35,20 @@ func (bp *BufPane) Newline() {
 	}
 }
 
+func (bp *BufPane) Retab() {
+	// TODO: do we want retab to only edit leading whitespace?
+	var err error
+	if bp.tabstospaces {
+		err = bp.ReplaceAll("\t", strings.Repeat(" ", bp.tabsize))
+	} else {
+		err = bp.ReplaceAll(strings.Repeat(" ", bp.tabsize), "\t")
+	}
+	// err must be nil since we provide the regexp statically
+	if err != nil {
+		panic(err)
+	}
+}
+
 func leadingws(b []byte) []byte {
 	i := 0
 	for i < len(b) {
@@ -47,7 +62,11 @@ func leadingws(b []byte) []byte {
 }
 
 func (bp *BufPane) Indent() {
-	bp.InsertString("\t")
+	if bp.tabstospaces {
+		bp.InsertString(strings.Repeat(" ", bp.tabsize))
+	} else {
+		bp.InsertString("\t")
+	}
 }
 
 func (bp *BufPane) Autoindent() {

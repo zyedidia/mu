@@ -35,6 +35,8 @@ func (bp *BufPane) SetOpt(opt string, val interface{}) error {
 		bp.autoindent = val.(bool)
 	case "cursorline":
 		bp.cursorline = val.(bool)
+	case "tabstospaces":
+		bp.tabstospaces = val.(bool)
 	}
 	return nil
 }
