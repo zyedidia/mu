@@ -43,6 +43,7 @@ func (bp *BufPane) LspFormat() error {
 	}
 
 	bp.ApplyLspEdits(edits)
+	bp.RecalcVX(bp.Cursor())
 	return nil
 }
 

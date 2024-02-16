@@ -37,6 +37,10 @@ proc zero {} {
 }
 `
 
+func (e *Editor) RunCommand(cmd string) (string, error) {
+	return e.EvalRet(cmd, nil)
+}
+
 func (e *Editor) Eval(cmd string, vars []interface{}) error {
 	interp := gotcl.NewInterpFrom(e.interp)
 	_, err := tclutil.EvalWithVars(interp, cmd, vars)
