@@ -196,18 +196,6 @@ func init() {
 	})
 }
 
-func (e *Editor) initPlugins() {
-	e.plugins.AddPackage("micro", map[string]any{
-		"Editor": func() *Editor {
-			return e
-		},
-	})
-	err := e.plugins.Load()
-	if err != nil {
-		log.Println("error loading plugins:", err)
-	}
-}
-
 func (e *Editor) initClipboard() {
 	clip := e.config.GlobalStrOpt("clipboard")
 	if err := e.setClipboard(clip); err != nil {

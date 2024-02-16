@@ -9,6 +9,12 @@ import (
 	tcl "github.com/zyedidia/gotcl"
 )
 
+type PreHookFn func(pane any, args []any) bool
+type PostHookFn func(pane any, args []any)
+
+var prehooks = map[string][]PreHookFn{}
+var posthooks = map[string][]PostHookFn{}
+
 type Command struct {
 	Name string
 	Fn   interface{}
@@ -26,9 +32,43 @@ func Unregister(interp *tcl.Interp, name string) {
 	interp.SetCmd(name, nil)
 }
 
+func PreHook(command string, callback PreHookFn) {
+	prehooks[command] = append(prehooks[command], callback)
+}
+
+func PostHook(command string, callback PostHookFn) {
+	posthooks[command] = append(posthooks[command], callback)
+}
+
 func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() error, post func()) {
 	v := reflect.ValueOf(fn)
 	t := v.Type()
+
+	call := func(argv []reflect.Value) []reflect.Value {
+		args := make([]any, 0, len(argv))
+		for _, a := range argv[1:] {
+			args = append(args, a.Interface())
+		}
+		var skip bool
+		if fns, ok := prehooks[name]; ok {
+			for _, fn := range fns {
+				if !fn(arg0, args) {
+					skip = true
+				}
+			}
+		}
+		if skip {
+			return nil
+		}
+		ret := v.Call(argv)
+		if fns, ok := posthooks[name]; ok {
+			for _, fn := range fns {
+				fn(arg0, args)
+			}
+		}
+
+		return ret
+	}
 
 	cmd := func(itp *tcl.Interp, args []*tcl.TclObj) tcl.TclStatus {
 		if pre != nil {
@@ -43,14 +83,14 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 		var ret []reflect.Value
 		if t.NumIn() == 2 && t.In(1) == reflect.TypeOf(args) {
 			argv = append(argv, reflect.ValueOf(args))
-			ret = v.Call(argv)
+			ret = call(argv)
 		} else if t.NumIn() == 2 && t.In(1).Kind() == reflect.Slice && t.In(1).Elem().Kind() == reflect.String {
 			slice := make([]string, 0, len(args))
 			for i := range args {
 				slice = append(slice, args[i].AsString())
 			}
 			argv = append(argv, reflect.ValueOf(slice))
-			ret = v.Call(argv)
+			ret = call(argv)
 		} else {
 			if len(args) != t.NumIn()-1 {
 				return itp.Fail(fmt.Errorf("invalid number of arguments. got: %v, want %v", len(args), t.NumIn()-1))
@@ -74,7 +114,7 @@ func Register(interp *tcl.Interp, name string, fn, arg0 interface{}, pre func() 
 					argv = append(argv, reflect.ValueOf(r))
 				}
 			}
-			ret = v.Call(argv)
+			ret = call(argv)
 		}
 
 		if post != nil {
