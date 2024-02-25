@@ -15,7 +15,7 @@ func (bp *BufPane) Resize(w, h int) {
 	if bp.needsReloc {
 		line, _ := bp.LineColAt(bp.Cursor().Pos)
 		line -= bp.height / 2
-		bp.stpos = bp.OffsetAt(line, 0)
+		bp.topline, bp.topcol = line, 0
 		bp.Relocate(bLoc{line, 0})
 		bp.needsReloc = false
 	}
@@ -84,6 +84,7 @@ func (b *BufPane) vLoc2bLoc(vl vLoc) (bl bLoc) {
 func (b *BufPane) MouseLoc(x, y int) (int, int) {
 	x -= b.width - b.bufferWidth()
 	var bl bLoc
+	stpos := b.OffsetAt(b.topline, b.topcol)
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: nil,
 		Track: func(off, bx, by, vx, vy int) bool {
@@ -99,7 +100,7 @@ func (b *BufPane) MouseLoc(x, y int) (int, int) {
 			bl.col = bx
 			return false
 		},
-	}, b.bufferWidth(), b.height, b.stpos, b.vis, b.softwrap, b.wordwrap, nil)
+	}, b.bufferWidth(), b.height, stpos, b.vis, b.softwrap, b.wordwrap, nil)
 	return bl.line, bl.col
 }
 
@@ -160,16 +161,16 @@ func (b *BufPane) vDistance(v1, v2 vLoc) int {
 // Relocate updates the window so that the given buffer location is in the
 // view.
 func (b *BufPane) Relocate(bl bLoc) {
-	topl, topc := b.LineColAt(b.stpos)
+	topl, topc := b.topline, b.topcol
 	vl := b.bLoc2vLoc(bl)
 
 	// vertical scrolling
 	if !b.softwrap {
 		if bl.line < topl+b.scrollmargin {
-			b.stpos = b.OffsetAt(bl.line-b.scrollmargin, 0)
+			b.topline, b.topcol = bl.line-b.scrollmargin, 0
 		} else if bl.line >= topl+b.height-b.scrollmargin {
 			top := min(bl.line-b.height+1+b.scrollmargin, b.NumLines()-b.height+1)
-			b.stpos = b.OffsetAt(top, 0)
+			b.topline, b.topcol = top, 0
 		}
 	} else {
 		vtop := b.bLoc2vLoc(bLoc{line: topl, col: topc})
@@ -188,7 +189,7 @@ func (b *BufPane) Relocate(bl bLoc) {
 			}
 		}
 		btop := b.vLoc2bLoc(vtop)
-		b.stpos = b.OffsetAt(btop.line, btop.col)
+		b.topline, b.topcol = btop.line, btop.col
 	}
 
 	// horizontal scrolling
@@ -220,6 +221,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		}
 	}
 
+	stpos := b.OffsetAt(b.topline, b.topcol)
 	b.Buffer.RenderForward(buffer.RenderTracker{
 		Draw: func(bx, by, vx, vy int, mainc rune, combc []rune, style theme.Style) {
 			if gutter+vx-b.stcol >= b.width || vy >= b.height {
@@ -242,7 +244,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 			}
 			return false
 		},
-	}, b.bufferWidth(), b.height, b.stpos, b.vis, b.softwrap, b.wordwrap, th)
+	}, b.bufferWidth(), b.height, stpos, b.vis, b.softwrap, b.wordwrap, th)
 
 	lnumstyle := func(l int) theme.Style {
 		style := th.Style("line-number")

@@ -43,9 +43,10 @@ type BufPane struct {
 	*buffer.Buffer
 	vis buffer.RuneVisualizer
 
-	stpos, stcol  int
-	width, height int
-	needsReloc    bool
+	topline, topcol int
+	stcol           int
+	width, height   int
+	needsReloc      bool
 
 	tabstospaces       bool
 	cursorline         bool

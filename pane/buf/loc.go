@@ -19,13 +19,9 @@ func (bp *BufPane) RelocateToCur() {
 }
 
 func (bp *BufPane) ScrollUp(amt int) {
-	topl, _ := bp.LineColAt(bp.stpos)
-	topl = max(0, topl-amt)
-	bp.stpos = bp.OffsetAt(topl, 0)
+	bp.topline, bp.topcol = max(0, bp.topline-amt), 0
 }
 
 func (bp *BufPane) ScrollDown(amt int) {
-	topl, _ := bp.LineColAt(bp.stpos)
-	topl = min(bp.NumLines(), topl+amt)
-	bp.stpos = bp.OffsetAt(topl, 0)
+	bp.topline, bp.topcol = min(bp.NumLines(), bp.topline+amt), 0
 }
