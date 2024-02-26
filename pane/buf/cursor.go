@@ -11,14 +11,14 @@ import (
 // TODO: need virtual cursors to handle visual x
 func (bp *BufPane) CursorUp(c buffer.Cursor) buffer.Cursor {
 	line, _ := bp.LineColAt(c.Pos)
-	c.Pos = bp.VisualLoc(line-1, c.Vx, bp.vis)
+	c.Pos = bp.VisualLoc(line-1, c.Vx)
 	bp.vertical = true
 	return c
 }
 
 func (bp *BufPane) CursorDown(c buffer.Cursor) buffer.Cursor {
 	line, _ := bp.LineColAt(c.Pos)
-	c.Pos = bp.VisualLoc(line+1, c.Vx, bp.vis)
+	c.Pos = bp.VisualLoc(line+1, c.Vx)
 	bp.vertical = true
 	return c
 }

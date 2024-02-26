@@ -77,7 +77,7 @@ func (b *BufPane) vLoc2bLoc(vl vLoc) (bl bLoc) {
 			bl.col = bx
 			return false
 		},
-	}, b.bufferWidth(), b.height, off, b.vis, b.softwrap, b.wordwrap, nil)
+	}, b.bufferWidth(), b.height, off, b.BoolOpt("softwrap"), b.BoolOpt("wordwrap"), nil)
 	return bl
 }
 
@@ -100,7 +100,7 @@ func (b *BufPane) MouseLoc(x, y int) (int, int) {
 			bl.col = bx
 			return false
 		},
-	}, b.bufferWidth(), b.height, stpos, b.vis, b.softwrap, b.wordwrap, nil)
+	}, b.bufferWidth(), b.height, stpos, b.BoolOpt("softwrap"), b.BoolOpt("wordwrap"), nil)
 	return bl.line, bl.col
 }
 
@@ -116,7 +116,7 @@ func (b *BufPane) bLoc2vLoc(bl bLoc) (vl vLoc) {
 			}
 			return false
 		},
-	}, b.bufferWidth(), b.height, off, b.vis, b.softwrap, b.wordwrap, nil)
+	}, b.bufferWidth(), b.height, off, b.BoolOpt("softwrap"), b.BoolOpt("wordwrap"), nil)
 	vl.line = bl.line
 	return vl
 }
@@ -165,17 +165,17 @@ func (b *BufPane) Relocate(bl bLoc) {
 	vl := b.bLoc2vLoc(bl)
 
 	// vertical scrolling
-	if !b.softwrap {
-		if bl.line < topl+b.scrollmargin {
-			b.topline, b.topcol = bl.line-b.scrollmargin, 0
-		} else if bl.line >= topl+b.height-b.scrollmargin {
-			top := min(bl.line-b.height+1+b.scrollmargin, b.NumLines()-b.height+1)
+	if !b.BoolOpt("softwrap") {
+		if bl.line < topl+b.IntOpt("scrollmargin") {
+			b.topline, b.topcol = bl.line-b.IntOpt("scrollmargin"), 0
+		} else if bl.line >= topl+b.height-b.IntOpt("scrollmargin") {
+			top := min(bl.line-b.height+1+b.IntOpt("scrollmargin"), b.NumLines()-b.height+1)
 			b.topline, b.topcol = top, 0
 		}
 	} else {
 		vtop := b.bLoc2vLoc(bLoc{line: topl, col: topc})
-		topscroll := b.vLinesUp(vl, b.scrollmargin)
-		bottomscroll := b.vLinesUp(vl, b.height-1-b.scrollmargin)
+		topscroll := b.vLinesUp(vl, b.IntOpt("scrollmargin"))
+		bottomscroll := b.vLinesUp(vl, b.height-1-b.IntOpt("scrollmargin"))
 		if topscroll.Compare(vtop) < 0 {
 			vtop = topscroll
 			vtop.col = 0
@@ -193,11 +193,11 @@ func (b *BufPane) Relocate(bl bLoc) {
 	}
 
 	// horizontal scrolling
-	if !b.softwrap {
-		if vl.col < b.stcol+b.hscrollmargin {
-			b.stcol = max(vl.col-b.hscrollmargin, 0)
-		} else if vl.col >= b.stcol+b.bufferWidth()-b.hscrollmargin {
-			b.stcol = vl.col - b.bufferWidth() + 1 + b.hscrollmargin
+	if !b.BoolOpt("softwrap") {
+		if vl.col < b.stcol+b.IntOpt("hscrollmargin") {
+			b.stcol = max(vl.col-b.IntOpt("hscrollmargin"), 0)
+		} else if vl.col >= b.stcol+b.bufferWidth()-b.IntOpt("hscrollmargin") {
+			b.stcol = vl.col - b.bufferWidth() + 1 + b.IntOpt("hscrollmargin")
 		}
 	}
 }
@@ -206,7 +206,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 	lines := make([]int, b.height)
 
 	linewid := 0
-	if b.linenums {
+	if b.BoolOpt("linenums") {
 		linewid = b.lnumWidth()
 	}
 	gutter := b.gutterWidth() + linewid
@@ -214,7 +214,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 	cursorline := th.Style("cursorline")
 	cursorlines := make(map[int]bool)
 
-	if b.cursorline {
+	if b.BoolOpt("cursorline") {
 		for _, c := range b.Cursors() {
 			line, _ := b.LineColAt(c.Pos)
 			cursorlines[line] = true
@@ -244,7 +244,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 			}
 			return false
 		},
-	}, b.bufferWidth(), b.height, stpos, b.vis, b.softwrap, b.wordwrap, th)
+	}, b.bufferWidth(), b.height, stpos, b.BoolOpt("softwrap"), b.BoolOpt("wordwrap"), th)
 
 	lnumstyle := func(l int) theme.Style {
 		style := th.Style("line-number")
@@ -257,7 +257,7 @@ func (b *BufPane) Display(draw func(vx, vy int, mainc rune, combc []rune, style 
 		return style
 	}
 
-	if b.linenums {
+	if b.BoolOpt("linenums") {
 		strfmt := fmt.Sprintf("%%%dd ", linewid-1)
 		for i, l := range lines {
 			var ls string

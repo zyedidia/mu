@@ -53,6 +53,8 @@ type BufferData struct {
 
 	Diagnostics []Diagnostic
 
+	vis Visualizer
+
 	refs int
 
 	cfg     Config
@@ -165,14 +167,9 @@ func NewBufferData(r Input, out Output, cfg Config, man *lsp.Manager, redraw cha
 		}
 	}
 
-	err = buf.LoadHighlighter()
-	if err != nil {
-		// TODO: return this error as a warning maybe
-		log.Println(err)
+	for opt := range opts {
+		buf.updateOpt(opt)
 	}
-	go buf.InitialHighlight()
-
-	buf.LoadLsp()
 
 	return buf, nil
 }
@@ -335,6 +332,17 @@ func (b *Buffer) Close() {
 			b.Lsp = nil
 		}
 	}
+}
+
+func (b *BufferData) InitFiletype() {
+	err := b.LoadHighlighter()
+	if err != nil {
+		// TODO: return this error as a warning maybe
+		log.Println(err)
+	}
+	go b.InitialHighlight()
+
+	b.LoadLsp()
 }
 
 // provides:

@@ -103,7 +103,7 @@ func newEditor(w, h int, clip TermClip, cursor func(string) error) (*Editor, err
 	if err != nil {
 		return nil, err
 	}
-	redraw := make(chan struct{}, 1)
+	redraw := make(chan struct{}, 4)
 	modes, err := loadBindings(cfg, "micro", "cmd", "charcmd", "complete", "term", "vim-normal", "vim-insert", "vim-visual")
 	if err != nil {
 		return nil, err

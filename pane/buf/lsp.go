@@ -29,12 +29,12 @@ func (bp *BufPane) LspFormat() error {
 			End:   bp.LspPosition(bp.LineColAt(c.Sel[1])),
 		}, protocol.FormattingOptions{
 			InsertSpaces: false,
-			TabSize:      uint32(bp.tabsize),
+			TabSize:      uint32(bp.IntOpt("tabsize")),
 		})
 	} else {
 		edits, err = bp.Lsp.DocumentFormat(bp.FullName(), protocol.FormattingOptions{
 			InsertSpaces: false,
-			TabSize:      uint32(bp.tabsize),
+			TabSize:      uint32(bp.IntOpt("tabsize")),
 		})
 	}
 

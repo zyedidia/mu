@@ -102,5 +102,34 @@ func (b *BufferData) SetOpt(name string, val interface{}) error {
 		return fmt.Errorf("%w: expected %v, got %v", config.ErrTypeMismatch, reflect.TypeOf(b.Options[name]), reflect.TypeOf(val))
 	}
 	b.Options[name] = val
+
+	b.updateOpt(name)
+
 	return nil
+}
+
+func (b *BufferData) updateOpt(name string) {
+	switch name {
+	case "syntax":
+		b.LoadHighlighter()
+	case "filetype":
+		b.InitFiletype()
+	case "charmap":
+		b.vis.CharMap = parseCharMap(b.StrOpt("charmap"))
+	case "tabsize":
+		b.vis.TabSize = b.IntOpt("tabsize")
+	}
+}
+
+func parseCharMap(s string) map[rune]string {
+	// charmap encoded as rune for '\t', '\n'
+	runes := []rune{'\t', '\n'}
+	m := make(map[rune]string)
+	for i, r := range s {
+		if i >= len(runes) {
+			break
+		}
+		m[runes[i]] = string(r)
+	}
+	return m
 }

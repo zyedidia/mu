@@ -83,7 +83,7 @@ func (v *Visualizer) Special(r rune) bool {
 // RenderForward draws this buffer in a box of 'width' and 'height', starting
 // from byte offset 'off'. The 'softwrap' and 'wordwrap' inputs control
 // wrapping, 'th' controls the theme used for highlighting.
-func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, displayer RuneVisualizer, softwrap, wordwrap bool, th *theme.Theme) {
+func (b *Buffer) RenderForward(tracker RenderTracker, width, height, off int, softwrap, wordwrap bool, th *theme.Theme) {
 	// vx is the visual x within the line without taking into account softwrap
 	// (so therefore not the actual x, y coordinate the character is drawn at).
 	// This is needed for keeping track of the correct tabstop width.
@@ -169,7 +169,7 @@ loop:
 		}
 
 		if softwrap && wordwrap {
-			wordsz := b.wordSizeAt(vx, off, identchar, displayer)
+			wordsz := b.wordSizeAt(vx, off, identchar)
 			if x+wordsz-1 > width {
 				if newline() {
 					return
@@ -185,11 +185,9 @@ loop:
 		}
 
 		if r == '\n' {
-			str, style := displayer.String(r, x, th)
-			if str != "\n" {
-				for _, c := range str {
-					drawRune(off, c, nil, gwidth, bx, by, style)
-				}
+			str, style := b.vis.String(r, x, th)
+			for _, c := range str {
+				drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style)
 			}
 			// Draw to the end of the line for cursorline.
 			// TODO: in the future, we could do this only for lines with cursors
@@ -204,8 +202,8 @@ loop:
 			if end {
 				return
 			}
-		} else if displayer.Special(r) {
-			dr, style := displayer.String(r, x, th)
+		} else if b.vis.Special(r) {
+			dr, style := b.vis.String(r, x, th)
 			for _, c := range dr {
 				done, loop := drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style)
 				if done {
@@ -227,15 +225,15 @@ loop:
 	}
 }
 
-func (b *Buffer) wordSizeAt(vx, off int, wordchar func(r rune) bool, displayer RuneVisualizer) int {
+func (b *Buffer) wordSizeAt(vx, off int, wordchar func(r rune) bool) int {
 	vn := 0
 	r, _, sz, width := b.DecodeGraphemeWidthAt(off)
 	off += sz
-	vn += displayer.Size(r, vx+vn, width)
+	vn += b.vis.Size(r, vx+vn, width)
 	for wordchar(r) {
 		r, _, sz, width = b.DecodeGraphemeWidthAt(off)
 		off += sz
-		vn += displayer.Size(r, vx+vn, width)
+		vn += b.vis.Size(r, vx+vn, width)
 	}
 	return vn
 }

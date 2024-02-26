@@ -30,7 +30,7 @@ func (bp *BufPane) InsertBytes(val []byte) {
 
 func (bp *BufPane) Newline() {
 	bp.InsertString("\n")
-	if bp.autoindent {
+	if bp.BoolOpt("autoindent") {
 		bp.Autoindent()
 	}
 }
@@ -38,10 +38,10 @@ func (bp *BufPane) Newline() {
 func (bp *BufPane) Retab() {
 	// TODO: do we want retab to only edit leading whitespace?
 	var err error
-	if bp.tabstospaces {
-		err = bp.ReplaceAll("\t", strings.Repeat(" ", bp.tabsize))
+	if bp.BoolOpt("tabstospaces") {
+		err = bp.ReplaceAll("\t", strings.Repeat(" ", bp.IntOpt("tabsize")))
 	} else {
-		err = bp.ReplaceAll(strings.Repeat(" ", bp.tabsize), "\t")
+		err = bp.ReplaceAll(strings.Repeat(" ", bp.IntOpt("tabsize")), "\t")
 	}
 	// err must be nil since we provide the regexp statically
 	if err != nil {
@@ -62,8 +62,8 @@ func leadingws(b []byte) []byte {
 }
 
 func (bp *BufPane) Indent() {
-	if bp.tabstospaces {
-		bp.InsertString(strings.Repeat(" ", bp.tabsize))
+	if bp.BoolOpt("tabstospaces") {
+		bp.InsertString(strings.Repeat(" ", bp.IntOpt("tabsize")))
 	} else {
 		bp.InsertString("\t")
 	}

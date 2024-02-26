@@ -41,22 +41,13 @@ type Editor interface {
 
 type BufPane struct {
 	*buffer.Buffer
-	vis buffer.RuneVisualizer
 
 	topline, topcol int
 	stcol           int
 	width, height   int
 	needsReloc      bool
 
-	tabstospaces       bool
-	cursorline         bool
-	autoindent         bool
-	softwrap, wordwrap bool
-	scrollmargin       int
-	hscrollmargin      int
-	linenums           bool
-	tabsize            int
-	gutter             int
+	gutter int
 
 	complete *CompleteBar
 
@@ -95,27 +86,14 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 	bp := &BufPane{
 		Buffer:     b,
 		needsReloc: true,
-		vis: &buffer.Visualizer{
-			TabSize: b.IntOpt("tabsize"),
-			CharMap: parseCharMap(b.StrOpt("charmap")),
-		},
-		tabstospaces:  b.BoolOpt("tabstospaces"),
-		tabsize:       b.IntOpt("tabsize"),
-		autoindent:    b.BoolOpt("autoindent"),
-		cursorline:    b.BoolOpt("cursorline"),
-		complete:      &CompleteBar{},
-		scrollmargin:  b.IntOpt("scrollmargin"),
-		hscrollmargin: b.IntOpt("hscrollmargin"),
-		gutter:        1,
-		linenums:      b.BoolOpt("linenums"),
-		softwrap:      b.BoolOpt("softwrap"),
-		wordwrap:      b.BoolOpt("wordwrap"),
-		mode:          b.StrOpt("mode"),
-		cfg:           cfg,
-		clip:          clip,
-		messager:      msger,
-		status:        tcl.NewInterp(),
-		Editor:        editor,
+		complete:   &CompleteBar{},
+		gutter:     1,
+		mode:       b.StrOpt("mode"),
+		cfg:        cfg,
+		clip:       clip,
+		messager:   msger,
+		status:     tcl.NewInterp(),
+		Editor:     editor,
 	}
 	for _, c := range statuscmds {
 		tclutil.Register(bp.status, c.Name, c.Fn, bp, nil, nil)
@@ -123,11 +101,11 @@ func NewBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, ed
 	return bp
 }
 
-func NewBufPaneOpts(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor, linenums bool, gutter int) *BufPane {
+func NewInfoBufPane(b *buffer.Buffer, msger Messager, clip Clipboard, cfg Config, editor Editor, linenums bool, gutter int) *BufPane {
 	bp := NewBufPane(b, msger, clip, cfg, editor)
-	bp.linenums = linenums
+	bp.SetOpt("linenums", false)
+	bp.SetOpt("cursorline", false)
 	bp.gutter = gutter
-	bp.cursorline = false
 	return bp
 }
 

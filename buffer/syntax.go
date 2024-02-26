@@ -55,6 +55,8 @@ func (b *BufferData) Filetype() string {
 // LoadHighlighter initializes the syntax highlighting memoization table and
 // loads the current filetype's highlighter.
 func (b *BufferData) LoadHighlighter() error {
+	b.matches = nil
+
 	if !b.BoolOpt("syntax") {
 		b.highlighter = nil
 		b.syntbl = memo.NoneTable{}
@@ -80,6 +82,7 @@ func (b *BufferData) InitialHighlight() {
 	b.hisem.Acquire(context.Background(), 1)
 	if b.highlighter == nil {
 		b.hisem.Release(1)
+		b.redraw <- struct{}{}
 		return
 	}
 
