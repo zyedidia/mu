@@ -157,8 +157,6 @@ func NewBufferData(r Input, out Output, cfg Config, man *lsp.Manager, redraw cha
 
 	buf.loadUndo(cfg.CacheFS(), input.EscapePath(r.FullName())+".undo")
 
-	buf.unmodified()
-
 	// if the filetype is not specified by the buffer options, use the detected
 	// one
 	if buf.Options["filetype"] == nil {
@@ -167,9 +165,14 @@ func NewBufferData(r Input, out Output, cfg Config, man *lsp.Manager, redraw cha
 		}
 	}
 
+	buf.Options["encoding"] = buf.encoding()
+	buf.Options["endings"] = buf.endings()
+
 	for opt := range opts {
-		buf.updateOpt(opt)
+		buf.updateOpt(opt, true)
 	}
+
+	buf.unmodified()
 
 	return buf, nil
 }
@@ -189,10 +192,10 @@ func getTextOpts(opts map[string]interface{}) text.Options {
 		var endsv endings.Type
 		switch endopt {
 		case "crlf", "CRLF", "dos":
-			endsv = endings.LF
+			endsv = endings.CRLF
 			ends = &endsv
 		case "lf", "LF", "unix":
-			endsv = endings.CRLF
+			endsv = endings.LF
 			ends = &endsv
 		}
 	}

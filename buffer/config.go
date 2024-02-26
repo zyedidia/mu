@@ -7,6 +7,7 @@ import (
 
 	"github.com/zyedidia/flare"
 	"github.com/zyedidia/ftdetect"
+	"github.com/zyedidia/mu/buffer/text/endings"
 	"github.com/zyedidia/mu/config"
 )
 
@@ -103,13 +104,23 @@ func (b *BufferData) SetOpt(name string, val interface{}) error {
 	}
 	b.Options[name] = val
 
-	b.updateOpt(name)
+	b.updateOpt(name, false)
 
 	return nil
 }
 
-func (b *BufferData) updateOpt(name string) {
+func (b *BufferData) updateOpt(name string, initial bool) {
 	switch name {
+	case "endings":
+		b.Buffer.Opts = getTextOpts(b.Options)
+		if !initial {
+			b.modified = true
+		}
+	case "encoding":
+		b.Buffer.Opts = getTextOpts(b.Options)
+		if !initial {
+			b.modified = true
+		}
 	case "syntax":
 		b.LoadHighlighter()
 	case "filetype":
@@ -132,4 +143,18 @@ func parseCharMap(s string) map[rune]string {
 		m[runes[i]] = string(r)
 	}
 	return m
+}
+
+func (b *BufferData) endings() string {
+	switch *b.Buffer.Opts.Endings {
+	case endings.LF:
+		return "lf"
+	case endings.CRLF:
+		return "crlf"
+	}
+	return "lf"
+}
+
+func (b *BufferData) encoding() string {
+	return fmt.Sprintf("%v", *b.Buffer.Opts.Charset)
 }
