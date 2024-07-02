@@ -18,11 +18,12 @@ local close = {
     ['`'] = true,
 }
 
+local fmt = import("fmt")
 function preInsert(bp, args)
     if #args[1] ~= 1 then
         return
     end
-    if close[args[1]] then
+    if close[args[1]] and args[1] == bp:RuneAtCursor() then
         bp:MoveTo(bp:Cursor():Right(bp.Buffer).Pos)
         return false
     end
