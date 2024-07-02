@@ -69,6 +69,12 @@ func NewConfigFS(dir string, sys string) *ConfigFS {
 	if _, err := os.Stat(filepath.Join(dir, "lsp.yaml")); os.IsNotExist(err) {
 		cfg.WriteDefaultLsp()
 	}
+	if _, err := os.Stat(filepath.Join(dir, "plugins.yaml")); os.IsNotExist(err) {
+		cfg.WriteDefaultPluginManifest()
+	}
+	if _, err := os.Stat(filepath.Join(dir, "plugins")); os.IsNotExist(err) {
+		cfg.WriteDefaultPlugins()
+	}
 	// TODO: this is a global setting in flare, which is bad
 	flare.SetLoader(func(name string) ([]byte, error) {
 		return fs.ReadFile(cfg, filepath.Join(highlighterDir, name+".lang"))
@@ -91,6 +97,18 @@ func (c *ConfigFS) WriteOpts() {
 	}
 }
 
+func (c *ConfigFS) WriteDefaultPluginManifest() {
+	if c.config == "" {
+		return
+	}
+	plugins, err := fs.ReadFile(c.embed, "plugins.yaml")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	c.config.WriteFile("plugins.yaml", plugins, 0666)
+}
+
 func (c *ConfigFS) WriteDefaultLsp() {
 	if c.config == "" {
 		return
@@ -101,6 +119,27 @@ func (c *ConfigFS) WriteDefaultLsp() {
 		return
 	}
 	c.config.WriteFile("lsp.yaml", lsp, 0666)
+}
+
+func (c *ConfigFS) WriteDefaultPlugins() {
+	if c.config != "" {
+		os.Mkdir(filepath.Join(c.ConfigDir(), "plugins"), 0750)
+		err := fs.WalkDir(c.embed, "plugins", func(path string, d fs.DirEntry, err error) error {
+			if d.IsDir() {
+				os.Mkdir(filepath.Join(c.ConfigDir(), path), 0750)
+				return nil
+			}
+			data, _ := fs.ReadFile(c.embed, path)
+			werr := c.config.WriteFile(path, data, 0666)
+			if werr != nil {
+				return werr
+			}
+			return nil
+		})
+		if err != nil {
+			log.Printf("error writing plugins: %v\n", err)
+		}
+	}
 }
 
 func (c *ConfigFS) WriteDefaultBindings() {
