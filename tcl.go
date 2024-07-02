@@ -37,16 +37,21 @@ proc zero {} {
 }
 `
 
+// RunCommand runs a micro TCL expression.
 func (e *Editor) RunCommand(cmd string) (string, error) {
 	return e.EvalRet(cmd, nil)
 }
 
+// Eval runs a micro TCL expression with the given variables defined in the
+// environment.
 func (e *Editor) Eval(cmd string, vars []interface{}) error {
 	interp := gotcl.NewInterpFrom(e.interp)
 	_, err := tclutil.EvalWithVars(interp, cmd, vars)
 	return err
 }
 
+// EvalRet is the same as Eval but returns the object returned by the TCL
+// expression as a string.
 func (e *Editor) EvalRet(cmd string, vars []interface{}) (string, error) {
 	interp := gotcl.NewInterpFrom(e.interp)
 	obj, err := tclutil.EvalWithVars(interp, cmd, vars)

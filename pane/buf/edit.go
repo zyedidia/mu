@@ -61,6 +61,21 @@ func leadingws(b []byte) []byte {
 	return b[0:i]
 }
 
+func (bp *BufPane) Deindent() {
+	l, _ := bp.LineColAt(bp.Cursor().Pos)
+	start := bp.OffsetAt(l, 0)
+	line := bp.GetLine(l)
+	if bp.BoolOpt("tabstospaces") {
+		if bytes.HasPrefix(line, bytes.Repeat([]byte{' '}, bp.IntOpt("tabsize"))) {
+			bp.Buffer.Remove(start, start+bp.IntOpt("tabsize"))
+		}
+	} else {
+		if bytes.HasPrefix(line, []byte{'\t'}) {
+			bp.Buffer.Remove(start, start+1)
+		}
+	}
+}
+
 func (bp *BufPane) Indent() {
 	if bp.BoolOpt("tabstospaces") {
 		bp.InsertString(strings.Repeat(" ", bp.IntOpt("tabsize")))
@@ -79,7 +94,14 @@ func (bp *BufPane) Autoindent() {
 			bytes.HasSuffix(bline, []byte{'('}),
 			bytes.HasSuffix(bline, []byte{'['}),
 			bytes.HasSuffix(bline, []byte{':'}):
+			r, _ := bp.DecodeRuneAt(bp.Cursor().Pos)
 			bp.Indent()
+			if r == '}' || r == ')' || r == ']' {
+				pos := bp.Cursor().Pos
+				bp.Newline()
+				bp.Deindent()
+				bp.MoveTo(pos)
+			}
 		}
 	}
 }
