@@ -18,7 +18,6 @@ local close = {
     ['`'] = true,
 }
 
-local fmt = import("fmt")
 function preInsert(bp, args)
     if #args[1] ~= 1 then
         return
@@ -34,10 +33,21 @@ function onInsert(bp, args)
     if #args[1] ~= 1 then
         return
     end
-    if open[args[1]] ~= nil then
+    if open[args[1]] ~= nil and not bp:RuneAtCursor():match("[%w_(]") then
         bp:InsertString(open[args[1]])
         bp:MoveTo(bp:Cursor():Left(bp.Buffer).Pos)
     end
 end
+
+function preRemove(bp, args)
+    local amt = bp:Cursor().Pos - args[1]
+    if amt == 1 and close[bp:RuneAtCursor()] and open[bp:RuneAt(bp:Cursor().Pos - 1)] then
+        bp:Remove(bp:Cursor().Pos - 1, bp:Cursor().Pos + 1)
+        return false
+    end
+    return true
+end
+
 micro.PostHook("insert", onInsert)
 micro.PreHook("insert", preInsert)
+micro.PreHook("remove-to", preRemove)

@@ -194,7 +194,11 @@ func (bp *BufPane) WordStart(from int) int {
 	return from - consumed
 }
 
-func (bp *BufPane) RuneAtCursor() string {
-	r, _ := bp.DecodeRuneAt(bp.Cursor().Pos)
+func (bp *BufPane) RuneAt(pos int) string {
+	r, _ := bp.DecodeRuneAt(pos)
 	return string(r)
+}
+
+func (bp *BufPane) RuneAtCursor() string {
+	return bp.RuneAt(bp.Cursor().Pos)
 }
