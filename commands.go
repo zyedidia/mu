@@ -303,6 +303,11 @@ var commands = []tclutil.Command{
 		Doc:  "get <name>: return the value of option <name>",
 	},
 	{
+		Name: "show",
+		Fn:   (*Editor).Get,
+		Doc:  "show <name>: return the value of option <name> (same as get)",
+	},
+	{
 		Name: "key",
 		Fn:   (*Editor).Key,
 		Doc:  "key <event>: execute <event> as if it had been typed in",

@@ -195,6 +195,9 @@ func (bp *BufPane) WordStart(from int) int {
 }
 
 func (bp *BufPane) RuneAt(pos int) string {
+	if pos < 0 {
+		return ""
+	}
 	r, _ := bp.DecodeRuneAt(pos)
 	return string(r)
 }

@@ -33,6 +33,9 @@ function onInsert(bp, args)
     if #args[1] ~= 1 then
         return
     end
+    if close[args[1]] and bp:RuneAt(bp:Cursor().Pos - 1):match("[%w_]") then
+        return
+    end
     if open[args[1]] ~= nil and not bp:RuneAtCursor():match("[%w_(]") then
         bp:InsertString(open[args[1]])
         bp:MoveTo(bp:Cursor():Left(bp.Buffer).Pos)
