@@ -5,8 +5,8 @@ import (
 
 	"github.com/zyedidia/mu/buffer"
 	"github.com/zyedidia/mu/pane/info"
-	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
+	"github.com/zyedidia/uniseg"
 )
 
 type message struct {
@@ -77,7 +77,7 @@ func (i *InfoBar) Display(draw DrawFn, cursor CursorFn) {
 
 	x, y := 0, 0
 	for len(msg) > 0 {
-		r, combc, size := grapheme.DecodeInString(msg)
+		r, combc, size := uniseg.DecodeInString(msg)
 		st := i.ed.theme.Default()
 		if err {
 			st = i.ed.theme.Style("error")

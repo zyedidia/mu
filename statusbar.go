@@ -2,9 +2,8 @@ package mu
 
 import (
 	"github.com/zyedidia/mu/pane"
-	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
-	"github.com/zyedidia/mu/pkg/uniseg"
+	"github.com/zyedidia/uniseg"
 )
 
 type StatusBar struct {
@@ -31,7 +30,7 @@ func (s *StatusBar) Display(draw DrawFn, w int, th *theme.Theme) {
 		style = seg.Style
 		left := seg.Text
 		for len(left) > 0 && x < w {
-			r, combc, size := grapheme.DecodeInString(left)
+			r, combc, size := uniseg.DecodeInString(left)
 			draw(x, 0, r, combc, style)
 			left = left[size:]
 			x++
@@ -52,7 +51,7 @@ func (s *StatusBar) Display(draw DrawFn, w int, th *theme.Theme) {
 		style = seg.Style
 		right := seg.Text
 		for len(right) > 0 && x < w {
-			r, combc, size := grapheme.DecodeInString(right)
+			r, combc, size := uniseg.DecodeInString(right)
 			draw(x, 0, r, combc, style)
 			right = right[size:]
 			x++

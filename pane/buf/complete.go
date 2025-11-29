@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/zyedidia/mu/pkg/completer"
-	"github.com/zyedidia/mu/pkg/grapheme"
 	"github.com/zyedidia/mu/pkg/theme"
+	"github.com/zyedidia/uniseg"
 )
 
 const suggestionMax = 25
@@ -50,7 +50,7 @@ func (c *CompleteBar) Display(draw DrawFn, w int, th *theme.Theme, choice int) {
 	style := th.Default().Add(theme.AttrReverse)
 	x := 0
 	for len(bar) > 0 && x < w {
-		r, combc, size := grapheme.DecodeInString(bar)
+		r, combc, size := uniseg.DecodeInString(bar)
 		draw(x, 0, r, combc, style)
 		bar = bar[size:]
 		x++

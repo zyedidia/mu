@@ -17,12 +17,12 @@ func main() {
 	var ed *mu.Editor
 	var err error
 	if len(args) > 0 {
-		ed, err = mu.NewEditorFromPath(args[0], 0, 0, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
+		ed, err = mu.NewEditorFromPath(args[0], 0, 0, nil, nil)
 	} else {
-		ed = mu.NewEditor(0, 0, nil)
+		ed, err = mu.NewEditor(0, 0, nil, nil)
+	}
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	rl, err := readline.New("> ")

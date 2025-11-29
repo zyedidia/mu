@@ -5,7 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/zyedidia/generic"
-	"github.com/zyedidia/mu/pkg/grapheme"
+	"github.com/zyedidia/uniseg"
 	"go.lsp.dev/protocol"
 )
 
@@ -14,12 +14,12 @@ import (
 // arbitrary number of combining runes, such as accents or other markings to be
 // applied to the visualization of the rune.
 func (b *Buffer) DecodeGraphemeAt(off int) (rune, []rune, int) {
-	r, comb, size, _ := grapheme.DecodeAt(b, off)
+	r, comb, size, _ := uniseg.DecodeAt(b, off)
 	return r, comb, size
 }
 
 func (b *Buffer) DecodeGraphemeWidthAt(off int) (rune, []rune, int, int) {
-	return grapheme.DecodeAt(b, off)
+	return uniseg.DecodeAt(b, off)
 }
 
 // DecodeRuneBefore returns the rune immediately before the offset and the size
@@ -30,7 +30,7 @@ func (b *Buffer) DecodeRuneBefore(off int) (rune, int) {
 }
 
 func (b *Buffer) DecodeGraphemeBefore(off int) (rune, []rune, int) {
-	return grapheme.DecodeBefore(b, off)
+	return uniseg.DecodeBefore(b, off)
 }
 
 // UnicodeLoc converts a unicode (line, col) pair to byte position, where col
