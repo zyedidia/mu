@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/zyedidia/gotcl"
 )
 
 // Editor is the top-level editor state, managing the screen, views, and
@@ -14,17 +15,17 @@ type Editor struct {
 	config *Config
 	theme  *Theme
 
-	ks   *KeyState
-	regs *RegisterSet
+	ks     *KeyState
+	regs   *RegisterSet
+	interp *gotcl.Interp
 
 	views  []*View
 	active int
 
+	infobar *InfoBar
+
 	running bool
 	w, h    int
-
-	message string
-	msgErr  bool
 }
 
 // NewEditor creates a new editor with the given screen, config, and theme.
@@ -35,16 +36,17 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 	SetupBindings(ks)
 
 	ed := &Editor{
-		screen: screen,
-		config: cfg,
-		theme:  th,
-		ks:     ks,
-		regs:   regs,
-		w:      w,
-		h:      h,
+		screen:  screen,
+		config:  cfg,
+		theme:   th,
+		ks:      ks,
+		regs:    regs,
+		infobar: NewInfoBar(),
+		w:       w,
+		h:       h,
 	}
 
-	// Editor-level bindings (quit, etc.)
+	ed.initTCL()
 	ed.registerEditorBindings()
 
 	return ed
@@ -60,6 +62,13 @@ func (e *Editor) registerEditorBindings() {
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.running = false
 	}, "Z", "Z")
+
+	// :: enter command mode
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.infobar.StartPrompt(":", func(input string) {
+			e.RunCommand(input)
+		})
+	}, ":")
 }
 
 // OpenFile opens a file in a new view.
@@ -110,7 +119,7 @@ func (e *Editor) addView(buf *Buffer, path string) {
 		v.HScrollMargin = n
 	}
 
-	v.Resize(e.w, e.h-2) // leave room for status + info bars
+	v.Resize(e.w, e.h-2)
 	e.views = append(e.views, v)
 	e.active = len(e.views) - 1
 	e.ks.SetBuffer(buf)
@@ -135,14 +144,12 @@ func (e *Editor) Resize(w, h int) {
 
 // Message displays a message in the info bar.
 func (e *Editor) Message(msg string) {
-	e.message = msg
-	e.msgErr = false
+	e.infobar.Message(msg)
 }
 
 // Error displays an error in the info bar.
 func (e *Editor) Error(msg string) {
-	e.message = msg
-	e.msgErr = true
+	e.infobar.Error(msg)
 }
 
 // Run starts the main event loop.
@@ -156,14 +163,18 @@ func (e *Editor) Run() {
 			break
 		}
 
-		// Clear transient messages on any keypress.
-		e.message = ""
-		e.msgErr = false
-
 		switch ev := ev.(type) {
 		case *tcell.EventKey:
 			key := keyEventToString(ev)
-			if key != "" {
+			if key == "" {
+				continue
+			}
+			// If the infobar prompt is active, send keys there.
+			if e.infobar.IsActive() {
+				e.infobar.HandleKey(key)
+			} else {
+				// Clear transient messages on normal keypress.
+				e.infobar.Clear()
 				e.ks.HandleKey(key)
 			}
 		case *tcell.EventResize:
@@ -192,7 +203,7 @@ func (e *Editor) Display() {
 	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {
 		e.screen.SetContent(x, y, mainc, combc, style.TCellStyle())
 	}, func(x, y int, main bool) {
-		if main {
+		if main && !e.infobar.IsActive() {
 			e.screen.ShowCursor(x, y)
 		}
 	}, e.theme)
@@ -201,80 +212,9 @@ func (e *Editor) Display() {
 	e.drawStatusBar(e.h - 2)
 
 	// Info bar.
-	e.drawInfoBar(e.h - 1)
+	e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
 
 	e.screen.Show()
-}
-
-// --- Status bar ---
-
-func (e *Editor) drawStatusBar(y int) {
-	if y < 0 {
-		return
-	}
-	style := e.theme.Style("statusline")
-	ts := style.TCellStyle()
-
-	v := e.ActiveView()
-	b := v.buf
-
-	// Left: mode | filename [+]
-	mode := e.ks.Mode().Name
-	name := b.Path
-	if name == "" {
-		name = "[No Name]"
-	}
-	mod := ""
-	if b.Modified() {
-		mod = " [+]"
-	}
-	left := fmt.Sprintf(" %s | %s%s ", mode, name, mod)
-
-	// Right: line:col
-	line, col := b.LineColAt(b.Cursor().Pos)
-	right := fmt.Sprintf(" %d:%d ", line+1, col+1)
-
-	x := 0
-	for _, r := range left {
-		if x >= e.w {
-			break
-		}
-		e.screen.SetContent(x, y, r, nil, ts)
-		x++
-	}
-	for x < e.w-len(right) {
-		e.screen.SetContent(x, y, ' ', nil, ts)
-		x++
-	}
-	for _, r := range right {
-		if x >= e.w {
-			break
-		}
-		e.screen.SetContent(x, y, r, nil, ts)
-		x++
-	}
-}
-
-// --- Info bar ---
-
-func (e *Editor) drawInfoBar(y int) {
-	if y < 0 {
-		return
-	}
-	style := e.theme.Default()
-	if e.msgErr {
-		style = e.theme.Style("error")
-	}
-	ts := style.TCellStyle()
-
-	x := 0
-	for _, r := range e.message {
-		if x >= e.w {
-			break
-		}
-		e.screen.SetContent(x, y, r, nil, ts)
-		x++
-	}
 }
 
 // --- Key event conversion ---
@@ -283,7 +223,6 @@ func (e *Editor) drawInfoBar(y int) {
 func keyEventToString(ev *tcell.EventKey) string {
 	mod := ev.Modifiers()
 
-	// Regular rune with no special modifiers (or just shift).
 	if ev.Key() == tcell.KeyRune {
 		r := ev.Rune()
 		if mod&tcell.ModAlt != 0 {
@@ -292,7 +231,6 @@ func keyEventToString(ev *tcell.EventKey) string {
 		return string(r)
 	}
 
-	// Named special keys.
 	if name, ok := specialKeyMap[ev.Key()]; ok {
 		if mod&tcell.ModAlt != 0 {
 			return fmt.Sprintf("<A-%s>", name)
@@ -300,8 +238,6 @@ func keyEventToString(ev *tcell.EventKey) string {
 		return name
 	}
 
-	// Ctrl combinations. Handle after special keys to avoid
-	// Ctrl-I/Tab, Ctrl-M/Enter conflicts.
 	if ev.Key() >= tcell.KeyCtrlA && ev.Key() <= tcell.KeyCtrlZ {
 		ch := 'a' + rune(ev.Key()-tcell.KeyCtrlA)
 		return fmt.Sprintf("<C-%c>", ch)
@@ -311,18 +247,18 @@ func keyEventToString(ev *tcell.EventKey) string {
 }
 
 var specialKeyMap = map[tcell.Key]string{
-	tcell.KeyEscape:    KeyEscape,
-	tcell.KeyEnter:     KeyEnter,
-	tcell.KeyBackspace: KeyBacksp,
+	tcell.KeyEscape:     KeyEscape,
+	tcell.KeyEnter:      KeyEnter,
+	tcell.KeyBackspace:  KeyBacksp,
 	tcell.KeyBackspace2: KeyBacksp,
-	tcell.KeyTab:       KeyTab,
-	tcell.KeyDelete:    KeyDelete,
-	tcell.KeyUp:        KeyUp,
-	tcell.KeyDown:      KeyDown,
-	tcell.KeyLeft:      KeyLeft,
-	tcell.KeyRight:     KeyRight,
-	tcell.KeyHome:      KeyHome,
-	tcell.KeyEnd:       KeyEnd,
-	tcell.KeyPgUp:      KeyPgUp,
-	tcell.KeyPgDn:      KeyPgDn,
+	tcell.KeyTab:        KeyTab,
+	tcell.KeyDelete:     KeyDelete,
+	tcell.KeyUp:         KeyUp,
+	tcell.KeyDown:       KeyDown,
+	tcell.KeyLeft:       KeyLeft,
+	tcell.KeyRight:      KeyRight,
+	tcell.KeyHome:       KeyHome,
+	tcell.KeyEnd:        KeyEnd,
+	tcell.KeyPgUp:       KeyPgUp,
+	tcell.KeyPgDn:       KeyPgDn,
 }

@@ -691,10 +691,10 @@ the essentials (h/j/k/l, w/b/e, d/c/y, iw/aw) and expand.
 loop, tab/split management. At this point the editor is functional for basic
 editing.
 
-### Step 8: UI Chrome
+### Step 8: UI Chrome (done)
 `statusbar.go`, `infobar.go` — Status line and command/message bar.
 
-### Step 9: Ex Commands and TCL
+### Step 9: Ex Commands and TCL (done)
 `command.go`, `tcl.go` — TCL interpreter, :w/:q/:e/:set/:sp/:vs commands,
 command-line prompt with completion.
 

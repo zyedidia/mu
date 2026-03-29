@@ -17,6 +17,8 @@ github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUc
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 h1:oMHjjTLfGXVuyOQBYj5/td9WC0mw4g1xDBPovIqmHew=
 github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3/go.mod h1:YKbIYP//Eln8eDgAJGI3IDvR3s4Tv9Z9TGIOumiyQ5c=
+github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 h1:Y4YaeD2C+eyDI2JqvweJ7OW06j7mcjTfaaR8VFb7e+k=
+github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7/go.mod h1:4Hhqh6e8X8FRGVQwM0eb2YZVcJ7W4zgTOCOQmpFGPKM=
 github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6 h1:MRDTJe75gN315qD/mVCzKzYyg9mNSwefjFNtKNz2ADw=
 github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6/go.mod h1:N+Hp6tKBZfw95qyv+TRnQkdD1GIQMVpBJekFyFrr/F4=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
