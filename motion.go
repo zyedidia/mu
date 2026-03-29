@@ -10,7 +10,7 @@ type MotionFlags int
 const (
 	Charwise  MotionFlags = 0
 	Linewise  MotionFlags = 1 << iota
-	Inclusive              // include the endpoint character in the range
+	Inclusive             // include the endpoint character in the range
 )
 
 // MotionDef defines a cursor motion. Fn computes a new byte offset from the

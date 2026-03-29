@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	lsp "go.lsp.dev/protocol"
 	"github.com/zyedidia/mu/text"
+	lsp "go.lsp.dev/protocol"
 )
 
 func init() {
@@ -37,8 +37,8 @@ type Buffer struct {
 	lspVersion int32
 	lspFt      string // filetype for LSP
 
-	watchDone chan struct{}   // closed to stop the file watcher
-	onReload  func(*Buffer)  // called from watcher when auto-reloaded
+	watchDone chan struct{} // closed to stop the file watcher
+	onReload  func(*Buffer) // called from watcher when auto-reloaded
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting

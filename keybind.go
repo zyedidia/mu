@@ -34,8 +34,8 @@ type TrieResult int
 
 const (
 	TrieNone   TrieResult = iota // no match and not a prefix
-	TriePrefix                    // prefix of one or more bindings
-	TrieMatch                     // exact match found
+	TriePrefix                   // prefix of one or more bindings
+	TrieMatch                    // exact match found
 )
 
 // BindingTrie is a prefix tree mapping key sequences to actions.
