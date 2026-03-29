@@ -12,6 +12,9 @@ wordwrap = false
 clipboard = "external"
 cursorline = true
 incsearch = true
+saveundo = true
+savecursor = true
+savehistory = true
 
 [makefile]
 tabstospaces = false

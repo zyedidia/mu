@@ -152,6 +152,10 @@ func cmdWrite(e *Editor, args []string) error {
 	if err := b.SaveAs(path); err != nil {
 		return err
 	}
+	// Persist undo history after successful save.
+	if saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo"); saveUndo {
+		b.SaveUndoHistory()
+	}
 	e.infobar.Message(fmt.Sprintf("\"%s\" written", b.Path))
 	return nil
 }

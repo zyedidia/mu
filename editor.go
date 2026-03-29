@@ -82,6 +82,11 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 	ed.registerSearchBindings()
 	ed.registerLspBindings()
 
+	// Load command history from disk.
+	if b, ok := GetOptBool(cfg.opts.top, "savehistory"); !ok || b {
+		ed.infobar.LoadHistory()
+	}
+
 	return ed
 }
 
@@ -431,6 +436,16 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 		buf.readonly = true
 	}
 
+	// Restore persisted state.
+	if path != "" {
+		if b, ok := GetOptBool(e.config.opts.top, "saveundo"); !ok || b {
+			buf.LoadUndoHistory()
+		}
+		if b, ok := GetOptBool(e.config.opts.top, "savecursor"); !ok || b {
+			buf.LoadCursorPos()
+		}
+	}
+
 	return v
 }
 
@@ -484,8 +499,40 @@ func (e *Editor) Error(msg string) {
 	e.infobar.Error(msg)
 }
 
+// persistState saves undo history, cursor positions, and command history
+// to disk.
+func (e *Editor) persistState() {
+	saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo")
+	saveCursor, _ := GetOptBool(e.config.opts.top, "savecursor")
+	saveHistory, _ := GetOptBool(e.config.opts.top, "savehistory")
+
+	// Save per-buffer state.
+	seen := make(map[*Buffer]bool)
+	for _, t := range e.tabs {
+		for _, v := range t.panes {
+			b := v.buf
+			if seen[b] {
+				continue
+			}
+			seen[b] = true
+			if saveUndo {
+				b.SaveUndoHistory()
+			}
+			if saveCursor && !b.Modified() {
+				b.SaveCursorPos()
+			}
+		}
+	}
+
+	// Save command history.
+	if saveHistory {
+		e.infobar.SaveHistory()
+	}
+}
+
 // Run starts the main event loop. Shuts down LSP servers on exit.
 func (e *Editor) Run() {
+	defer e.persistState()
 	defer e.lspManager.ShutdownAll()
 	defer e.screen.SetCursorStyle(tcell.CursorStyleDefault)
 
