@@ -52,6 +52,13 @@ func (b *Buffer) SaveAs(path string) error {
 	b.Path = path
 	b.markUnmodified()
 	b.updateModTime()
+
+	// Notify LSP server.
+	if b.lspServer != nil {
+		absPath2, _ := filepath.Abs(path)
+		b.lspServer.DidSave(absPath2)
+	}
+
 	return nil
 }
 

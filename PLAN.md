@@ -647,15 +647,17 @@ For now, the only pane type is `BufPane` (a View + Buffer).
 | `gdamore/tcell/v2` | Terminal I/O |
 | `zyedidia/flare` | PEG-based syntax highlighting |
 | `zyedidia/ftdetect` | Filetype detection |
+| `zyedidia/gpeg` | PEG VM (used by flare) |
 | `zyedidia/gotcl` | TCL interpreter |
 | `zyedidia/uniseg` | Grapheme segmentation + display width |
-| `zyedidia/go-runewidth` | Character display width |
-| `zyedidia/clipper` | System clipboard |
+| `zyedidia/glob` | Glob pattern matching (config) |
+| `mattn/go-runewidth` | Character display width |
 | `gogs/chardet` | Charset auto-detection |
 | `pelletier/go-toml` | TOML parsing |
 | `gopkg.in/yaml.v2` | YAML parsing (themes, LSP config) |
 | `golang.org/x/text` | Encoding transforms |
-| `go.lsp.dev/protocol` | LSP type definitions |
+| `golang.org/x/sync` | Semaphore (syntax highlighting) |
+| `go.lsp.dev/protocol` | LSP type definitions (step 13) |
 
 ## Implementation Order
 
@@ -699,13 +701,48 @@ editing.
 command-line prompt with completion.
 
 ### Step 10: Search (done)
-`search.go` — Forward/backward search (/, ?), next/prev (n, N), :s substitute.
+`search.go` — Incremental forward/backward search (/, ?), next/prev (n, N),
+substitute command with interactive (y/n/q/a) and all modes. Search uses
+`FindReaderSubmatchIndex` directly on the buffer (no byte copies). `*` and `#`
+search for word under cursor.
 
-### Step 11: Syntax Highlighting
-`syntax.go` — Windowed flare integration, background highlighting, incremental
-updates.
+### Step 11: Syntax Highlighting (done)
+`syntax.go` — Windowed flare integration with 10MB core window + 5MB overlap
+on each side. Background initial highlight via goroutine. Incremental
+re-highlighting via memo table on edits. Window re-centers when cursor leaves
+the core. Filetype detection via ftdetect. 24 highlighter grammars and 137
+filetype detectors embedded.
 
-### Step 12: File I/O and LSP
-`save.go` — Atomic file saving, backup, readonly detection.
-`lsp.go` — LSP client, server lifecycle, completion/hover/definition/format/
-diagnostics.
+### Step 12: File I/O (done)
+`save.go` — File saving with backup to `~/.config/mu/backup/`, readonly
+detection with `[RO]` status bar indicator, sudo save via `screen.Suspend()`
+with SIGINT protection. `:w` prompts for sudo on readonly files. `ZZ` saves
+and quits.
+
+`diff.go` — O(ND) byte-level diff on `Indexer` interface (no buffer copies).
+
+`buffer.go` additions — `SetContent` applies diffs to preserve undo history
+(falls back to full replacement above 256KB). `Reload` reads file and diffs.
+Background file watcher checks mtime every second and auto-reloads unmodified
+buffers. Per-keypress check prompts for modified buffers. Hash-based
+modification detection (md5) for files under 1MB eliminates false positives
+from undo.
+
+### Step 13: LSP (done — tier 1)
+`lsp.go` — JSON-RPC 2.0 transport over stdin/stdout, ID-based request/response
+matching via channels, background receive goroutine. LspServer wraps subprocess
+with initialize/shutdown lifecycle. LspManager manages one server per language,
+lazy-started from lsp.yaml config.
+
+`lsp_editor.go` — Editor integration: diagnostic push handling updates gutter
+markers, diagnostic text shown in infobar on cursor line. Keybindings: `gd`
+(go to definition), `K` (hover), `]d`/`[d` (next/prev diagnostic). Commands:
+`:lsp-def`, `:lsp-hover`, `:lsp-format`.
+
+`buffer.go` additions — `lspServer`/`lspVersion` fields, `lspSendEdit` sends
+incremental didChange on every edit, `LspPosition`/`FromLspPosition` for
+UTF-16 ↔ byte offset conversion. didSave sent on `:w`.
+
+Tier 1 features: initialize/shutdown, didOpen/didChange/didSave/didClose,
+publishDiagnostics, go to definition, hover, formatting, completion request
+(UI not yet wired). See LSP.md for full plan including tier 2/3.

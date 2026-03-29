@@ -22,8 +22,9 @@ type Editor struct {
 	views  []*View
 	active int
 
-	infobar *InfoBar
-	search  SearchState
+	infobar    *InfoBar
+	search     SearchState
+	lspManager *LspManager
 
 	running bool
 	w, h    int
@@ -54,9 +55,11 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		return 10
 	}
 
+	ed.initLsp()
 	ed.initTCL()
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()
+	ed.registerLspBindings()
 
 	return ed
 }
@@ -147,10 +150,11 @@ func (e *Editor) addView(buf *Buffer, path string) {
 	}
 	buf.StartWatcher()
 
-	// Detect filetype and initialize syntax highlighting.
+	// Detect filetype, initialize syntax highlighting and LSP.
 	ft := DetectFiletype(e.config, path, buf.GetLine(0))
 	if ft != "" {
 		buf.InitSyntax(e.config, ft)
+		e.initBufferLsp(buf, ft)
 	}
 
 	if path != "" && isReadonly(path) {
@@ -220,8 +224,9 @@ func (e *Editor) Error(msg string) {
 	e.infobar.Error(msg)
 }
 
-// Run starts the main event loop.
+// Run starts the main event loop. Shuts down LSP servers on exit.
 func (e *Editor) Run() {
+	defer e.lspManager.ShutdownAll()
 	e.running = true
 	e.Display()
 
@@ -281,6 +286,14 @@ func (e *Editor) Display() {
 			e.screen.ShowCursor(x, y)
 		}
 	}, e.theme)
+
+	// Show diagnostic for cursor line in infobar (if no other message).
+	if !e.infobar.IsActive() && e.infobar.message == "" {
+		line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
+		if d, ok := v.buf.GetDiagnosticAt(line); ok {
+			e.infobar.Message(fmt.Sprintf("[%s] %s", d.Type.String(), d.Text))
+		}
+	}
 
 	// Status bar.
 	e.drawStatusBar(e.h - 2)

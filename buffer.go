@@ -5,8 +5,10 @@ import (
 	"crypto/md5"
 	"encoding/gob"
 	"os"
+	"path/filepath"
 	"time"
 
+	lsp "go.lsp.dev/protocol"
 	"github.com/zyedidia/mu/text"
 )
 
@@ -30,6 +32,10 @@ type Buffer struct {
 	savedHash   []byte    // md5 of contents at last save/load (nil if too large)
 	diagnostics []Diagnostic
 	syntax      *SyntaxState
+
+	lspServer  *LspServer
+	lspVersion int32
+	lspFt      string // filetype for LSP
 
 	watchDone chan struct{}   // closed to stop the file watcher
 	onReload  func(*Buffer)  // called from watcher when auto-reloaded
@@ -166,6 +172,9 @@ func (b *Buffer) applyEdit(start, end int, val []byte) {
 	b.text.Insert(start, val)
 	b.modified = true
 
+	// Notify LSP server of the change.
+	b.lspSendEdit(start, end, val)
+
 	// Update syntax highlighting memo table.
 	b.SyntaxApplyEdit(start, end, len(val))
 
@@ -241,6 +250,42 @@ func (b *Buffer) Redo() {
 // UndoBarrier prevents the next edit from coalescing with the previous one.
 func (b *Buffer) UndoBarrier() {
 	b.undo.Barrier()
+}
+
+// --- LSP integration ---
+
+func (b *Buffer) lspSendEdit(start, end int, text []byte) {
+	if b.lspServer == nil {
+		return
+	}
+	b.lspVersion++
+	absPath, _ := filepath.Abs(b.Path)
+
+	startLine, startCol := b.LineColAt(start)
+	endLine, endCol := b.LineColAt(end)
+	_, startCol16 := b.Utf16Loc(startLine, startCol)
+	_, endCol16 := b.Utf16Loc(endLine, endCol)
+
+	change := lsp.TextDocumentContentChangeEvent{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: uint32(startLine), Character: uint32(startCol16)},
+			End:   lsp.Position{Line: uint32(endLine), Character: uint32(endCol16)},
+		},
+		Text: string(text),
+	}
+	b.lspServer.DidChange(absPath, b.lspVersion, []lsp.TextDocumentContentChangeEvent{change})
+}
+
+// LspPosition converts a (line, byte-col) pair to an LSP Position (UTF-16).
+func (b *Buffer) LspPosition(line, col int) lsp.Position {
+	_, col16 := b.Utf16Loc(line, col)
+	return lsp.Position{Line: uint32(line), Character: uint32(col16)}
+}
+
+// FromLspPosition converts an LSP Position to a byte offset.
+func (b *Buffer) FromLspPosition(pos lsp.Position) int {
+	_, col8 := b.Utf8Loc(int(pos.Line), int(pos.Character))
+	return b.OffsetAt(int(pos.Line), col8)
 }
 
 // --- File watcher ---

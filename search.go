@@ -368,7 +368,8 @@ func (e *Editor) substituteInteractive(re *regexp.Regexp, replacement string) {
 // subStep finds the next match from off and prompts the user. It chains
 // via the Prompt callback so the event loop drives each step.
 func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) {
-	b := e.ActiveView().buf
+	v := e.ActiveView()
+	b := v.buf
 
 	sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
 	br := bufio.NewReader(sr)
@@ -382,6 +383,7 @@ func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) 
 	}
 
 	*b.Cursor() = b.Cursor().MoveTo(loc[0])
+	v.Highlight = [2]int{loc[0], loc[1]}
 	matched := string(b.Slice(loc[0], loc[1]))
 
 	e.infobar.Prompt(fmt.Sprintf("Replace \"%s\"? (y/n/q/a)", matched), func(key string) {
@@ -418,6 +420,7 @@ func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) 
 }
 
 func (e *Editor) subDone(re *regexp.Regexp, count int) {
+	e.ActiveView().Highlight = [2]int{}
 	if count == 0 {
 		e.infobar.Error(fmt.Sprintf("Pattern not found: %s", re.String()))
 	} else {
