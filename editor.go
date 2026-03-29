@@ -59,7 +59,19 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		switch mode {
 		case ModeInsert, ModeReplace:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
+		case ModeOperatorPending:
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
 		default:
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
+		}
+	}
+	ks.onCursorStyle = func(waiting bool) {
+		if ed.screen == nil {
+			return
+		}
+		if waiting {
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
+		} else {
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
 		}
 	}

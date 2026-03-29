@@ -144,6 +144,10 @@ type KeyState struct {
 
 	// onModeChange is called after every mode switch with the new mode ID.
 	onModeChange func(ModeID)
+
+	// onCursorStyle is called when entering/leaving a pending char-wait
+	// state (f, t, r, etc.). true = waiting, false = done.
+	onCursorStyle func(waiting bool)
 }
 
 // NewKeyState creates a new key dispatch state machine.
@@ -234,6 +238,9 @@ func (ks *KeyState) SetPending(op *PendingOp) {
 // argument (for f, t, r, etc.).
 func (ks *KeyState) WaitForChar(fn func(ks *KeyState, ch string)) {
 	ks.charWait = fn
+	if ks.onCursorStyle != nil {
+		ks.onCursorStyle(true)
+	}
 }
 
 // ResetAction clears the accumulated count, register, pending operator, and
@@ -253,6 +260,9 @@ func (ks *KeyState) HandleKey(key string) {
 	if ks.charWait != nil {
 		fn := ks.charWait
 		ks.charWait = nil
+		if ks.onCursorStyle != nil {
+			ks.onCursorStyle(false)
+		}
 		fn(ks, key)
 		return
 	}

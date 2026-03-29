@@ -28,11 +28,19 @@ type InfoBar struct {
 	// Tab completion.
 	completer  Completer
 	completion completionState
+
+	// Command history (per prompt type: ":", "/", "?").
+	history    map[string][]string
+	histIndex  int    // -1 = editing new input, 0..n = browsing history
+	histSaved  []rune // the input being edited before browsing history
 }
 
 // NewInfoBar creates a new info bar.
 func NewInfoBar() *InfoBar {
-	return &InfoBar{}
+	return &InfoBar{
+		history:   make(map[string][]string),
+		histIndex: -1,
+	}
 }
 
 // Message shows a message in the info bar.
@@ -86,6 +94,8 @@ func (ib *InfoBar) StartPrompt(prompt string, cb func(input string)) {
 	ib.onCancel = nil
 	ib.completer = nil
 	ib.completion.reset()
+	ib.histIndex = -1
+	ib.histSaved = nil
 	ib.message = ""
 }
 
@@ -143,18 +153,32 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		ib.Cancel()
 		return true, true
 	case KeyEnter:
+		input := string(ib.input)
+		// Save non-empty input to history for this prompt type.
+		if input != "" {
+			h := ib.history[ib.prompt]
+			// Avoid consecutive duplicates.
+			if len(h) == 0 || h[len(h)-1] != input {
+				ib.history[ib.prompt] = append(h, input)
+			}
+		}
 		cb := ib.callback
-		// Clear callbacks before invoking so Cancel inside cb doesn't double-fire.
 		ib.active = false
 		ib.callback = nil
 		ib.onChange = nil
 		ib.onCancel = nil
 		if cb != nil {
-			cb(string(ib.input))
+			cb(input)
 		}
 		ib.input = nil
 		ib.cursorPos = 0
 		return true, true
+	case KeyUp, "<C-p>":
+		ib.historyNav(-1)
+		return true, false
+	case KeyDown, "<C-n>":
+		ib.historyNav(1)
+		return true, false
 	case KeyBacksp:
 		if ib.cursorPos > 0 {
 			ib.input = append(ib.input[:ib.cursorPos-1], ib.input[ib.cursorPos:]...)
@@ -192,6 +216,43 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		}
 	}
 	return true, false
+}
+
+// historyNav navigates through command history. dir is -1 for older (Up)
+// or +1 for newer (Down).
+//
+// histIndex: -1 = editing new input, 0 = most recent, 1 = next older, etc.
+func (ib *InfoBar) historyNav(dir int) {
+	h := ib.history[ib.prompt]
+	if len(h) == 0 {
+		return
+	}
+	if ib.histIndex == -1 && dir > 0 {
+		return // already at current input
+	}
+	if ib.histIndex == -1 {
+		// Save current input before browsing.
+		ib.histSaved = make([]rune, len(ib.input))
+		copy(ib.histSaved, ib.input)
+	}
+
+	// Up = older = increment index; Down = newer = decrement.
+	newIndex := ib.histIndex - dir
+	if newIndex >= len(h) {
+		return // at oldest
+	}
+	if newIndex < -1 {
+		newIndex = -1
+	}
+
+	ib.histIndex = newIndex
+	if newIndex == -1 {
+		ib.input = ib.histSaved
+	} else {
+		ib.input = []rune(h[len(h)-1-newIndex])
+	}
+	ib.cursorPos = len(ib.input)
+	ib.completion.reset()
 }
 
 // tabComplete performs one step of tab completion. dir is +1 for forward
