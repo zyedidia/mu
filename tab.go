@@ -50,12 +50,17 @@ func (t *Tab) VSplit(v *View) {
 	if node == nil {
 		return
 	}
+	// Save the current pane's cursor before splitting.
+	if cur := t.panes[t.cur]; cur != nil {
+		cur.Deactivate()
+	}
 	newID := node.VSplit()
 	if newID == 0 {
 		return
 	}
 	t.panes[newID] = v
 	t.cur = newID
+	v.Activate()
 	t.Resize(t.w, t.h)
 }
 
@@ -66,12 +71,16 @@ func (t *Tab) HSplit(v *View) {
 	if node == nil {
 		return
 	}
+	if cur := t.panes[t.cur]; cur != nil {
+		cur.Deactivate()
+	}
 	newID := node.HSplit()
 	if newID == 0 {
 		return
 	}
 	t.panes[newID] = v
 	t.cur = newID
+	v.Activate()
 	t.Resize(t.w, t.h)
 }
 
@@ -248,23 +257,27 @@ func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeN
 	}
 }
 
-// drawDividers renders vertical and horizontal dividers between split panes.
+// drawDividers renders vertical dividers between vertically-split panes.
+// Horizontal dividers are not drawn — the top pane's status bar acts as
+// the visual separator.
 func (t *Tab) drawDividers(draw DrawFunc, th *Theme) {
 	style := th.Style("statusline")
-	t.root.EachLeaf(func(leaf *SplitNode) {
-		// Vertical divider to the left of right-side panes.
-		if leaf.HasDividerLeft() {
-			x := leaf.X - 1
-			for y := leaf.Y; y < leaf.Y+leaf.H; y++ {
-				draw(x, y, '│', nil, style)
-			}
+	drawVertDividers(t.root, draw, style)
+}
+
+// drawVertDividers recursively draws the vertical divider column for each
+// SplitVert node.
+func drawVertDividers(n *SplitNode, draw DrawFunc, style Style) {
+	if n.IsLeaf() {
+		return
+	}
+	if n.Kind == SplitVert {
+		// The divider column is between children[0] and children[1].
+		x := n.children[0].X + n.children[0].W
+		for y := n.Y; y < n.Y+n.H; y++ {
+			draw(x, y, '│', nil, style)
 		}
-		// Horizontal divider above bottom panes.
-		if leaf.HasDividerAbove() {
-			y := leaf.Y - 1
-			for x := leaf.X; x < leaf.X+leaf.W; x++ {
-				draw(x, y, '─', nil, style)
-			}
-		}
-	})
+	}
+	drawVertDividers(n.children[0], draw, style)
+	drawVertDividers(n.children[1], draw, style)
 }

@@ -73,18 +73,19 @@ func (n *SplitNode) VSplit() uint {
 }
 
 // HSplit splits this leaf node horizontally (top/bottom). Returns the new
-// leaf node's ID. The existing content stays on top.
+// leaf node's ID. The existing content stays on top. No gap row is
+// reserved — the top pane's status bar acts as the visual divider.
 func (n *SplitNode) HSplit() uint {
 	if !n.IsLeaf() {
 		return 0
 	}
 	topH := n.H / 2
-	botH := n.H - topH - 1 // -1 for divider
+	botH := n.H - topH
 
 	top := newLeafNode(n.X, n.Y, n.W, topH, n)
 	top.id = n.id
 
-	bot := newLeafNode(n.X, n.Y+topH+1, n.W, botH, n)
+	bot := newLeafNode(n.X, n.Y+topH, n.W, botH, n)
 
 	n.Kind = SplitHoriz
 	n.children = [2]*SplitNode{top, bot}
@@ -162,12 +163,12 @@ func (n *SplitNode) Resize(w, h int) {
 		n.children[1].Resize(rightW, h)
 	case SplitHoriz:
 		topH := h / 2
-		botH := h - topH - 1
+		botH := h - topH
 		n.children[0].X = n.X
 		n.children[0].Y = n.Y
 		n.children[0].Resize(w, topH)
 		n.children[1].X = n.X
-		n.children[1].Y = n.Y + topH + 1
+		n.children[1].Y = n.Y + topH
 		n.children[1].Resize(w, botH)
 	}
 }
@@ -274,20 +275,3 @@ func (n *SplitNode) neighbor(id uint, isDir func(cur, cand *SplitNode) bool, dis
 	return bestID
 }
 
-// HasDividerLeft returns true if there's a vertical divider to the left
-// of this node (i.e., it's the right child of a vertical split).
-func (n *SplitNode) HasDividerLeft() bool {
-	if n.parent == nil {
-		return false
-	}
-	return n.parent.Kind == SplitVert && n.parent.children[1] == n
-}
-
-// HasDividerAbove returns true if there's a horizontal divider above
-// this node.
-func (n *SplitNode) HasDividerAbove() bool {
-	if n.parent == nil {
-		return false
-	}
-	return n.parent.Kind == SplitHoriz && n.parent.children[1] == n
-}
