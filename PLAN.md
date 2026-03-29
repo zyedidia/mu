@@ -686,7 +686,7 @@ lookup, register management, action composition framework.
 `motion.go`, `operator.go`, `textobject.go` — Core vim commands. Start with
 the essentials (h/j/k/l, w/b/e, d/c/y, iw/aw) and expand.
 
-### Step 7: Editor Shell
+### Step 7: Editor Shell (done)
 `editor.go`, `main.go`, `tab.go`, `split.go` — Editor struct, tcell event
 loop, tab/split management. At this point the editor is functional for basic
 editing.

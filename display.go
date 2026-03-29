@@ -18,6 +18,13 @@ type Visualizer struct {
 
 // String returns the display string and style for a rune at visual column vx.
 func (v *Visualizer) String(r rune, vx int, th *Theme) (string, Style) {
+	if r == '\n' {
+		// Newline visualization (e.g. "$") if configured, otherwise invisible.
+		if char, ok := v.CharMap[r]; ok {
+			return char, th.Style("hidden-char")
+		}
+		return "", th.Default()
+	}
 	if r == '\t' {
 		tsz := v.TabSize
 		if char, ok := v.CharMap[r]; ok {
