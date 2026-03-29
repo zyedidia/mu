@@ -1,5 +1,7 @@
 github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f h1:3BSP1Tbs2djlpprl7wCLuiqMaUh5SJkkzI2gDs+FgLs=
 github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f/go.mod h1:Pcatq5tYkCW2Q6yrR2VRHlbHpZ/R4/7qyL1TCF7vl14=
+github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6 h1:MRDTJe75gN315qD/mVCzKzYyg9mNSwefjFNtKNz2ADw=
+github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6/go.mod h1:N+Hp6tKBZfw95qyv+TRnQkdD1GIQMVpBJekFyFrr/F4=
 golang.org/x/text v0.31.0 h1:aC8ghyu4JhP8VojJ2lEHBnochRno1sgL6nEi9WGFGMM=
 golang.org/x/text v0.31.0/go.mod h1:tKRAlv61yKIjGGHX/4tP1LTbc13YSec1pxVEWXzfoeM=
 golang.org/x/text v0.35.0 h1:JOVx6vVDFokkpaq1AEptVzLTpDe9KGpj5tR4/X+ybL8=
