@@ -678,11 +678,11 @@ from old mu.
 `view.go`, `display.go`, `gutter.go` — Viewport management, scrolling,
 grapheme-based rendering, line numbers.
 
-### Step 5: Vim Mode System and Key Dispatch
+### Step 5: Vim Mode System and Key Dispatch (done)
 `mode.go`, `keybind.go`, `register.go` — Mode definitions, key parsing, binding
 lookup, register management, action composition framework.
 
-### Step 6: Vim Motions, Operators, Text Objects
+### Step 6: Vim Motions, Operators, Text Objects (done)
 `motion.go`, `operator.go`, `textobject.go` — Core vim commands. Start with
 the essentials (h/j/k/l, w/b/e, d/c/y, iw/aw) and expand.
 

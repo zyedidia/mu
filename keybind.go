@@ -102,15 +102,12 @@ func (bt *BindingTrie) HasPrefix(keys []string) bool {
 // --- Pending operator ---
 
 // PendingOp describes an operator waiting for a motion or text object to
-// provide a range. Concrete operators are defined in step 6.
+// provide a range.
 type PendingOp struct {
 	Name string
-	// Exec applies the operator to the byte range [start, end) on each cursor.
-	Exec func(ks *KeyState, start, end int)
-	// ExecLine applies the operator linewise (for doubled operators like "dd").
-	ExecLine func(ks *KeyState)
-	// Key is the operator's trigger key, used to detect doubled operators.
-	Key string
+	Key  string // trigger key, used to detect doubled operators (dd, yy)
+	// Fn applies the operator to the byte range [start, end).
+	Fn func(ks *KeyState, b *Buffer, start, end int)
 }
 
 // --- Key state ---
