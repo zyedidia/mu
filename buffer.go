@@ -22,6 +22,7 @@ type Buffer struct {
 	modified    bool
 	Path        string
 	diagnostics []Diagnostic
+	syntax      *SyntaxState
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting
@@ -131,6 +132,9 @@ func (b *Buffer) applyEdit(start, end int, val []byte) {
 	b.text.Remove(start, end)
 	b.text.Insert(start, val)
 	b.modified = true
+
+	// Update syntax highlighting memo table.
+	b.SyntaxApplyEdit(start, end, len(val))
 
 	// Adjust all cursor positions for the edit.
 	insLen := len(val)

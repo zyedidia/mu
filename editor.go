@@ -125,6 +125,12 @@ func (e *Editor) addView(buf *Buffer, path string) {
 	e.views = append(e.views, v)
 	e.active = len(e.views) - 1
 	e.ks.SetBuffer(buf)
+
+	// Detect filetype and initialize syntax highlighting.
+	ft := DetectFiletype(e.config, path, buf.GetLine(0))
+	if ft != "" {
+		buf.InitSyntax(e.config, ft)
+	}
 }
 
 // ActiveView returns the currently focused view.
@@ -200,6 +206,9 @@ func (e *Editor) Display() {
 	}
 
 	v.Relocate()
+
+	// Check if syntax window needs re-centering.
+	v.buf.SyntaxCheckWindow(v.buf.Cursor().Pos)
 
 	// Draw buffer contents.
 	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {

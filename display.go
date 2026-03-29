@@ -80,6 +80,16 @@ type RenderTracker struct {
 func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, height, off int, softwrap, wordwrap bool, th *Theme) {
 	var vx, x, y int
 
+	// Compute syntax matches for the visible range.
+	if tracker.Draw != nil && th != nil {
+		endLine, _ := b.LineColAt(off)
+		end := b.OffsetAt(endLine+height+1, 0)
+		if end > b.Len() {
+			end = b.Len()
+		}
+		b.HighlightRange(off, end)
+	}
+
 	newline := func() bool {
 		x = 0
 		y++
@@ -88,6 +98,12 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 
 	drawRune := func(off int, c rune, combc []rune, rwidth, bx, by int, style Style) (done bool) {
 		if tracker.Draw != nil {
+			// Syntax highlighting: override default style with syntax group.
+			if th != nil && style == th.Default() {
+				if group := b.SyntaxGroup(off); group != "" {
+					style = th.Style(group)
+				}
+			}
 			// Selection overlay.
 			for _, cur := range b.cursors {
 				if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {

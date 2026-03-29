@@ -15,9 +15,13 @@ require (
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/zyedidia/flare v0.1.1-0.20240213024608-1a9b6d2b5063 // indirect
+	github.com/zyedidia/ftdetect v0.1.0 // indirect
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 // indirect
 	github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 // indirect
+	github.com/zyedidia/gpeg v0.0.0-20250206232340-241e478b8934 // indirect
 	github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

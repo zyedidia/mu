@@ -698,7 +698,7 @@ editing.
 `command.go`, `tcl.go` — TCL interpreter, :w/:q/:e/:set/:sp/:vs commands,
 command-line prompt with completion.
 
-### Step 10: Search
+### Step 10: Search (done)
 `search.go` — Forward/backward search (/, ?), next/prev (n, N), :s substitute.
 
 ### Step 11: Syntax Highlighting
