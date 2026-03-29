@@ -47,6 +47,10 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	if m.Vertical {
 		ks.vertical = true
 	}
+	// Pure motions in normal mode are not repeatable — discard recording.
+	if !selecting && ks.ModeID() == ModeNormal {
+		ks.recording = nil
+	}
 	ks.count = 0
 }
 
@@ -171,13 +175,17 @@ func registerMotion(ks *KeyState, keys []string, m MotionDef) {
 }
 
 // registerCharMotion binds a char-argument motion (f, t, F, T) in all motion
-// modes.
-func registerCharMotion(ks *KeyState, key string, fn func(b *Buffer, c Cursor, count int, ch rune) int, flags MotionFlags) {
+// modes. reverseFn is the opposite direction for ; and , repeat.
+func registerCharMotion(ks *KeyState, key string, fn func(b *Buffer, c Cursor, count int, ch rune) int, reverseFn func(b *Buffer, c Cursor, count int, ch rune) int, flags MotionFlags) {
 	handler := func(ks *KeyState) {
 		ks.WaitForChar(func(ks *KeyState, ch string) {
 			rs := []rune(ch)
 			if len(rs) == 0 {
 				return
+			}
+			// Save for ; and , repeat.
+			ks.lastCharSearch = charSearch{
+				fn: fn, reverse: reverseFn, ch: rs[0], flags: flags,
 			}
 			m := MotionDef{
 				Fn: func(b *Buffer, c Cursor, count int) int {
@@ -462,6 +470,48 @@ func motionParaDown(b *Buffer, c Cursor, count int) int {
 	return b.OffsetAt(line, 0)
 }
 
+func motionMatchBracket(b *Buffer, c Cursor, _ int) int {
+	open := map[rune]rune{'(': ')', '{': '}', '[': ']'}
+	close := map[rune]rune{')': '(', '}': '{', ']': '['}
+
+	r, _ := b.DecodeRuneAt(c.Pos)
+	if match, ok := open[r]; ok {
+		depth := 0
+		pos := c.Pos
+		for pos < b.Len() {
+			ch, sz := b.DecodeRuneAt(pos)
+			if ch == r {
+				depth++
+			} else if ch == match {
+				depth--
+				if depth == 0 {
+					return pos
+				}
+			}
+			pos += sz
+		}
+	} else if opener, ok := close[r]; ok {
+		depth := 0
+		pos := c.Pos
+		for pos >= 0 {
+			ch, sz := b.DecodeRuneBefore(pos)
+			pos -= sz
+			if ch == r {
+				depth++
+			} else if ch == opener {
+				depth--
+				if depth == 0 {
+					return pos
+				}
+			}
+			if sz == 0 {
+				break
+			}
+		}
+	}
+	return c.Pos
+}
+
 // --- Registration ---
 
 // RegisterMotions registers all motion bindings.
@@ -545,8 +595,34 @@ func RegisterMotions(ks *KeyState) {
 		scrollHalfPage(ks, -1)
 	}, "<C-u>")
 
-	registerCharMotion(ks, "f", motionFindChar, Inclusive)
-	registerCharMotion(ks, "F", motionFindCharBack, Charwise)
-	registerCharMotion(ks, "t", motionTillChar, Inclusive)
-	registerCharMotion(ks, "T", motionTillCharBack, Charwise)
+	registerCharMotion(ks, "f", motionFindChar, motionFindCharBack, Inclusive)
+	registerCharMotion(ks, "F", motionFindCharBack, motionFindChar, Charwise)
+	registerCharMotion(ks, "t", motionTillChar, motionTillCharBack, Inclusive)
+	registerCharMotion(ks, "T", motionTillCharBack, motionTillChar, Charwise)
+
+	// %: matching bracket
+	registerMotion(ks, []string{"%"}, MotionDef{Fn: motionMatchBracket})
+
+	// ;: repeat last f/t/F/T
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if ks.lastCharSearch.fn != nil {
+			applyMotion(ks, MotionDef{
+				Fn: func(b *Buffer, c Cursor, count int) int {
+					return ks.lastCharSearch.fn(b, c, count, ks.lastCharSearch.ch)
+				},
+				Flags: ks.lastCharSearch.flags,
+			}, false)
+		}
+	}, ";")
+
+	// ,: reverse last f/t/F/T
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if ks.lastCharSearch.reverse != nil {
+			applyMotion(ks, MotionDef{
+				Fn: func(b *Buffer, c Cursor, count int) int {
+					return ks.lastCharSearch.reverse(b, c, count, ks.lastCharSearch.ch)
+				},
+			}, false)
+		}
+	}, ",")
 }

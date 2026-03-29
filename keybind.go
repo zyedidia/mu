@@ -131,8 +131,12 @@ type KeyState struct {
 	// (e.g. f, t, r). The function is called with the next key.
 	charWait func(ks *KeyState, ch string)
 
-	// lastAction records the last completed action for . repeat.
+	// lastKeys records the keys of the last completed action for . repeat.
 	lastKeys []string
+	// recording accumulates keys during the current action.
+	recording []string
+	// replaying is true while . is replaying keys to prevent re-recording.
+	replaying bool
 
 	// activeView returns the active view. Set by the editor so that
 	// scroll commands (Ctrl-D/Ctrl-U) can adjust the viewport directly.
@@ -141,6 +145,12 @@ type KeyState struct {
 	// vertical is set by applyMotion for j/k moves to signal that Vx
 	// should not be recalculated this cycle.
 	vertical bool
+
+	// marks stores named mark positions (m<char> / '<char> / `<char>).
+	marks map[byte]int
+
+	// lastCharSearch stores the last f/t/F/T search for ; and , repeat.
+	lastCharSearch charSearch
 
 	// onModeChange is called after every mode switch with the new mode ID.
 	onModeChange func(ModeID)
@@ -176,7 +186,8 @@ func (ks *KeyState) SetMode(id ModeID) {
 	if ks.mode == id {
 		return
 	}
-	old := ks.modes[ks.mode]
+	prev := ks.mode
+	old := ks.modes[prev]
 	if old.OnLeave != nil {
 		old.OnLeave(ks)
 	}
@@ -189,6 +200,11 @@ func (ks *KeyState) SetMode(id ModeID) {
 	}
 	if ks.onModeChange != nil {
 		ks.onModeChange(id)
+	}
+
+	// Dot repeat: save recorded keys when returning to normal mode.
+	if id == ModeNormal && prev != ModeNormal {
+		ks.StopRecording()
 	}
 }
 
@@ -250,12 +266,26 @@ func (ks *KeyState) ResetAction() {
 	ks.register = 0
 	ks.pendingOp = nil
 	if ks.mode == ModeOperatorPending {
-		ks.SetMode(ModeNormal)
+		ks.SetMode(ModeNormal) // StopRecording called by SetMode
+	} else if ks.mode == ModeNormal {
+		ks.StopRecording()
 	}
 }
 
 // HandleKey processes a single key event through the vim state machine.
 func (ks *KeyState) HandleKey(key string) {
+	// Dot repeat recording: start a fresh recording on the first key of a
+	// normal-mode action (no pending state yet). Once started, keep
+	// appending until the action completes.
+	if !ks.replaying {
+		if ks.mode == ModeNormal && ks.recording == nil && ks.pendingOp == nil && len(ks.keys) == 0 && !ks.regWait {
+			ks.recording = []string{}
+		}
+		if ks.recording != nil {
+			ks.recording = append(ks.recording, key)
+		}
+	}
+
 	// If waiting for a character argument (f, t, r, etc.), deliver it.
 	if ks.charWait != nil {
 		fn := ks.charWait
@@ -319,6 +349,30 @@ func (ks *KeyState) HandleKey(key string) {
 	}
 }
 
+// StopRecording saves the accumulated keys as the last action for dot repeat.
+func (ks *KeyState) StopRecording() {
+	if ks.replaying {
+		return
+	}
+	if len(ks.recording) > 0 {
+		ks.lastKeys = make([]string, len(ks.recording))
+		copy(ks.lastKeys, ks.recording)
+	}
+	ks.recording = nil
+}
+
+// Replay executes the last recorded action.
+func (ks *KeyState) Replay() {
+	if len(ks.lastKeys) == 0 || ks.replaying {
+		return
+	}
+	ks.replaying = true
+	for _, key := range ks.lastKeys {
+		ks.HandleKey(key)
+	}
+	ks.replaying = false
+}
+
 // tryCount attempts to consume the key as a count digit. Returns true if
 // consumed.
 func (ks *KeyState) tryCount(key string) bool {
@@ -336,4 +390,20 @@ func (ks *KeyState) tryCount(key string) bool {
 		return true
 	}
 	return false
+}
+
+// charSearch stores the last f/t/F/T search for ; and , repeat.
+type charSearch struct {
+	fn      func(b *Buffer, c Cursor, count int, ch rune) int
+	reverse func(b *Buffer, c Cursor, count int, ch rune) int
+	ch      rune
+	flags   MotionFlags
+}
+
+// ActiveView returns the active view via the callback. Returns nil if unset.
+func (ks *KeyState) ActiveView() *View {
+	if ks.activeView != nil {
+		return ks.activeView()
+	}
+	return nil
 }

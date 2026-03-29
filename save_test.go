@@ -61,6 +61,9 @@ func TestSaveAs(t *testing.T) {
 }
 
 func TestSaveCreatesBackup(t *testing.T) {
+	configDirOverride = t.TempDir()
+	defer func() { configDirOverride = "" }()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
 

@@ -154,8 +154,15 @@ func LoadConfig() (*Config, error) {
 	return &Config{opts: opts, dir: dir}, nil
 }
 
+// configDirOverride can be set by tests to avoid writing to ~/.config/mu.
+var configDirOverride string
+
 // configDir returns the user config directory, creating it if needed.
 func configDir() string {
+	if configDirOverride != "" {
+		os.MkdirAll(configDirOverride, 0755)
+		return configDirOverride
+	}
 	dir := filepath.Join(userConfigDir(), "mu")
 	os.MkdirAll(dir, 0755)
 	return dir

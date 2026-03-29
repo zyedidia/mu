@@ -325,17 +325,25 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "J")
 
-	// u: undo
+	// u: undo (not repeatable)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.recording = nil
 		ks.Buf().Undo()
 		ks.ResetAction()
 	}, "u")
 
-	// Ctrl-R: redo
+	// Ctrl-R: redo (not repeatable)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.recording = nil
 		ks.Buf().Redo()
 		ks.ResetAction()
 	}, "<C-r>")
+
+	// .: repeat last action
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.recording = nil // don't record the replay itself
+		ks.Replay()
+	}, ".")
 
 	// --- Mode switching ---
 
@@ -506,6 +514,325 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeReplace].Bindings.Bind(func(ks *KeyState) {
 		ks.SetMode(ModeNormal)
 	}, KeyEscape)
+
+	// Replace mode: overwrite char and advance
+	ks.modes[ModeReplace].OnKey = func(ks *KeyState, key string) {
+		if len(key) == 0 || (len(key) > 1 && key[0] == '<') {
+			return
+		}
+		b := ks.Buf()
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			r, _, sz := b.DecodeGraphemeAt(c.Pos)
+			if sz > 0 && r != '\n' {
+				b.Remove(c.Pos, c.Pos+sz)
+			}
+			b.Insert(c.Pos, []byte(key))
+		}
+	}
+
+	// R: enter replace mode
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.Buf().UndoBarrier()
+		ks.SetMode(ModeReplace)
+	}, "R")
+
+	// r<char>: replace char under cursor
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.WaitForChar(func(ks *KeyState, ch string) {
+			b := ks.Buf()
+			b.UndoBarrier()
+			count := ks.Count()
+			for i := 0; i < b.NumCursors(); i++ {
+				c := b.cursors[i]
+				for j := 0; j < count; j++ {
+					r, _, sz := b.DecodeGraphemeAt(c.Pos)
+					if sz == 0 || r == '\n' {
+						break
+					}
+					b.Remove(c.Pos, c.Pos+sz)
+					b.Insert(c.Pos, []byte(ch))
+				}
+			}
+			ks.ResetAction()
+		})
+	}, "r")
+
+	// s: delete char + enter insert
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		b.UndoBarrier()
+		count := ks.Count()
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			end := c.Pos
+			for j := 0; j < count; j++ {
+				r, _, sz := b.DecodeGraphemeAt(end)
+				if r == '\n' || sz == 0 {
+					break
+				}
+				end += sz
+			}
+			if end > c.Pos {
+				opDelete(ks, b, c.Pos, end)
+			}
+		}
+		ks.SetMode(ModeInsert)
+		ks.ResetAction()
+	}, "s")
+
+	// S: delete line contents + enter insert
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		b.UndoBarrier()
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			line, _ := b.LineColAt(c.Pos)
+			start := b.OffsetAt(line, 0)
+			end := start + b.LineLen(line)
+			if end > start {
+				opDelete(ks, b, start, end)
+			}
+		}
+		ks.SetMode(ModeInsert)
+		ks.ResetAction()
+	}, "S")
+
+	// ~: toggle case and advance
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		b.UndoBarrier()
+		count := ks.Count()
+		for i := 0; i < b.NumCursors(); i++ {
+			for j := 0; j < count; j++ {
+				c := b.cursors[i]
+				r, _, sz := b.DecodeGraphemeAt(c.Pos)
+				if sz == 0 || r == '\n' {
+					break
+				}
+				var repl rune
+				if unicode.IsUpper(r) {
+					repl = unicode.ToLower(r)
+				} else {
+					repl = unicode.ToUpper(r)
+				}
+				b.Remove(c.Pos, c.Pos+sz)
+				b.Insert(c.Pos, []byte(string(repl)))
+			}
+		}
+		ks.ResetAction()
+	}, "~")
+
+	// .: repeat last edit
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.Replay()
+	}, ".")
+
+	// H/M/L: screen top/middle/bottom
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(v.topline, 0))
+		}
+		ks.ResetAction()
+	}, "H")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			mid := v.topline + v.height/2
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(mid, 0))
+		}
+		ks.ResetAction()
+	}, "M")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			bot := v.topline + v.height - 1
+			if bot > v.buf.NumLines() {
+				bot = v.buf.NumLines()
+			}
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(bot, 0))
+		}
+		ks.ResetAction()
+	}, "L")
+
+	// Ctrl-F/Ctrl-B: full page down/up
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, _ int) int {
+				return motionDown(b, c, v.height*ks.Count())
+			}}, false)
+		}
+	}, "<C-f>")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, _ int) int {
+				return motionUp(b, c, v.height*ks.Count())
+			}}, false)
+		}
+	}, "<C-b>")
+
+	// Ctrl-E/Ctrl-Y: scroll view without moving cursor
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			v.topline += ks.Count()
+			if v.topline > v.buf.NumLines() {
+				v.topline = v.buf.NumLines()
+			}
+		}
+		ks.count = 0
+	}, "<C-e>")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			v.topline -= ks.Count()
+			if v.topline < 0 {
+				v.topline = 0
+			}
+		}
+		ks.count = 0
+	}, "<C-y>")
+
+	// m<char>: set mark
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.WaitForChar(func(ks *KeyState, ch string) {
+			if len(ch) == 1 {
+				if ks.marks == nil {
+					ks.marks = make(map[byte]int)
+				}
+				ks.marks[ch[0]] = ks.Buf().Cursor().Pos
+			}
+		})
+	}, "m")
+
+	// '<char>: jump to mark (line start)
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.WaitForChar(func(ks *KeyState, ch string) {
+			if len(ch) == 1 {
+				if pos, ok := ks.marks[ch[0]]; ok {
+					b := ks.Buf()
+					if pos > b.Len() {
+						pos = b.Len()
+					}
+					line, _ := b.LineColAt(pos)
+					*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(line, 0))
+				}
+			}
+		})
+	}, "'")
+
+	// `<char>: jump to mark (exact position)
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.WaitForChar(func(ks *KeyState, ch string) {
+			if len(ch) == 1 {
+				if pos, ok := ks.marks[ch[0]]; ok {
+					b := ks.Buf()
+					if pos > b.Len() {
+						pos = b.Len()
+					}
+					*b.Cursor() = b.Cursor().MoveTo(pos)
+				}
+			}
+		})
+	}, "`")
+
+	// gu: lowercase operator
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.SetPending(&PendingOp{
+			Name: "gu", Key: "gu",
+			Fn: func(ks *KeyState, b *Buffer, start, end int) {
+				opCase(b, start, end, unicode.ToLower)
+			},
+		})
+	}, "g", "u")
+	// gU: uppercase operator
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.SetPending(&PendingOp{
+			Name: "gU", Key: "gU",
+			Fn: func(ks *KeyState, b *Buffer, start, end int) {
+				opCase(b, start, end, unicode.ToUpper)
+			},
+		})
+	}, "g", "U")
+
+	// zz/zt/zb: scroll view to center/top/bottom cursor
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
+			v.topline = line - v.height/2
+			if v.topline < 0 {
+				v.topline = 0
+			}
+		}
+		ks.ResetAction()
+	}, "z", "z")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
+			v.topline = line
+		}
+		ks.ResetAction()
+	}, "z", "t")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := ks.ActiveView(); v != nil {
+			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
+			v.topline = line - v.height + 1
+			if v.topline < 0 {
+				v.topline = 0
+			}
+		}
+		ks.ResetAction()
+	}, "z", "b")
+
+	// Ctrl-W in insert mode: delete word before cursor
+	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			start := c.WordLeft(b, IsWordChar).Pos
+			if start < c.Pos {
+				b.Remove(start, c.Pos)
+			}
+		}
+	}, "<C-w>")
+
+	// Ctrl-U in insert mode: delete to start of line
+	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			start := c.LineStart(b).Pos
+			if start < c.Pos {
+				b.Remove(start, c.Pos)
+			}
+		}
+	}, "<C-u>")
+
+	// o in visual mode: swap cursor to other end of selection
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			b := ks.Buf()
+			for i := range b.cursors {
+				c := &b.cursors[i]
+				if c.HasSel {
+					if c.Pos == c.Sel[0] {
+						c.Pos = c.Sel[1]
+					} else {
+						c.Pos = c.Sel[0]
+					}
+					c.Orig[0], c.Orig[1] = c.Orig[1], c.Orig[0]
+				}
+			}
+		}, "o")
+	}
+
+	// u/U in visual mode: lowercase/uppercase selection
+	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
+		execVisualOp(ks, func(ks *KeyState, b *Buffer, start, end int) {
+			opCase(b, start, end, unicode.ToLower)
+		})
+	}, "u")
+	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
+		execVisualOp(ks, func(ks *KeyState, b *Buffer, start, end int) {
+			opCase(b, start, end, unicode.ToUpper)
+		})
+	}, "U")
 }
 
 // paste inserts register content. If before is true, paste before cursor.
@@ -546,4 +873,19 @@ func paste(ks *KeyState, before bool) {
 		}
 	}
 	ks.ResetAction()
+}
+
+// opCase changes the case of characters in [start, end) using transform.
+// Processes in reverse to keep offsets stable.
+func opCase(b *Buffer, start, end int, transform func(rune) rune) {
+	pos := end
+	for pos > start {
+		r, sz := b.DecodeRuneBefore(pos)
+		pos -= sz
+		tr := transform(r)
+		if tr != r {
+			b.Remove(pos, pos+sz)
+			b.Insert(pos, []byte(string(tr)))
+		}
+	}
 }

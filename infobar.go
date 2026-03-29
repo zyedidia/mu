@@ -184,6 +184,9 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 			ib.input = append(ib.input[:ib.cursorPos-1], ib.input[ib.cursorPos:]...)
 			ib.cursorPos--
 			changed = true
+		} else if len(ib.input) == 0 {
+			ib.Cancel()
+			return true, true
 		}
 	case KeyLeft:
 		if ib.cursorPos > 0 {
@@ -197,6 +200,29 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		ib.cursorPos = 0
 	case KeyEnd, "<C-e>":
 		ib.cursorPos = len(ib.input)
+	case "<C-w>":
+		// Delete word before cursor.
+		if ib.cursorPos > 0 {
+			start := ib.cursorPos
+			// Skip trailing spaces.
+			for start > 0 && ib.input[start-1] == ' ' {
+				start--
+			}
+			// Skip word chars.
+			for start > 0 && ib.input[start-1] != ' ' {
+				start--
+			}
+			ib.input = append(ib.input[:start], ib.input[ib.cursorPos:]...)
+			ib.cursorPos = start
+			changed = true
+		}
+	case "<C-u>":
+		// Delete to start of line.
+		if ib.cursorPos > 0 {
+			ib.input = ib.input[ib.cursorPos:]
+			ib.cursorPos = 0
+			changed = true
+		}
 	default:
 		if len(key) == 0 || (len(key) > 1 && key[0] == '<') {
 			return false, false
