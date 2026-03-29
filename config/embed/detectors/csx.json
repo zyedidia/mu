@@ -1,7 +1,0 @@
-{
-    "name": "csharp-script",
-    "exts": [".csx"],
-    "header": {
-        "regex": "^#!.*/(env +)?dotnet-script( |$)"
-    }
-}

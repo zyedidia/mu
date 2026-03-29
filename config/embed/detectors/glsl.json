@@ -1,4 +1,0 @@
-{
-    "name": "glsl",
-    "exts": [".frag", ".vert", ".fp", ".vp", ".glsl"]
-}

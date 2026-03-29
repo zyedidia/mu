@@ -1,5 +1,0 @@
-bindings <- {'ctrl+q', 'cancel'}
-          / {'ctrl+c', 'cancel'}
-          / {'escape', 'cancel'}
-          / {'backspace', 'cancel'}
-          / {., 'enter-char $0'}

@@ -1,4 +1,0 @@
-{
-    "name": "cython",
-    "exts": [".pyx", ".pyd", ".pyi"]
-}

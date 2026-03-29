@@ -1,7 +1,0 @@
-jinja2 has no detectors
-v has no detectors (due to conflict with verilog)
-objective c .h conflict
-objective c .m conflict
-groff objective c .mm conflict
-gentoo not converted
-sh -> shell

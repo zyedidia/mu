@@ -1,7 +1,0 @@
-{
-    "name": "conky",
-    "files": ["conky.conf"],
-    "file": {
-        "regex": "\\.*conkyrc.*"
-    }
-}

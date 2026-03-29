@@ -1,5 +1,0 @@
-{
-    "name": "nim",
-    "exts": [".nim", ".nims"],
-    "files": ["nim.cfg"]
-}

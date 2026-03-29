@@ -1,7 +1,0 @@
-{
-    "name": "sage",
-    "exts": [".sage"],
-    "header": {
-        "regex": "^#!.*/(env +)?sage( |$)"
-    }
-}

@@ -1,7 +1,0 @@
-{
-    "name": "inputrc",
-    "files": ["inputrc"],
-    "file": {
-        "regex": "inputrc$"
-    }
-}

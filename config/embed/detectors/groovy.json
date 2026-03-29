@@ -1,7 +1,0 @@
-{
-    "name": "groovy",
-    "exts": [".groovy", ".gy", ".gvy", ".gsh", ".gradle"],
-    "header": {
-        "regex": "^#!.*/(env +)?groovy *$"
-    }
-}

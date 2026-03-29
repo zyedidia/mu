@@ -1,5 +1,0 @@
-bindings <- {'ctrl+g' ('ctrl+e' / 'e'), 'command'}
-          / {'ctrl+g' ('ctrl+q' / 'q'), 'quit'}
-          / {'ctrl+g' '/', 'vsplit; term'}
-          / {'ctrl+g' '-', 'hsplit; term'}
-          / {'ctrl+g' ('ctrl+w' / 'w'), 'split-select-next'}

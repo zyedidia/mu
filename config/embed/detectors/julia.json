@@ -1,7 +1,0 @@
-{
-    "name": "julia",
-    "exts": [".jl"],
-    "header": {
-        "regex": "^#!.*/(env +)?julia( |$)"
-    }
-}

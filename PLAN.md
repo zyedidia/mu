@@ -1,315 +1,711 @@
-# Mu Architecture Plan
+# Mu Text Editor - Design Plan
 
-## Overview
+Mu is a terminal text editor written in Go with vim keybindings, designed as a
+personal editor and potential successor to micro. It draws from three reference
+projects: vis (vim keybinding architecture), micro (Go text editor by the same
+author), and the previous mu rewrite (rope data structure, flare highlighting,
+TCL commands, TOML config, themes, LSP).
 
-This document outlines architectural decisions for Mu, following a Neovim-inspired split between core engine (Go) and extensible features (Lua).
+## Design Decisions
 
----
+- **Flat source structure** like vis: all editor Go files in the root package,
+  one sub-package (`text/`) for the reusable rope buffer.
+- **Hard-coded vim keybindings** in Go (like vis), not a PEG DSL. TCL is used
+  only for ex-commands.
+- **Multiple cursors** built in from day one.
+- **Tree-based undo** with branching and time coalescing (from old mu).
+- **Windowed syntax highlighting** via flare with ~1MB window, re-centered when
+  the cursor approaches the edge.
+- **TOML options** with per-filetype and glob-pattern overrides.
+- **YAML themes** with hierarchical style lookups.
+- **TCL command language** (gotcl) for ex-commands. No Lua plugin system.
+- **Basic LSP** support: completion, hover, go-to-definition, diagnostics,
+  formatting.
+- **gdamore/tcell/v2** for terminal I/O (upstream, not micro-editor fork).
+- **Grapheme-aware** cursor movement and display via zyedidia/uniseg.
 
-## Core Principles
+Deferred: terminal pane, directory browser, mouse support, macro recording.
 
-### Go Core: Primitives and Performance
+## File Structure
 
-The Go core handles:
-- Things called thousands of times per keystroke
-- Fundamental data structures
-- The "engine" that plugins build on
+```
+mu/
+├── main.go              # Entry point, event loop
+├── editor.go            # Editor struct: tabs, mode stack, global state
+├── buffer.go            # Buffer: wraps text.Buffer with undo, syntax, LSP, cursors
+├── cursor.go            # Cursor struct, selection, multi-cursor management
+├── undo.go              # UndoTree generic data structure
+├── view.go              # Viewport: scrolling, soft wrap, line rendering
+├── display.go           # Visualizer, rune rendering, grapheme width
+├── unicode.go           # Grapheme decoding, UnicodeLoc, VisualLoc, UTF-16 conversion
+├── mode.go              # Vim modes: normal, insert, visual, visual-line, operator-pending, replace
+├── motion.go            # Vim motions: word, line, paragraph, search, f/t, gg/G, etc.
+├── operator.go          # Vim operators: d, c, y, >, <, ~, gu, gU, etc.
+├── textobject.go        # Vim text objects: iw, aw, i(, a", ip, etc.
+├── keybind.go           # Key parsing, binding lookup, count/register accumulation
+├── register.go          # Vim registers: ", +, 0, a-z, blackhole
+├── command.go           # Ex commands: :w, :q, :e, :set, :sp, :vs, etc.
+├── tcl.go               # TCL interpreter setup, command registration
+├── search.go            # Search and replace: /, ?, n, N, :s
+├── syntax.go            # Windowed flare highlighting
+├── config.go            # TOML options: load, per-filetype, glob overrides
+├── theme.go             # Theme loading (YAML), Style, Color, Attr types
+├── lsp.go               # LSP client: lifecycle, requests, notifications
+├── tab.go               # Tab management
+├── split.go             # Split pane tree layout
+├── gutter.go            # Line numbers, diagnostic markers
+├── statusbar.go         # Status line per pane
+├── infobar.go           # Command prompt, messages
+├── save.go              # File read/write, backup, atomic save
+├── text/                # Reusable text buffer package (DONE)
+│   ├── rope.go          # Rope with line indexing, parallel construction
+│   ├── line.go          # Line/col location arithmetic
+│   ├── util.go          # indexN, lineCol helpers
+│   ├── cache.go         # Cached io.ReaderAt with rune/grapheme support
+│   ├── linecache.go     # Cached line offset lookups
+│   ├── endings.go       # LF/CRLF detection and transform
+│   ├── utf8.go          # UTF-8 validation, charset reference
+│   ├── read.go          # Charset detection, encoding conversion
+│   ├── buffer.go        # Buffer wrapping Rope + Reader + Liner
+│   └── rope_test.go     # Tests
+└── embed/               # Embedded default resources
+    ├── themes/          # *.yaml theme files
+    ├── highlighters/    # *.lang flare grammar files
+    ├── detectors/       # *.json filetype detectors
+    ├── lsp.yaml         # Default LSP server configs
+    └── options.toml     # Default options
+```
 
-### Lua Plugins: Policy and Features
+## Core Data Structures
 
-Lua handles features built on core primitives:
-- Features that could reasonably be implemented by users
-- Things that might evolve quickly or differ between users
-- Logic that orchestrates core APIs
+### Editor
 
-### Declarative Config: Static Settings
+Central orchestrator. Owns all global state.
 
-TOML/YAML for configuration that doesn't need code:
-- Options, themes, keybindings (simple modes)
-- Plugin manifests
-- LSP server definitions
+```go
+type Editor struct {
+    tabs    []*Tab
+    curtab  int
+    active  Pane           // currently focused pane
 
-### Litmus Test
+    buffers []*Buffer      // all open buffers (shared across splits)
 
-"Could a motivated user implement this as a plugin if we didn't ship it?"
-- Yes → Lua (shipped as default plugin)
-- No → Go core
+    interp  *tcl.Interp   // TCL interpreter for ex-commands
+    lsp     *LspManager    // LSP server lifecycle
 
----
+    theme   *Theme
+    config  *Config        // parsed TOML options
 
-## Component Split
+    clipboard Clipboard    // system clipboard
 
-### Go Core
+    w, h    int            // terminal dimensions
+    infobar *InfoBar
 
-| Component | Notes |
-|-----------|-------|
-| Buffer/rope, undo tree | Fundamental data structures |
-| Cursors, marks, selections | Core editing state |
-| Pane/split/tab management | Window layout |
-| Display rendering | Performance critical |
-| Event loop | Core infrastructure |
-| Vim implementation | Stateful, performance-sensitive, core use case |
-| TCL interpreter | Command bar execution |
-| Lua runtime | Plugin infrastructure |
-| LSP transport | JSON-RPC over stdio |
-| Flare engine | Syntax highlighting, indent, fold |
-| Clipboard | Platform-specific |
-| Terminal emulator | Complex, performance-sensitive |
-| File I/O | Core infrastructure |
+    Redraw  chan struct{}
+    Errors  chan error
+    Suspend chan func()
+    Resume  chan struct{}
+}
+```
 
-### Declarative Config
+Event loop (in `main.go`):
+1. Initialize tcell screen, load config/theme, open files.
+2. Spawn goroutine polling `screen.PollEvent()` into a channel.
+3. Main select loop: handle key/resize events, redraw signals, errors, suspend.
+4. On key event: dispatch through the active pane's vim mode system.
+5. After processing: draw all visible panes via `Editor.Display()`.
 
-| File | Purpose |
-|------|---------|
-| `options.toml` | Editor and buffer options |
-| `bindings.toml` | Simple keybindings (micro mode, command bar) |
-| `plugins.yaml` | Plugin manifest |
-| `themes/*.yaml` | Color themes |
-| `lsp.yaml` | LSP server definitions |
-| `detectors/*.json` | Filetype detection rules |
-| `highlighters/*.lang` | Flare syntax grammars |
+### Buffer
 
-### Lua (Shipped as Default Plugins)
+Editor-level buffer wrapping `text.Buffer`. One per open file, shared across
+splits.
 
-| Feature | Notes |
-|---------|-------|
-| LSP client logic | Completion, hover, diagnostics, goto-def, etc. |
-| Comment toggling | Simple buffer manipulation |
-| Autoclose pairs | Insert-time hooks |
-| Snippet expansion | Template insertion |
-| Formatter/linter integration | Shell out, apply results |
-| Git gutter | Shell out to git, display signs |
-| Statusline customization | User-facing polish |
-| File explorer enhancements | Beyond basic directory listing |
+```go
+type Buffer struct {
+    *text.Buffer                   // underlying rope-based text
 
----
+    cursors  []*Cursor             // multi-cursor list (primary is [0])
+    undo     *UndoTree[*Buffer]    // tree-based undo
 
-## Keybinding Architecture
+    Path     string                // file path
+    Name     string                // display name
+    Modified bool
 
-### Remove PEG Grammar System
+    highlighter *flare.Highlighter // syntax highlighting
+    syntaxWin   SyntaxWindow       // windowed highlight state
+    matches     *flare.Matches
 
-The current `.kbd` PEG-based system is being removed. It's over-engineered for simple bindings and insufficient for vim.
+    lsp      *LspServer            // active LSP connection
+    ft       string                // detected filetype
+    opts     map[string]any        // resolved options for this buffer
+}
+```
 
-### Simple Bindings: TOML
+### Cursor
 
-For micro mode and command bar. Bindings map key sequences to TCL commands (same as typing in command bar).
+Byte-offset based cursor with selection support.
 
-#### Key Syntax (Kakoune-style, lowercase)
+```go
+type Cursor struct {
+    buf     *Buffer
+    Pos     int        // byte offset in buffer
+    HasSel  bool
+    Sel     [2]int     // selection range [start, end)
+    Orig    [2]int     // original anchor for visual mode
+    Vx      int        // desired visual column (for vertical movement)
+    id      int        // unique cursor id
+}
+```
 
-Modifiers (fully spelled out):
-- `<ctrl-x>` - Control
-- `<alt-x>` - Alt/Meta
-- `<shift-x>` - Shift (for special keys)
-- `<ctrl-shift-x>` - Combined modifiers
+Multi-cursor operations: all motions/operators apply to every cursor. Cursors
+are kept sorted by position. Overlapping selections merge after each operation.
 
-Special keys:
-- `<ret>` or `<enter>` - Enter/Return
-- `<esc>` - Escape
-- `<space>` - Space
-- `<tab>`, `<shift-tab>` - Tab
-- `<backspace>` or `<bs>` - Backspace
-- `<del>` - Delete
-- `<up>`, `<down>`, `<left>`, `<right>` - Arrow keys
-- `<home>`, `<end>` - Home/End
-- `<pageup>`, `<pagedown>` - Page Up/Down
-- `<f1>` through `<f12>` - Function keys
+### UndoTree
 
-Regular characters are just themselves: `a`, `/`, `"`, etc.
+Generic tree-based undo with branching redo paths. Ported from old mu.
 
-Key sequences use multiple brackets: `<ctrl-x><ctrl-s>`
+```go
+type Delta interface {
+    Do(buf *Buffer)
+    Undo(buf *Buffer)
+}
 
-#### Example Bindings
+type Event struct {
+    Deltas  []Delta
+    Time    time.Time
+    Cursors []CursorState  // snapshot cursor positions
+    Next    []int          // children event indices (branching redo)
+    Prev    int            // parent event index
+}
+
+type UndoTree struct {
+    events  []Event
+    current int            // index of current event
+    cutoff  int            // max events (0 = unlimited)
+}
+```
+
+Edits within a short time window (~1s) coalesce into one event. Undo moves to
+parent, redo moves to the most recently visited child.
+
+## Vim Mode System
+
+Modeled after vis. Modes form an inheritance tree for key binding fallback.
+
+### Modes
+
+```go
+type ModeID int
+
+const (
+    ModeNormal ModeID = iota
+    ModeInsert
+    ModeReplace
+    ModeVisual
+    ModeVisualLine
+    ModeOperatorPending
+    ModeCommand         // : prompt
+)
+
+type Mode struct {
+    ID       ModeID
+    Name     string
+    Parent   *Mode                           // binding inheritance
+    Bindings map[string]*KeyBinding          // key sequence -> binding
+    OnEnter  func(e *Editor)
+    OnLeave  func(e *Editor)
+    OnInput  func(e *Editor, key string)     // unbound key handler
+    IsVisual bool
+}
+```
+
+Mode hierarchy:
+```
+Normal
+├── Visual
+│   └── Visual-Line
+├── Operator-Pending
+Insert
+Replace (parent: Insert for shared Escape handling)
+Command
+```
+
+### Action Composition
+
+Like vis, the pending action accumulates state as keys arrive:
+
+```go
+type Action struct {
+    Count    int            // numeric prefix (0 = default)
+    Register RegisterID     // target register (default = ")
+    Op       *Operator      // nil until operator key pressed
+    Motion   *Motion        // nil until motion key pressed
+    TextObj  *TextObject    // alternative to motion (iw, a", etc.)
+    Linewise bool
+}
+```
+
+Flow: `[count][register][operator][count][motion|textobject]`
+
+Example: `"a3dw` → register=a, count=3, op=delete, motion=word-right.
+
+When both operator and motion/textobject are set, execute:
+1. For each cursor, compute the range from motion or textobject.
+2. Apply the operator to each range.
+3. Update cursor positions.
+4. Record in undo tree.
+5. Clear the action.
+
+### Motions
+
+```go
+type Motion struct {
+    Fn       func(b *Buffer, c *Cursor, count int) int  // returns new byte offset
+    Flags    MotionFlags  // Linewise, Inclusive, Jump, etc.
+}
+```
+
+Core motions: h/l (char), j/k (line), w/W/b/B/e/E (word), 0/^/$ (line
+bounds), gg/G (file bounds), f/F/t/T (char find), /{?} (search), %
+(matching bracket), {/} (paragraph).
+
+### Operators
+
+```go
+type Operator struct {
+    Fn func(e *Editor, b *Buffer, cursors []*Cursor, ranges []Range, reg RegisterID)
+}
+```
+
+Core operators: d (delete), c (change), y (yank), > / < (indent), ~ (swap
+case), gu/gU (lower/upper case), = (format via LSP).
+
+Special cases:
+- `dd`, `cc`, `yy`: operator doubled = operate on whole line.
+- `.`: repeat last action (store the full Action for replay).
+
+### Text Objects
+
+```go
+type TextObject struct {
+    Inner func(b *Buffer, pos int, count int) Range
+    Outer func(b *Buffer, pos int, count int) Range
+}
+```
+
+Core text objects: w (word), W (WORD), s (sentence), p (paragraph), and
+delimiter pairs: () [] {} <> "" '' ``.
+
+### Key Dispatch
+
+```go
+type KeyBinding struct {
+    Action  func(e *Editor, keys string) string  // returns unconsumed keys
+    // OR
+    Alias   string                                // replacement key sequence
+}
+```
+
+Key dispatch algorithm (in `keybind.go`):
+1. Accumulate input in a key buffer.
+2. Search current mode's bindings, then parent modes.
+3. If exact match: execute binding, consume keys.
+4. If prefix match: wait for more input.
+5. If no match: call mode's OnInput handler (insert char in insert mode, beep
+   in normal mode).
+
+### Registers
+
+```go
+type RegisterID byte  // '"', '+', '0', 'a'-'z', '_' (blackhole)
+
+type Register struct {
+    Content  []byte
+    Linewise bool
+}
+```
+
+Special registers:
+- `"` (unnamed): default for d/c/y.
+- `+` (clipboard): system clipboard.
+- `0` (yank): last yank only (not delete).
+- `_` (blackhole): discard.
+- `a`-`z`: named. Uppercase `A`-`Z` appends.
+
+## View and Display
+
+### View
+
+Each split pane has a View that manages the visible window into a buffer.
+
+```go
+type View struct {
+    buf         *Buffer
+    topLine     int          // first visible line number
+    leftCol     int          // horizontal scroll offset
+    width       int          // viewport columns
+    height      int          // viewport rows
+    scrollOff   int          // vertical scroll margin (from config)
+    hScrollOff  int          // horizontal scroll margin
+}
+```
+
+Scrolling: after cursor movement, adjust topLine/leftCol so the cursor stays
+within the margins. Soft wrap: if enabled, long lines wrap at viewport width
+(logical vs visual line distinction).
+
+### Display / Visualizer
+
+Rendering walks through the visible portion of the buffer grapheme by grapheme:
+
+```go
+type Visualizer struct {
+    TabSize int
+    CharMap map[rune]string  // e.g., '\t' -> "|  "
+}
+```
+
+For each grapheme at offset `off`:
+1. `uniseg.DecodeAt(buf, off)` → rune, combining runes, byte size, display width.
+2. `Visualizer.Size(r, vx, width)` → actual columns consumed (tabs expand).
+3. Apply syntax highlight style from `flare.Matches`.
+4. Apply cursor/selection overlay.
+5. Emit via `tcell.SetContent(x, y, mainc, combc, style)`.
+
+### Gutter
+
+Renders to the left of the text area:
+- Line numbers (absolute or relative, from config).
+- Diagnostic markers (errors/warnings from LSP).
+- Width auto-adjusts to the number of digits needed.
+
+## Syntax Highlighting
+
+Uses `zyedidia/flare` with a **windowed** approach for large files.
+
+```go
+type SyntaxWindow struct {
+    Start   int     // byte offset of window start
+    End     int     // byte offset of window end
+    Size    int     // window size in bytes (default ~1MB)
+    Margin  int     // re-center threshold (~100KB from edge)
+}
+```
+
+Algorithm:
+1. On file open: if file size <= window size, highlight the entire file.
+2. Otherwise, center a window around the cursor position.
+3. Run `flare.Highlighter` on the windowed text, store matches.
+4. On cursor movement: if cursor is within `Margin` bytes of the window edge,
+   re-center the window around the cursor and re-highlight.
+5. Highlighting runs in a background goroutine. A semaphore prevents concurrent
+   highlights. A redraw signal is sent on completion.
+6. Incremental re-highlighting: on edits, invalidate from the edited line and
+   re-highlight forward using the memoization table.
+
+Filetype detection: `zyedidia/ftdetect` matches filename patterns and content
+heuristics to select the appropriate `.lang` grammar file.
+
+## Configuration
+
+### TOML Options
 
 ```toml
-[micro]
-"<ctrl-s>" = "save"
-"<ctrl-q>" = "quit"
-"<ctrl-x><ctrl-s>" = "save"
-"<ctrl-x><ctrl-c>" = "quit-all"
-"<ctrl-f>" = "find-prompt"
-"<ctrl-z>" = "undo"
-"<ctrl-y>" = "redo"
-"<alt-n>" = "tab-next"
-"<alt-p>" = "tab-prev"
-"<ctrl-shift-p>" = "command"
+# Global options
+autoindent = true
+cursor = "block"           # block, bar, underline
+theme = "monokai"
+syntax = true
+tabsize = 4
+tabstospaces = true
+scrollmargin = 3
+hscrollmargin = 1
+linenums = true
+softwrap = false
+wordwrap = false
+clipboard = "external"     # internal, external, terminal
+cursorline = true
 
-[command]
-"<ret>" = "execute"
-"<esc>" = "cancel"
-"<tab>" = "complete"
-"<shift-tab>" = "prev-completion"
-"<up>" = "history-prev"
-"<down>" = "history-next"
+# Per-filetype overrides
+[makefile]
+tabstospaces = false
+
+# Glob pattern overrides
+["glob:*.md"]
+softwrap = true
+wordwrap = true
 ```
 
-#### Implementation
-
-Bindings are stored as a prefix map to support multi-key sequences:
-
 ```go
-type Bindings struct {
-    commands map[string]string   // full sequence -> TCL command
-    prefixes map[string]bool     // partial sequences with continuations
+type Config struct {
+    globals map[string]any              // editor-wide options (theme, clipboard, cursor)
+    top     map[string]any              // default buffer options
+    ft      []FtOpts                    // filetype-specific overrides
+}
+
+type FtOpts struct {
+    Pattern string                      // filetype name or "glob:pattern"
+    Opts    map[string]any
 }
 ```
 
-Key dispatch:
-1. Convert key event to string (e.g., `<ctrl-s>`)
-2. Append to pending sequence
-3. If full match → execute TCL command via `Editor.Eval()`
-4. If prefix match → wait for more keys
-5. Otherwise → reset, pass key through
+Resolution order for a buffer option: glob match → filetype match → top-level
+default → built-in default. Global options (theme, clipboard, cursor) are
+editor-wide and never overridden per-buffer.
 
-### Vim Bindings: Go
+Config directory: `~/.config/mu/` (XDG).
 
-Vim is implemented entirely in Go for:
-- **Performance** - Every keystroke, no Lua overhead
-- **Complexity** - Large stateful system (registers, macros, `.` repeat)
-- **Core use case** - Goal is vim drop-in replacement
-- **Debugging** - Go tooling beats Lua for complex state
+### LSP Configuration
 
-Lua provides vim *customization*, not implementation:
-
-```lua
--- User remaps
-vim.map('n', 'H', '^')
-vim.map('n', 'L', '$')
-
--- Custom text object
-vim.textobj('ie', function(buf)
-  return 0, buf:len()  -- entire buffer
-end)
+```yaml
+go:
+  command: gopls
+  args: []
+python:
+  command: pylsp
+  args: []
+rust:
+  command: rust-analyzer
+  args: []
 ```
 
----
+## Themes
 
-## Vim Implementation
+YAML files with hierarchical style group lookups.
 
-### Goal
-
-Drop-in replacement for Vim.
-
-### Why Not Grammar-Based
-
-Vim's behavior is deeply stateful:
-
-| Feature | Requirement |
-|---------|-------------|
-| `.` repeat | Record actual changes, not keys |
-| Counts | `3d2w` = 6 words, propagation |
-| Registers | 26+ named, special (`"*`, `"+`, `"0`) |
-| Macros | `qa...q`, `@a`, `@@` |
-| Text objects | `ciw`, `da"`, `yi(` |
-| Visual modes | `v`, `V`, `<C-v>` |
-| Marks | Local and global |
-| Jump list | `<C-o>`, `<C-i>` |
-| Insert sub-modes | `<C-r>`, `<C-o>` |
-
-### Package Structure
-
+```yaml
+default:
+  fg: white
+  bg: black
+comment:
+  fg: gray
+  attr: italic
+keyword:
+  fg: blue
+  attr: bold
+string:
+  fg: green
+error:
+  fg: red
+  attr: underline
+gutter:
+  fg: gray
+statusline:
+  fg: black
+  bg: white
 ```
-vim/
-  vim.go       # State machine, key dispatch
-  normal.go    # Normal mode
-  insert.go    # Insert mode
-  visual.go    # Visual modes
-  operator.go  # Operator-pending (d, c, y, etc.)
-  motion.go    # Motions (w, b, e, f, t, gg, G, etc.)
-  textobj.go   # Text objects (iw, aw, i", etc.)
-  register.go  # Register management
-  macro.go     # Macro recording/playback
-  repeat.go    # Dot repeat
-  marks.go     # Mark storage
-  jumplist.go  # Jump list
-```
-
-### Core State
 
 ```go
-type Vim struct {
-    mode       Mode
-    count      int
-    register   rune
-    operator   Operator
+type Theme struct {
+    def   Style
+    rules map[string]Style
+}
 
-    lastChange Change    // for . repeat
-    recording  bool
-    macros     map[rune][]Key
-    macroReg   rune
+type Style struct {
+    Fg   Color
+    Bg   Color
+    Attr Attr   // bold, italic, underline, reverse, dim
+}
 
-    registers  map[rune][]byte
-    marks      map[rune]Mark
-    jumplist   *JumpList
+type Color struct {
+    // Supports: named (red, blue), 256-palette (0-255),
+    // true color (#RRGGBB), default (terminal default)
 }
 ```
 
-### Editor Integration
+`Theme.Style("string.escape")` looks up `string.escape`, then falls back to
+`string`, then to `default`.
 
-Vim package returns actions, decoupled from editor:
+## LSP
+
+Minimal LSP client communicating via JSON-RPC 2.0 over stdin/stdout.
 
 ```go
-type Action interface{}
+type LspManager struct {
+    servers map[string]*LspServer   // one per language/filetype
+    config  map[string]LspConfig    // from lsp.yaml
+}
 
-type MoveCursor struct { Pos int }
-type Delete struct { Start, End int }
-type Insert struct { Pos int; Text []byte }
-type ChangeMode struct { Mode Mode }
-type SetRegister struct { Reg rune; Text []byte }
+type LspServer struct {
+    cmd          *exec.Cmd
+    stdin        io.WriteCloser
+    stdout       *bufio.Reader
+    capabilities ServerCapabilities
+    nextID       int
+    responses    map[int]chan json.RawMessage
+    lock         sync.Mutex
+}
 ```
 
----
+Supported requests:
+- `initialize` / `shutdown`
+- `textDocument/didOpen`, `didChange`, `didSave`, `didClose`
+- `textDocument/completion` → completion menu
+- `textDocument/hover` → info popup
+- `textDocument/definition` → jump to definition
+- `textDocument/formatting` → format buffer
+- `textDocument/publishDiagnostics` → gutter markers + infobar messages
 
-## Flare Extensions
+Position encoding: LSP uses UTF-16 offsets. `Buffer.Utf16Loc` / `Utf8Loc`
+convert between internal byte offsets and LSP positions.
 
-Flare handles syntax highlighting via PEG grammars. Planned extensions:
+## TCL Commands
 
-| Feature | Status |
-|---------|--------|
-| Syntax highlighting | Working |
-| Auto-indentation | Planned |
-| Code folding | Planned |
+TCL (via `zyedidia/gotcl`) is the command language for ex-commands. Every
+`:` command is a TCL procedure.
 
-These remain declarative in `.lang` files. Lua calls `editor.reindent()` or `editor.fold()`, Flare does the work.
+```go
+func (e *Editor) initTCL() {
+    e.interp = tcl.NewInterp()
+    // Register editor commands
+    e.interp.RegisterCommand("quit", e.cmdQuit)
+    e.interp.RegisterCommand("write", e.cmdWrite)
+    e.interp.RegisterCommand("edit", e.cmdEdit)
+    e.interp.RegisterCommand("set", e.cmdSet)
+    e.interp.RegisterCommand("split", e.cmdSplit)
+    e.interp.RegisterCommand("vsplit", e.cmdVsplit)
+    e.interp.RegisterCommand("tabnew", e.cmdTabNew)
+    e.interp.RegisterCommand("lsp-hover", e.cmdLspHover)
+    e.interp.RegisterCommand("lsp-def", e.cmdLspDef)
+    e.interp.RegisterCommand("lsp-format", e.cmdLspFormat)
+    // ...
+}
+```
 
----
+Ex-command `:` prompt: enter command mode, read a line, evaluate via
+`e.interp.Eval(line)`. Supports command-line completion for command names and
+file paths.
 
-## Migration Path
+Vim aliases: `:w` = `write`, `:q` = `quit`, `:e` = `edit`, `:sp` = `split`,
+`:vs` = `vsplit`, `:s` = `substitute`.
 
-### Phase 1: Keybindings
-1. Implement TOML binding loader
-2. Convert micro mode bindings to TOML
-3. Remove `.kbd` files and PEG grammar code
+## Splits and Tabs
 
-### Phase 2: Vim
-1. Create `vim/` package skeleton
-2. Basic motions (h, j, k, l, w, b, e, 0, $, gg, G)
-3. Operators (d, c, y) with motions
-4. Counts
-5. Insert mode
-6. Visual modes
-7. Text objects
-8. Registers
-9. `.` repeat
-10. Macros
-11. Marks and jump list
+### Split Tree
 
-### Phase 3: Lua Plugin API
-1. Define core API surface (buffer, cursor, window, editor)
-2. Add hooks (onSave, onOpen, onBufEnter, onKey)
-3. Move comment toggling to Lua
-4. Move autoclose to Lua
-5. Implement LSP client in Lua
-6. Document plugin API
+Binary tree of split nodes. Each leaf is a pane (buffer view).
 
-### Phase 4: Polish
-1. Ship default plugins
-2. Plugin repository/installation improvements
-3. Documentation
+```go
+type SplitType uint8
+const (
+    SplitVert  SplitType = iota   // left | right
+    SplitHoriz                     // top / bottom
+)
 
----
+type SplitNode struct {
+    Kind     SplitType
+    Parent   *SplitNode
+    Children []*SplitNode   // len 0 for leaves, len 2 for splits
+    X, Y     int            // position
+    W, H     int            // dimensions
+    PropW    float64        // proportional width (0-1)
+    PropH    float64        // proportional height (0-1)
+    ID       uint           // leaf node ID
+}
+```
 
-## References
+### Tabs
 
-- Neovim: C core + Lua for LSP, treesitter queries, diagnostics
-- Kakoune/Helix: Modal editing in code, not grammars
-- Zed: Rust core + RPC plugins (future consideration for Mu)
+```go
+type Tab struct {
+    root   *SplitNode
+    panes  []Pane          // indexed by SplitNode.ID
+    active uint            // ID of focused pane
+}
+```
+
+### Pane Interface
+
+All pane types (buffer, future terminal, etc.) implement:
+
+```go
+type Pane interface {
+    Display(screen tcell.Screen, x, y, w, h int, theme *Theme)
+    HandleKey(ev *tcell.EventKey)
+    Resize(w, h int)
+    Name() string
+    Close()
+}
+```
+
+For now, the only pane type is `BufPane` (a View + Buffer).
+
+## Status Bar and Info Bar
+
+**StatusBar** (one per pane, at the bottom of each split):
+- Left: filename, modified flag, filetype, line ending
+- Right: cursor position (line:col), selection info, encoding
+
+**InfoBar** (one per editor, at the very bottom):
+- Shows messages, errors, and the `:` command prompt.
+- Supports single-line text input with completion.
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `gdamore/tcell/v2` | Terminal I/O |
+| `zyedidia/flare` | PEG-based syntax highlighting |
+| `zyedidia/ftdetect` | Filetype detection |
+| `zyedidia/gotcl` | TCL interpreter |
+| `zyedidia/uniseg` | Grapheme segmentation + display width |
+| `zyedidia/go-runewidth` | Character display width |
+| `zyedidia/clipper` | System clipboard |
+| `gogs/chardet` | Charset auto-detection |
+| `pelletier/go-toml` | TOML parsing |
+| `gopkg.in/yaml.v2` | YAML parsing (themes, LSP config) |
+| `golang.org/x/text` | Encoding transforms |
+| `go.lsp.dev/protocol` | LSP type definitions |
+
+## Implementation Order
+
+Each step builds on the previous.
+
+### Step 1: Text Buffer ✅
+`text/` package: rope, cache, linecache, endings, charset detection, Buffer.
+
+### Step 2: Editor Buffer, Cursor, Undo
+`buffer.go`, `cursor.go`, `undo.go` — Buffer wrapping text.Buffer with
+multi-cursor support and tree-based undo. `unicode.go` — grapheme decoding,
+UnicodeLoc, VisualLoc.
+
+### Step 3: Configuration and Themes
+`config.go`, `theme.go` — TOML options loading with filetype/glob overrides.
+YAML theme loading with hierarchical style lookups. Copy `embed/` resources
+from old mu.
+
+### Step 4: View and Display
+`view.go`, `display.go`, `gutter.go` — Viewport management, scrolling,
+grapheme-based rendering, line numbers.
+
+### Step 5: Vim Mode System and Key Dispatch
+`mode.go`, `keybind.go`, `register.go` — Mode definitions, key parsing, binding
+lookup, register management, action composition framework.
+
+### Step 6: Vim Motions, Operators, Text Objects
+`motion.go`, `operator.go`, `textobject.go` — Core vim commands. Start with
+the essentials (h/j/k/l, w/b/e, d/c/y, iw/aw) and expand.
+
+### Step 7: Editor Shell
+`editor.go`, `main.go`, `tab.go`, `split.go` — Editor struct, tcell event
+loop, tab/split management. At this point the editor is functional for basic
+editing.
+
+### Step 8: UI Chrome
+`statusbar.go`, `infobar.go` — Status line and command/message bar.
+
+### Step 9: Ex Commands and TCL
+`command.go`, `tcl.go` — TCL interpreter, :w/:q/:e/:set/:sp/:vs commands,
+command-line prompt with completion.
+
+### Step 10: Search
+`search.go` — Forward/backward search (/, ?), next/prev (n, N), :s substitute.
+
+### Step 11: Syntax Highlighting
+`syntax.go` — Windowed flare integration, background highlighting, incremental
+updates.
+
+### Step 12: File I/O and LSP
+`save.go` — Atomic file saving, backup, readonly detection.
+`lsp.go` — LSP client, server lifecycle, completion/hover/definition/format/
+diagnostics.

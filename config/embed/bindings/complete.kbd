@@ -1,3 +1,0 @@
-bindings <- {'tab',     'all-cursors { next-completion }'}
-          / {'backtab', 'all-cursors { prev-completion }'}
-          / {'ctrl+c',  'all-cursors { cancel-completion }; pop-mode'}

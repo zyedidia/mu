@@ -1,7 +1,0 @@
-{
-    "name": "yaml",
-    "exts": [".yml", ".yaml"],
-    "header": {
-        "regex": "%YAML"
-    }
-}

@@ -1,7 +1,0 @@
-{
-    "name": "yum",
-    "exts": [".repo"],
-    "file": {
-        "regex": "yum.*\\.conf$"
-    }
-}

@@ -1,6 +1,0 @@
-{
-    "name": "privoxy-config",
-    "file": {
-        "regex": "privoxy/config$"
-    }
-}

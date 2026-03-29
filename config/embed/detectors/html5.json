@@ -1,7 +1,0 @@
-{
-    "name": "html5",
-    "exts": [".html5", ".htm5"],
-    "header": {
-        "regex": "<!DOCTYPE html5>"
-    }
-}
