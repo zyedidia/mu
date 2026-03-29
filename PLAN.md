@@ -661,20 +661,20 @@ For now, the only pane type is `BufPane` (a View + Buffer).
 
 Each step builds on the previous.
 
-### Step 1: Text Buffer ✅
+### Step 1: Text Buffer (done)
 `text/` package: rope, cache, linecache, endings, charset detection, Buffer.
 
-### Step 2: Editor Buffer, Cursor, Undo
+### Step 2: Editor Buffer, Cursor, Undo (done)
 `buffer.go`, `cursor.go`, `undo.go` — Buffer wrapping text.Buffer with
 multi-cursor support and tree-based undo. `unicode.go` — grapheme decoding,
 UnicodeLoc, VisualLoc.
 
-### Step 3: Configuration and Themes
+### Step 3: Configuration and Themes (done)
 `config.go`, `theme.go` — TOML options loading with filetype/glob overrides.
 YAML theme loading with hierarchical style lookups. Copy `embed/` resources
 from old mu.
 
-### Step 4: View and Display
+### Step 4: View and Display (done)
 `view.go`, `display.go`, `gutter.go` — Viewport management, scrolling,
 grapheme-based rendering, line numbers.
 
