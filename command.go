@@ -20,6 +20,7 @@ var editorCommands = []CommandDef{
 	{"write", cmdWrite, "write [filename]: save the buffer"},
 	{"edit", cmdEdit, "edit <filename>: open a file"},
 	{"set", cmdSet, "set <name> [value]: get or set an option"},
+	{"substitute", cmdSubstitute, "substitute <pattern> <replacement>: replace all matches in buffer"},
 }
 
 // vimAliases maps vim-style short commands to TCL command strings.
@@ -30,6 +31,7 @@ var vimAliases = map[string]string{
 	"wq": "write; quit",
 	"x":  "write; quit",
 	"e":  "edit",
+	"s":  "substitute",
 }
 
 // RunCommand parses and executes an ex command string. It expands vim

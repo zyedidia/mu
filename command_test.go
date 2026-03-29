@@ -21,6 +21,7 @@ func newTestEditor() *Editor {
 	SetupBindings(ed.ks)
 	ed.initTCL()
 	ed.registerEditorBindings()
+	ed.registerSearchBindings()
 
 	// Open an empty buffer.
 	buf := NewEmptyBuffer()

@@ -11,6 +11,7 @@ softwrap = false
 wordwrap = false
 clipboard = "external"
 cursorline = true
+incsearch = true
 
 [makefile]
 tabstospaces = false

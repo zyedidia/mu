@@ -23,6 +23,7 @@ type Editor struct {
 	active int
 
 	infobar *InfoBar
+	search  SearchState
 
 	running bool
 	w, h    int
@@ -48,6 +49,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 
 	ed.initTCL()
 	ed.registerEditorBindings()
+	ed.registerSearchBindings()
 
 	return ed
 }

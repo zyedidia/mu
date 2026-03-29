@@ -32,6 +32,10 @@ type View struct {
 	LineNums      bool
 	CursorLine    bool
 	GutterWidth   int // width for diagnostic markers (0 or 1)
+
+	// Highlight is a byte range [start, end) to display with a search
+	// highlight style. Set to [0,0] for no highlight.
+	Highlight [2]int
 }
 
 // NewView creates a new View for the given buffer.
@@ -171,6 +175,13 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme) {
 	}
 	cursorlineStyle := th.Style("cursorline")
 
+	hasHL := v.Highlight[0] != v.Highlight[1]
+	hlStyle := th.Default().Add(AttrReverse)
+	if th.HasStyle("search") {
+		hlStyle = th.Style("search")
+	}
+
+	var curOff int
 	stpos := v.buf.OffsetAt(v.topline, v.topcol)
 	v.buf.RenderForward(RenderTracker{
 		Draw: func(bx, by, vx, vy int, mainc rune, combc []rune, style Style) {
@@ -178,12 +189,16 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme) {
 			if sx < gutter || sx >= v.width || vy >= v.height {
 				return
 			}
-			if cursorlines[by] {
+			if hasHL && curOff >= v.Highlight[0] && curOff < v.Highlight[1] {
+				style = hlStyle
+			}
+			if cursorlines[by] && !hasHL {
 				style.Bg = cursorlineStyle.Bg
 			}
 			draw(sx, vy, mainc, combc, style)
 		},
 		Track: func(off, bx, by, vx, vy int) bool {
+			curOff = off
 			if vy >= v.height {
 				return true
 			}

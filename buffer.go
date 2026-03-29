@@ -88,6 +88,9 @@ func (b *Buffer) LineLen(i int) int { return b.text.LineLen(i) }
 // GetLine returns the bytes for line i without the trailing '\n'.
 func (b *Buffer) GetLine(i int) []byte { return b.text.GetLine(i) }
 
+// ReadAt implements io.ReaderAt, used by search to avoid copying the buffer.
+func (b *Buffer) ReadAt(p []byte, off int64) (int, error) { return b.text.ReadAt(p, off) }
+
 // Modified returns whether the buffer has been modified since last save.
 func (b *Buffer) Modified() bool { return b.modified }
 

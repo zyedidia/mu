@@ -16,6 +16,8 @@ type InfoBar struct {
 	input     []rune
 	cursorPos int
 	callback  func(input string) // called on Enter
+	onChange  func(input string) // called on each input change (incremental search)
+	onCancel  func()             // called on Escape (restore state)
 }
 
 // NewInfoBar creates a new info bar.
@@ -54,65 +56,95 @@ func (ib *InfoBar) StartPrompt(prompt string, cb func(input string)) {
 	ib.input = nil
 	ib.cursorPos = 0
 	ib.callback = cb
+	ib.onChange = nil
+	ib.onCancel = nil
+	ib.message = ""
+}
+
+// StartPromptIncremental activates command-line input with callbacks for
+// incremental updates. onChange is called after every keystroke that modifies
+// the input. onCancel is called when the user presses Escape.
+func (ib *InfoBar) StartPromptIncremental(prompt string, onChange func(string), onDone func(string), onCancel func()) {
+	ib.active = true
+	ib.prompt = prompt
+	ib.input = nil
+	ib.cursorPos = 0
+	ib.callback = onDone
+	ib.onChange = onChange
+	ib.onCancel = onCancel
 	ib.message = ""
 }
 
 // Cancel deactivates the command-line input.
 func (ib *InfoBar) Cancel() {
+	onCancel := ib.onCancel
 	ib.active = false
 	ib.input = nil
 	ib.cursorPos = 0
 	ib.callback = nil
+	ib.onChange = nil
+	ib.onCancel = nil
+	if onCancel != nil {
+		onCancel()
+	}
 }
 
 // HandleKey processes a key event while the command-line is active.
 // Returns true if the editor should redraw, false if the prompt closed.
 func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
+	changed := false
+
 	switch key {
 	case KeyEscape, "<C-c>":
 		ib.Cancel()
 		return true, true
 	case KeyEnter:
-		if ib.callback != nil {
-			ib.callback(string(ib.input))
+		cb := ib.callback
+		// Clear callbacks before invoking so Cancel inside cb doesn't double-fire.
+		ib.active = false
+		ib.callback = nil
+		ib.onChange = nil
+		ib.onCancel = nil
+		if cb != nil {
+			cb(string(ib.input))
 		}
-		ib.Cancel()
+		ib.input = nil
+		ib.cursorPos = 0
 		return true, true
 	case KeyBacksp:
 		if ib.cursorPos > 0 {
 			ib.input = append(ib.input[:ib.cursorPos-1], ib.input[ib.cursorPos:]...)
 			ib.cursorPos--
+			changed = true
 		}
-		return true, false
 	case KeyLeft:
 		if ib.cursorPos > 0 {
 			ib.cursorPos--
 		}
-		return true, false
 	case KeyRight:
 		if ib.cursorPos < len(ib.input) {
 			ib.cursorPos++
 		}
-		return true, false
 	case KeyHome, "<C-a>":
 		ib.cursorPos = 0
-		return true, false
 	case KeyEnd, "<C-e>":
 		ib.cursorPos = len(ib.input)
-		return true, false
 	default:
-		// Insert character.
 		if len(key) == 0 || (len(key) > 1 && key[0] == '<') {
 			return false, false
 		}
 		rs := []rune(key)
-		// Insert at cursor position.
 		tail := make([]rune, len(ib.input[ib.cursorPos:]))
 		copy(tail, ib.input[ib.cursorPos:])
 		ib.input = append(ib.input[:ib.cursorPos], append(rs, tail...)...)
 		ib.cursorPos += len(rs)
-		return true, false
+		changed = true
 	}
+
+	if changed && ib.onChange != nil {
+		ib.onChange(string(ib.input))
+	}
+	return true, false
 }
 
 // Draw renders the info bar at the given screen row.
