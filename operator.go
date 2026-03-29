@@ -105,6 +105,41 @@ func execLineOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
 	ks.ResetAction()
 }
 
+// execLineChange handles cc: deletes line contents without removing the
+// line itself, then enters insert mode. For counts > 1 (e.g. 3cc), the
+// extra lines are fully removed but one empty line is preserved.
+func execLineChange(ks *KeyState) {
+	b := ks.Buf()
+	b.UndoBarrier()
+	count := ks.RawCount()
+	if count == 0 {
+		count = 1
+	}
+	for i := 0; i < b.NumCursors(); i++ {
+		c := b.cursors[i]
+		line, _ := b.LineColAt(c.Pos)
+		start := b.OffsetAt(line, 0)
+		// Remove extra lines entirely (their content + newlines).
+		if count > 1 {
+			extraStart := b.OffsetAt(line+1, 0)
+			extraEnd := b.OffsetAt(line+count, 0)
+			if extraEnd > b.Len() {
+				extraEnd = b.Len()
+			}
+			if extraEnd > extraStart {
+				opDelete(ks, b, extraStart, extraEnd)
+			}
+		}
+		// Delete the first line's content (preserve the newline).
+		end := start + b.LineLen(line)
+		if end > start {
+			opDelete(ks, b, start, end)
+		}
+	}
+	ks.SetMode(ModeInsert)
+	ks.ResetAction()
+}
+
 // --- Visual mode operator execution ---
 
 func execVisualOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
@@ -122,7 +157,9 @@ func execVisualOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
 		opFn(ks, b, start, end)
 		b.cursors[i].HasSel = false
 	}
-	ks.SetMode(ModeNormal)
+	if ks.ModeID() != ModeInsert {
+		ks.SetMode(ModeNormal)
+	}
 }
 
 // --- Operator binding helpers ---
@@ -142,7 +179,11 @@ func registerOperator(ks *KeyState, key string, opFn func(*KeyState, *Buffer, in
 	// Operator-pending: doubled operator = linewise.
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
 		if p := ks.Pending(); p != nil && p.Key == key {
-			execLineOp(ks, opFn)
+			if key == "c" {
+				execLineChange(ks)
+			} else {
+				execLineOp(ks, opFn)
+			}
 		}
 	}, key)
 
@@ -380,12 +421,14 @@ func RegisterOperators(ks *KeyState) {
 			}
 			ks.SetMode(ModeNormal)
 		}, KeyEscape)
+		ks.modes[mode].Bindings.Bind(ks.modes[mode].Bindings.root.children[KeyEscape].action, "<C-c>")
 	}
 
 	// Escape in operator-pending: cancel
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
 		ks.ResetAction()
 	}, KeyEscape)
+	ks.modes[ModeOperatorPending].Bindings.Bind(ks.modes[ModeOperatorPending].Bindings.root.children[KeyEscape].action, "<C-c>")
 
 	// --- Insert mode ---
 

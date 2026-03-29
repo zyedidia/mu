@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -22,6 +24,10 @@ type InfoBar struct {
 
 	// Single-key prompt state (for y/n prompts).
 	charCallback func(key string)
+
+	// Tab completion.
+	completer  Completer
+	completion completionState
 }
 
 // NewInfoBar creates a new info bar.
@@ -62,6 +68,12 @@ func (ib *InfoBar) IsActive() bool {
 	return ib.active || ib.charCallback != nil
 }
 
+// SetCompleter sets the tab-completion function for the active prompt.
+func (ib *InfoBar) SetCompleter(c Completer) {
+	ib.completer = c
+	ib.completion.reset()
+}
+
 // StartPrompt activates command-line input with the given prompt character.
 // The callback is called with the entered text when the user presses Enter.
 func (ib *InfoBar) StartPrompt(prompt string, cb func(input string)) {
@@ -72,6 +84,8 @@ func (ib *InfoBar) StartPrompt(prompt string, cb func(input string)) {
 	ib.callback = cb
 	ib.onChange = nil
 	ib.onCancel = nil
+	ib.completer = nil
+	ib.completion.reset()
 	ib.message = ""
 }
 
@@ -119,6 +133,12 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 	changed := false
 
 	switch key {
+	case KeyTab:
+		ib.tabComplete(1)
+		return true, false
+	case "<S-Tab>":
+		ib.tabComplete(-1)
+		return true, false
 	case KeyEscape, "<C-c>":
 		ib.Cancel()
 		return true, true
@@ -165,10 +185,145 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		changed = true
 	}
 
-	if changed && ib.onChange != nil {
-		ib.onChange(string(ib.input))
+	if changed {
+		ib.completion.reset()
+		if ib.onChange != nil {
+			ib.onChange(string(ib.input))
+		}
 	}
 	return true, false
+}
+
+// tabComplete performs one step of tab completion. dir is +1 for forward
+// (Tab) or -1 for backward (Shift-Tab).
+func (ib *InfoBar) tabComplete(dir int) {
+	if ib.completer == nil {
+		return
+	}
+
+	cs := &ib.completion
+	if !cs.active {
+		// First Tab press: compute candidates from the original input.
+		input := string(ib.input)
+		cs.candidates = ib.completer(input)
+		if len(cs.candidates) == 0 {
+			return
+		}
+		word := lastWord(input)
+		cs.replaceFrom = len([]rune(input)) - len([]rune(word))
+		cs.index = -1
+		cs.active = true
+
+		// If there's a common prefix longer than what's typed, complete
+		// to that first without cycling.
+		if lcp := longestCommonPrefix(cs.candidates); len(lcp) > len(word) {
+			prefix := ib.input[:cs.replaceFrom]
+			ib.input = append(append([]rune{}, prefix...), []rune(lcp)...)
+			ib.cursorPos = len(ib.input)
+			return
+		}
+
+		// If there's only one candidate and it matches the word, nothing to do.
+		if len(cs.candidates) == 1 && cs.candidates[0] == word {
+			cs.reset()
+			return
+		}
+	}
+
+	if len(cs.candidates) == 0 {
+		return
+	}
+
+	// Advance index, skipping candidates that match what's already displayed.
+	current := string(ib.input[cs.replaceFrom:])
+	for range cs.candidates {
+		cs.index += dir
+		if cs.index >= len(cs.candidates) {
+			cs.index = 0
+		} else if cs.index < 0 {
+			cs.index = len(cs.candidates) - 1
+		}
+		if cs.candidates[cs.index] != current {
+			break
+		}
+	}
+
+	// Replace from the saved position with the selected candidate.
+	prefix := ib.input[:cs.replaceFrom]
+	newInput := append([]rune{}, prefix...)
+	newInput = append(newInput, []rune(cs.candidates[cs.index])...)
+	ib.input = newInput
+	ib.cursorPos = len(ib.input)
+}
+
+// longestCommonPrefix returns the longest string that is a prefix of all
+// candidates.
+func longestCommonPrefix(candidates []string) string {
+	if len(candidates) == 0 {
+		return ""
+	}
+	lcp := candidates[0]
+	for _, c := range candidates[1:] {
+		for i := 0; i < len(lcp); i++ {
+			if i >= len(c) || lcp[i] != c[i] {
+				lcp = lcp[:i]
+				break
+			}
+		}
+	}
+	return lcp
+}
+
+// lastWord returns the last space-separated word in s, or all of s if
+// there are no spaces.
+func lastWord(s string) string {
+	i := strings.LastIndexByte(s, ' ')
+	if i == -1 {
+		return s
+	}
+	return s[i+1:]
+}
+
+// HasCompletions returns true if there are active completion candidates to show.
+func (ib *InfoBar) HasCompletions() bool {
+	return ib.completion.active && len(ib.completion.candidates) > 0
+}
+
+// DrawCompletions renders the completion candidates on the given screen row
+// (typically the status bar row). The selected candidate is shown in brackets.
+func (ib *InfoBar) DrawCompletions(screen tcell.Screen, y, w int, th *Theme) {
+	cs := &ib.completion
+	if !cs.active || len(cs.candidates) == 0 {
+		return
+	}
+
+	style := th.Default().Add(AttrReverse)
+	ts := style.TCellStyle()
+
+	x := 0
+	for i, s := range cs.candidates {
+		if len(s) > 25 {
+			s = "..." + s[len(s)-22:]
+		}
+		var display string
+		if i == cs.index {
+			display = "[" + s + "]"
+		} else {
+			display = " " + s + " "
+		}
+		for _, r := range display {
+			if x >= w {
+				goto fill
+			}
+			screen.SetContent(x, y, r, nil, ts)
+			x++
+		}
+	}
+fill:
+	for x < w {
+		screen.SetContent(x, y, ' ', nil, ts)
+		x++
+	}
 }
 
 // Draw renders the info bar at the given screen row.

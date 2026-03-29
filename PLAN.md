@@ -746,3 +746,121 @@ UTF-16 ↔ byte offset conversion. didSave sent on `:w`.
 Tier 1 features: initialize/shutdown, didOpen/didChange/didSave/didClose,
 publishDiagnostics, go to definition, hover, formatting, completion request
 (UI not yet wired). See LSP.md for full plan including tier 2/3.
+
+### Step 14: Info Bar Tab Completion (done)
+
+Context-aware tab completion in the `:` command prompt.
+
+**Architecture:**
+- `Completer` interface: `Complete(input string, pos int) []string`
+- InfoBar calls completer on Tab, cycles through results with repeated
+  Tab / Shift-Tab
+- Completion state: prefix, candidates list, current index
+- Display: replace current word with completed text, cycle on repeated Tab
+
+**Completion sources (selected by context):**
+- **Command names**: first word → complete registered TCL command names and
+  vim aliases (`q`, `w`, `wq`, `e`, `set`, `substitute`, `lsp-format`, etc.)
+- **File paths**: for `edit`/`write` — complete filesystem paths relative
+  to cwd, expanding `~`
+- **Option names**: for `set` second arg — complete known option names from
+  the config defaults
+- **Option values**: for `set theme <Tab>` — complete from available theme
+  files. For bool options → `true`/`false`
+
+**Resolution:**
+1. Split input into command + arguments
+2. First word → command name completer
+3. Subsequent words → look up the command, delegate to its arg completer
+
+### Step 15: Extended Keybindings
+
+Fill in commonly-used vim bindings that are currently missing.
+
+**Normal mode — critical:**
+- `.` — repeat last edit. Track last edit keys in KeyState, replay on `.`
+- `r<char>` — replace character under cursor (charWait, no mode switch)
+- `R` — replace mode (overwrite chars as you type)
+- `s` — delete char + enter insert (alias for `cl`)
+- `S` — delete line + enter insert (alias for `cc`)
+- `~` — toggle case of char under cursor and advance
+- `%` — jump to matching bracket `(){}[]`
+
+**Normal mode — high priority:**
+- `H` / `M` / `L` — top / middle / bottom of screen (needs View height)
+- `Ctrl-F` / `Ctrl-B` — full page down / up
+- `Ctrl-E` / `Ctrl-Y` — scroll view one line down / up without moving cursor
+- `;` / `,` — repeat / reverse last `f`/`t`/`F`/`T` search
+- `m<char>` — set mark at cursor position
+- `'<char>` / `` `<char> `` — jump to mark (line / exact)
+- `Ctrl-O` / `Ctrl-I` — jump list backward / forward
+- `gu` / `gU` / `g~` — lowercase / uppercase / togglecase operators
+
+**Normal mode — nice to have:**
+- `q<reg>` / `@<reg>` — record / play macro
+- `Ctrl-A` / `Ctrl-X` — increment / decrement number
+- `gv` — reselect last visual selection
+- `zz` / `zt` / `zb` — center / top / bottom cursor in view
+
+**Insert mode:**
+- `Ctrl-W` — delete word before cursor
+- `Ctrl-U` — delete to start of line
+- `Ctrl-N` / `Ctrl-P` — next / previous completion (LSP or buffer words)
+
+**Visual mode:**
+- `o` — swap cursor to other end of selection
+- `u` / `U` — lowercase / uppercase selection
+- `J` — join selected lines
+
+**Command mode:**
+- Up / Down or `Ctrl-P` / `Ctrl-N` — command history recall
+
+### Step 16: Multi-Cursor Support
+
+Modeled after `vim-multiple-cursors` plugin behavior.
+
+**Core interaction — `Ctrl-N` flow:**
+
+1. **First press** (no selection): select the word under the cursor
+   (equivalent to `viw`). This becomes the "search pattern" for subsequent
+   presses.
+2. **Subsequent presses**: find the next occurrence of the selected text
+   in the buffer, spawn a new cursor there with the same selection.
+   Wraps around at end of file.
+3. **`Ctrl-P`**: remove the most recently added cursor and go back to the
+   previous one.
+4. **`Ctrl-X`**: skip the current match (remove it) and jump to the next
+   occurrence instead.
+5. **`Escape`** (with multiple cursors active): remove all cursors except
+   the primary one, clear selections.
+
+**State machine:**
+```
+Normal (no multi-cursor)
+  │ Ctrl-N
+  ▼
+Select word under cursor, enter Visual mode
+  │ Ctrl-N
+  ▼
+Find next occurrence, add cursor+selection ◄─── Ctrl-N (repeat)
+  │                                            │
+  ├── Ctrl-P: remove last cursor, go back ─────┘
+  ├── Ctrl-X: skip this match, find next ──────┘
+  ├── Escape: clear all extra cursors, normal mode
+  └── Any edit key: apply to ALL cursors, then wait
+```
+
+**After spawning cursors, editing works as-is:**
+- Insert mode typing inserts at all cursors (already implemented)
+- Operators (d/c/y) apply to all cursors (already implemented)
+- Motions move all cursors (already implemented)
+- `applyEdit` adjusts all cursor positions (already implemented)
+
+**Implementation:**
+- Track multi-cursor search pattern and match index on Editor
+- `Ctrl-N` binding in normal and visual modes
+- `Ctrl-P` / `Ctrl-X` bindings (only active when multiple cursors exist)
+- Cursor merge: after operations, sort cursors by position, remove
+  overlapping ones
+- Undo state: save all cursor positions (not just primary) for proper
+  undo/redo with multiple cursors

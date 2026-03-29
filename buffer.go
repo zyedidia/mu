@@ -37,6 +37,8 @@ type Buffer struct {
 	lspVersion int32
 	lspFt      string // filetype for LSP
 
+	vis *Visualizer // set by the view, used for visual column calculations
+
 	watchDone chan struct{} // closed to stop the file watcher
 	onReload  func(*Buffer) // called from watcher when auto-reloaded
 }

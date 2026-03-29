@@ -40,7 +40,7 @@ type View struct {
 
 // NewView creates a new View for the given buffer.
 func NewView(buf *Buffer, tabsize int) *View {
-	return &View{
+	v := &View{
 		buf: buf,
 		vis: Visualizer{
 			TabSize: tabsize,
@@ -52,6 +52,8 @@ func NewView(buf *Buffer, tabsize int) *View {
 		CursorLine:    true,
 		GutterWidth:   1,
 	}
+	buf.vis = &v.vis
+	return v
 }
 
 // Resize sets the viewport dimensions.

@@ -17,9 +17,10 @@ const (
 // current cursor. Count is the raw count (0 = unset). Name is used for
 // special-casing (e.g. vim's cw→ce quirk).
 type MotionDef struct {
-	Fn    func(b *Buffer, c Cursor, count int) int
-	Flags MotionFlags
-	Name  string
+	Fn       func(b *Buffer, c Cursor, count int) int
+	Flags    MotionFlags
+	Name     string
+	Vertical bool // true for j/k: preserve Vx instead of recalculating
 }
 
 // --- Motion application helpers ---
@@ -39,6 +40,9 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 			}
 		} else {
 			b.cursors[i] = c.MoveTo(newPos)
+		}
+		if !m.Vertical {
+			b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
 		}
 	}
 	ks.count = 0
@@ -214,32 +218,24 @@ func motionDown(b *Buffer, c Cursor, count int) int {
 	if count == 0 {
 		count = 1
 	}
-	line, col := b.LineColAt(c.Pos)
+	line, _ := b.LineColAt(c.Pos)
 	line += count
 	if line > b.NumLines() {
 		line = b.NumLines()
 	}
-	ll := b.LineLen(line)
-	if col > ll {
-		col = ll
-	}
-	return b.OffsetAt(line, col)
+	return b.VisualLoc(line, c.Vx)
 }
 
 func motionUp(b *Buffer, c Cursor, count int) int {
 	if count == 0 {
 		count = 1
 	}
-	line, col := b.LineColAt(c.Pos)
+	line, _ := b.LineColAt(c.Pos)
 	line -= count
 	if line < 0 {
 		line = 0
 	}
-	ll := b.LineLen(line)
-	if col > ll {
-		col = ll
-	}
-	return b.OffsetAt(line, col)
+	return b.VisualLoc(line, c.Vx)
 }
 
 func motionLineStart(_ *Buffer, c Cursor, _ int) int {
@@ -451,10 +447,10 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{KeyLeft}, MotionDef{Fn: motionLeft})
 	registerMotion(ks, []string{"l"}, MotionDef{Fn: motionRight})
 	registerMotion(ks, []string{KeyRight}, MotionDef{Fn: motionRight})
-	registerMotion(ks, []string{"j"}, MotionDef{Fn: motionDown})
-	registerMotion(ks, []string{KeyDown}, MotionDef{Fn: motionDown})
-	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp})
-	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp})
+	registerMotion(ks, []string{"j"}, MotionDef{Fn: motionDown, Vertical: true})
+	registerMotion(ks, []string{KeyDown}, MotionDef{Fn: motionDown, Vertical: true})
+	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp, Vertical: true})
+	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp, Vertical: true})
 
 	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionFirstNonBlank})
@@ -487,7 +483,7 @@ func RegisterMotions(ks *KeyState) {
 				count = 1
 			}
 			return motionDown(b, c, halfPage*count)
-		}}, false)
+		}, Vertical: true}, false)
 	}, "<C-d>")
 
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
@@ -500,7 +496,7 @@ func RegisterMotions(ks *KeyState) {
 				count = 1
 			}
 			return motionUp(b, c, halfPage*count)
-		}}, false)
+		}, Vertical: true}, false)
 	}, "<C-u>")
 
 	registerCharMotion(ks, "f", motionFindChar, Inclusive)

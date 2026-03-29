@@ -41,6 +41,59 @@ func (b *Buffer) UnicodeLoc(line, col int) int {
 	return off
 }
 
+// maxVisualWalk is the byte-column threshold above which VisualCol and
+// VisualLoc fall back to using the byte column directly, avoiding an
+// expensive character-by-character walk on very long lines.
+const maxVisualWalk = 4096
+
+// VisualCol returns the visual column (accounting for tab width) at a byte
+// offset. For lines longer than maxVisualWalk bytes it falls back to the byte
+// column for efficiency.
+func (b *Buffer) VisualCol(pos int) int {
+	line, col := b.LineColAt(pos)
+	if b.vis == nil || b.LineLen(line) > maxVisualWalk {
+		return col
+	}
+	off := b.OffsetAt(line, 0)
+	vx := 0
+	for off < pos {
+		r, _, sz, width := b.DecodeGraphemeWidthAt(off)
+		if r == '\n' || sz == 0 {
+			break
+		}
+		vx += b.vis.Size(r, vx, width)
+		off += sz
+	}
+	return vx
+}
+
+// VisualLoc converts a (line, visual-column) pair to a byte offset, accounting
+// for tab width and wide characters. For lines longer than maxVisualWalk bytes
+// it falls back to using the column as a byte offset for efficiency.
+func (b *Buffer) VisualLoc(line, vcol int) int {
+	if line >= b.NumLines() {
+		return b.Len()
+	}
+	if b.vis == nil || b.LineLen(line) > maxVisualWalk {
+		ll := b.LineLen(line)
+		if vcol > ll {
+			vcol = ll
+		}
+		return b.OffsetAt(line, vcol)
+	}
+	off := b.OffsetAt(line, 0)
+	vx := 0
+	for vx < vcol {
+		r, _, sz, width := b.DecodeGraphemeWidthAt(off)
+		if r == '\n' || sz == 0 {
+			return off
+		}
+		off += sz
+		vx += b.vis.Size(r, vx, width)
+	}
+	return off
+}
+
 // Utf16Loc converts a (line, byte-col) pair to a (line, utf16-col) pair.
 // This is needed for LSP which uses UTF-16 offsets.
 func (b *Buffer) Utf16Loc(line, col8 int) (int, int) {

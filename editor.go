@@ -81,11 +81,12 @@ func (e *Editor) registerEditorBindings() {
 		e.running = false
 	}, "Z", "Z")
 
-	// :: enter command mode
+	// :: enter command mode with tab completion
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.infobar.StartPrompt(":", func(input string) {
 			e.RunCommand(input)
 		})
+		e.infobar.SetCompleter(cmdCompleter(e))
 	}, ":")
 }
 
@@ -295,8 +296,12 @@ func (e *Editor) Display() {
 		}
 	}
 
-	// Status bar.
-	e.drawStatusBar(e.h - 2)
+	// Status bar (or completion bar if completing).
+	if e.infobar.HasCompletions() {
+		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
+	} else {
+		e.drawStatusBar(e.h - 2)
+	}
 
 	// Info bar.
 	e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)

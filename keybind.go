@@ -263,8 +263,8 @@ func (ks *KeyState) HandleKey(key string) {
 		return
 	}
 
-	// Try register prefix (only before any trie keys).
-	if len(ks.keys) == 0 && key == "\"" && ks.register == 0 {
+	// Try register prefix (only in normal mode, before any trie keys).
+	if len(ks.keys) == 0 && key == "\"" && ks.register == 0 && ks.mode == ModeNormal {
 		ks.regWait = true
 		return
 	}
