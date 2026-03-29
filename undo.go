@@ -38,9 +38,10 @@ type UndoTree[T, S any] struct {
 	Current EventPtr
 	Events  []Event[T, S]
 
-	cutoff  int
-	base    T
-	barrier bool
+	cutoff       int
+	base         T
+	barrier      bool
+	BarrierOnly  bool // when true, only split undo events on explicit barriers (ignore time)
 }
 
 const NoCutoff = -1
@@ -51,9 +52,10 @@ const coalesceTime = time.Second
 // cutoff is NoCutoff, the history will never be truncated.
 func NewUndoTree[T, S any](base T, cutoff int) *UndoTree[T, S] {
 	u := &UndoTree[T, S]{
-		base:   base,
-		cutoff: cutoff,
-		Events: make([]Event[T, S], 0),
+		base:        base,
+		cutoff:      cutoff,
+		BarrierOnly: true,
+		Events:      make([]Event[T, S], 0),
 	}
 	root := u.newEvent(Event[T, S]{
 		Time: time.Now(),
@@ -123,12 +125,15 @@ func (u *UndoTree[T, S]) Barrier() {
 func (u *UndoTree[T, S]) Apply(d Delta[T, S]) {
 	d.Do(u.base)
 
-	// Coalesce into the current event if within the time window and no barrier.
-	if u.current().Prev != -1 && !u.barrier && time.Since(u.current().Time) < coalesceTime {
+	// Coalesce into the current event if no barrier is set and either
+	// BarrierOnly mode is on or we are within the coalesce time window.
+	if u.current().Prev != -1 && !u.barrier && (u.BarrierOnly || time.Since(u.current().Time) < coalesceTime) {
 		u.current().Deltas = append(u.current().Deltas, d)
 		u.barrier = false
 		return
 	}
+
+	u.barrier = false
 
 	e := u.newEvent(Event[T, S]{
 		Deltas: []Delta[T, S]{d},

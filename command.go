@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -15,23 +16,36 @@ type CommandDef struct {
 // editorCommands is the registry of all ex commands. These are registered
 // as TCL commands in tcl.go.
 var editorCommands = []CommandDef{
-	{"quit", cmdQuit, "quit: close the editor"},
+	{"quit", cmdQuit, "quit: close pane/tab/editor"},
 	{"quit!", cmdForceQuit, "quit!: close without saving"},
+	{"quitall", cmdQuitAll, "quitall: close all panes and tabs"},
+	{"quitall!", cmdForceQuitAll, "quitall!: close all without saving"},
 	{"write", cmdWrite, "write [filename]: save the buffer"},
 	{"edit", cmdEdit, "edit <filename>: open a file"},
 	{"set", cmdSet, "set <name> [value]: get or set an option"},
 	{"substitute", cmdSubstitute, "substitute <pattern> <replacement>: replace all matches in buffer"},
+	{"vsplit", cmdVSplit, "vsplit [filename]: vertical split"},
+	{"hsplit", cmdHSplit, "hsplit [filename]: horizontal split"},
+	{"split", cmdHSplit, "split [filename]: horizontal split (alias)"},
+	{"tabnew", cmdTabNew, "tabnew [filename]: open file in new tab"},
+	{"tabnext", cmdTabNext, "tabnext: switch to next tab"},
+	{"tabprev", cmdTabPrev, "tabprev: switch to previous tab"},
 }
 
 // vimAliases maps vim-style short commands to TCL command strings.
 var vimAliases = map[string]string{
-	"q":  "quit",
-	"q!": "quit!",
-	"w":  "write",
-	"wq": "write; quit",
-	"x":  "write; quit",
-	"e":  "edit",
-	"s":  "substitute",
+	"q":   "quit",
+	"q!":  "quit!",
+	"qa":  "quitall",
+	"qa!": "quitall!",
+	"w":   "write",
+	"wq":  "write; quit",
+	"x":   "write; quit",
+	"e":   "edit",
+	"s":   "substitute",
+	"vs":  "vsplit",
+	"sp":  "split",
+	"vsp": "vsplit",
 }
 
 // RunCommand parses and executes an ex command string. It expands vim
@@ -78,11 +92,29 @@ func cmdQuit(e *Editor, args []string) error {
 	if e.ActiveView() != nil && e.ActiveView().buf.Modified() {
 		return fmt.Errorf("No write since last change (use :q! to override)")
 	}
-	e.running = false
+	e.ClosePane()
 	return nil
 }
 
 func cmdForceQuit(e *Editor, args []string) error {
+	e.ClosePane()
+	return nil
+}
+
+func cmdQuitAll(e *Editor, args []string) error {
+	// Check all buffers for unsaved changes.
+	for _, t := range e.tabs {
+		for _, v := range t.panes {
+			if v.buf.Modified() {
+				return fmt.Errorf("No write since last change (use :qa! to override)")
+			}
+		}
+	}
+	e.running = false
+	return nil
+}
+
+func cmdForceQuitAll(e *Editor, args []string) error {
 	e.running = false
 	return nil
 }
@@ -216,4 +248,48 @@ func coerceOptValue(existing any, s string) (any, error) {
 		return s, nil
 	}
 	return nil, fmt.Errorf("unknown type")
+}
+
+func cmdVSplit(e *Editor, args []string) error {
+	e.VSplit(args)
+	return nil
+}
+
+func cmdHSplit(e *Editor, args []string) error {
+	e.HSplit(args)
+	return nil
+}
+
+func cmdTabNew(e *Editor, args []string) error {
+	var v *View
+	if len(args) > 0 {
+		data, err := os.ReadFile(args[0])
+		if err != nil {
+			if os.IsNotExist(err) {
+				data = []byte{}
+			} else {
+				return err
+			}
+		}
+		buf, err := NewBuffer(data, args[0])
+		if err != nil {
+			return err
+		}
+		v = e.configureView(buf, args[0])
+	} else {
+		buf := NewEmptyBuffer()
+		v = e.configureView(buf, "")
+	}
+	e.NewTabWithView(v)
+	return nil
+}
+
+func cmdTabNext(e *Editor, args []string) error {
+	e.NextTab()
+	return nil
+}
+
+func cmdTabPrev(e *Editor, args []string) error {
+	e.PrevTab()
+	return nil
 }

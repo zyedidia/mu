@@ -399,7 +399,9 @@ func RegisterOperators(ks *KeyState) {
 		b := ks.Buf()
 		c := b.Cursor()
 		_, _, sz := b.DecodeGraphemeAt(c.Pos)
-		*c = c.SelectTo(c.Pos + sz)
+		c.HasSel = true
+		c.Orig = [2]int{c.Pos, c.Pos + sz}
+		c.Sel = [2]int{c.Pos, c.Pos + sz}
 		ks.SetMode(ModeVisual)
 	}, "v")
 

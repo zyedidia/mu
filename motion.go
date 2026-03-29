@@ -35,17 +35,40 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 		newPos = clamp(newPos, 0, b.Len())
 		if selecting {
 			b.cursors[i] = c.SelectTo(newPos)
-			if ks.ModeID() == ModeVisualLine {
+			if ks.ModeID() == ModeVisual {
+				adjustVisualChar(b, &b.cursors[i])
+			} else if ks.ModeID() == ModeVisualLine {
 				adjustVisualLine(b, &b.cursors[i])
 			}
 		} else {
 			b.cursors[i] = c.MoveTo(newPos)
 		}
-		if !m.Vertical {
-			b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
-		}
+	}
+	if m.Vertical {
+		ks.vertical = true
 	}
 	ks.count = 0
+}
+
+// adjustVisualChar ensures the selection includes the grapheme at the cursor
+// position, since visual charwise mode is inclusive of the cursor character.
+func adjustVisualChar(b *Buffer, c *Cursor) {
+	if !c.HasSel {
+		return
+	}
+	if c.Pos >= c.Orig[0] {
+		// Forward: extend Sel[1] past the grapheme at cursor
+		_, _, sz := b.DecodeGraphemeAt(c.Pos)
+		if sz > 0 {
+			c.Sel[1] = c.Pos + sz
+		}
+	} else {
+		// Backward: extend Sel[1] past the grapheme at anchor
+		_, _, sz := b.DecodeGraphemeAt(c.Orig[0])
+		if sz > 0 {
+			c.Sel[1] = c.Orig[0] + sz
+		}
+	}
 }
 
 // adjustVisualLine extends a cursor's selection to full lines.
@@ -471,32 +494,55 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"{"}, MotionDef{Fn: motionParaUp})
 	registerMotion(ks, []string{"}"}, MotionDef{Fn: motionParaDown})
 
-	// Ctrl-D / Ctrl-U: half-page down/up. These need the view height, so
-	// the motion function captures it dynamically via the KeyState's buffer.
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		halfPage := 10 // fallback
-		if ks.halfPageSize != nil {
-			halfPage = ks.halfPageSize()
+	// Ctrl-D / Ctrl-U: half-page scroll. Scrolls the view and moves the
+	// cursor by the same amount so the cursor stays at the same screen row.
+	// At file boundaries the cursor moves to stay visible.
+	scrollHalfPage := func(ks *KeyState, dir int) {
+		v := ks.activeView()
+		if v == nil {
+			return
 		}
-		applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
-			if count == 0 {
-				count = 1
-			}
-			return motionDown(b, c, halfPage*count)
-		}, Vertical: true}, false)
-	}, "<C-d>")
+		b := ks.Buf()
+		halfPage := v.height / 2
+		count := ks.RawCount()
+		if count == 0 {
+			count = 1
+		}
+		scroll := halfPage * count * dir
 
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		halfPage := 10
-		if ks.halfPageSize != nil {
-			halfPage = ks.halfPageSize()
+		// Scroll the view.
+		newTop := v.topline + scroll
+		if newTop < 0 {
+			newTop = 0
 		}
-		applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
-			if count == 0 {
-				count = 1
-			}
-			return motionUp(b, c, halfPage*count)
-		}, Vertical: true}, false)
+		maxTop := b.NumLines() - v.height + 1
+		if maxTop < 0 {
+			maxTop = 0
+		}
+		if newTop > maxTop {
+			newTop = maxTop
+		}
+		v.topline = newTop
+
+		// Move cursor by the same amount.
+		c := b.Cursor()
+		line, _ := b.LineColAt(c.Pos)
+		newLine := line + scroll
+		if newLine < 0 {
+			newLine = 0
+		}
+		if newLine > b.NumLines() {
+			newLine = b.NumLines()
+		}
+		*c = c.MoveTo(b.VisualLoc(newLine, c.Vx))
+		ks.vertical = true
+		ks.count = 0
+	}
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		scrollHalfPage(ks, 1)
+	}, "<C-d>")
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		scrollHalfPage(ks, -1)
 	}, "<C-u>")
 
 	registerCharMotion(ks, "f", motionFindChar, Inclusive)

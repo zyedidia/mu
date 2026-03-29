@@ -38,19 +38,22 @@ func (e *Editor) initLsp() {
 // matching buffer.
 func (e *Editor) handleDiagnostics(params lsp.PublishDiagnosticsParams) {
 	path := params.URI.Filename()
-	for _, v := range e.views {
-		absPath, _ := filepath.Abs(v.buf.Path)
-		if absPath == path {
-			v.buf.ClearDiagnostics()
-			for _, d := range params.Diagnostics {
-				_, col8 := v.buf.Utf8Loc(int(d.Range.Start.Line), int(d.Range.Start.Character))
-				dtype := DiagWarning
-				if d.Severity == lsp.DiagnosticSeverityError {
-					dtype = DiagError
+	// Search all tabs and panes for the matching buffer.
+	for _, t := range e.tabs {
+		for _, v := range t.panes {
+			absPath, _ := filepath.Abs(v.buf.Path)
+			if absPath == path {
+				v.buf.ClearDiagnostics()
+				for _, d := range params.Diagnostics {
+					_, col8 := v.buf.Utf8Loc(int(d.Range.Start.Line), int(d.Range.Start.Character))
+					dtype := DiagWarning
+					if d.Severity == lsp.DiagnosticSeverityError {
+						dtype = DiagError
+					}
+					v.buf.AddDiagnostic(int(d.Range.Start.Line), col8, d.Message, dtype)
 				}
-				v.buf.AddDiagnostic(int(d.Range.Start.Line), col8, d.Message, dtype)
+				return
 			}
-			break
 		}
 	}
 }

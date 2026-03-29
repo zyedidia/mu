@@ -61,7 +61,7 @@ func main() {
 			}
 		}
 	}
-	if len(ed.views) == 0 {
+	if len(ed.tabs) == 0 {
 		ed.OpenEmpty()
 	}
 

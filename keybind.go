@@ -134,9 +134,16 @@ type KeyState struct {
 	// lastAction records the last completed action for . repeat.
 	lastKeys []string
 
-	// halfPageSize returns half the viewport height. Set by the editor
-	// so motions like Ctrl-D/Ctrl-U know the page size.
-	halfPageSize func() int
+	// activeView returns the active view. Set by the editor so that
+	// scroll commands (Ctrl-D/Ctrl-U) can adjust the viewport directly.
+	activeView func() *View
+
+	// vertical is set by applyMotion for j/k moves to signal that Vx
+	// should not be recalculated this cycle.
+	vertical bool
+
+	// onModeChange is called after every mode switch with the new mode ID.
+	onModeChange func(ModeID)
 }
 
 // NewKeyState creates a new key dispatch state machine.
@@ -175,6 +182,9 @@ func (ks *KeyState) SetMode(id ModeID) {
 	nw := ks.modes[id]
 	if nw.OnEnter != nil {
 		nw.OnEnter(ks)
+	}
+	if ks.onModeChange != nil {
+		ks.onModeChange(id)
 	}
 }
 

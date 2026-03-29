@@ -8,7 +8,7 @@ import (
 	"github.com/zyedidia/gotcl"
 )
 
-// Editor is the top-level editor state, managing the screen, views, and
+// Editor is the top-level editor state, managing the screen, tabs, and
 // key dispatch.
 type Editor struct {
 	screen tcell.Screen
@@ -19,8 +19,8 @@ type Editor struct {
 	regs   *RegisterSet
 	interp *gotcl.Interp
 
-	views  []*View
-	active int
+	tabs   []*Tab
+	curtab int
 
 	infobar    *InfoBar
 	search     SearchState
@@ -48,11 +48,20 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		h:       h,
 	}
 
-	ks.halfPageSize = func() int {
-		if v := ed.ActiveView(); v != nil {
-			return v.height / 2
+	ks.activeView = func() *View {
+		return ed.ActiveView()
+	}
+
+	ks.onModeChange = func(mode ModeID) {
+		if ed.screen == nil {
+			return
 		}
-		return 10
+		switch mode {
+		case ModeInsert, ModeReplace:
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
+		default:
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
+		}
 	}
 
 	ed.initLsp()
@@ -88,9 +97,235 @@ func (e *Editor) registerEditorBindings() {
 		})
 		e.infobar.SetCompleter(cmdCompleter(e))
 	}, ":")
+
+	// bindCW binds an action to <C-w> followed by key, and also
+	// <C-w> followed by <C-key> (for when Ctrl is held across both).
+	bindCW := func(key string, fn KeyAction) {
+		e.ks.modes[ModeNormal].Bindings.Bind(fn, "<C-w>", key)
+		if len(key) == 1 && key[0] >= 'a' && key[0] <= 'z' {
+			e.ks.modes[ModeNormal].Bindings.Bind(fn, "<C-w>", fmt.Sprintf("<C-%s>", key))
+		}
+	}
+
+	// Ctrl-W w: next pane
+	bindCW("w", func(ks *KeyState) {
+		e.ActiveTab().NextPane()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	})
+
+	// Ctrl-W h: focus left (also <BS> since <C-h> == Backspace in terminals)
+	focusLeft := func(ks *KeyState) {
+		e.ActiveTab().FocusLeft()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	}
+	bindCW("h", focusLeft)
+	e.ks.modes[ModeNormal].Bindings.Bind(focusLeft, "<C-w>", KeyLeft)
+	e.ks.modes[ModeNormal].Bindings.Bind(focusLeft, "<C-w>", KeyBacksp)
+
+	// Ctrl-W l: focus right
+	bindCW("l", func(ks *KeyState) {
+		e.ActiveTab().FocusRight()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	})
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.ActiveTab().FocusRight()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	}, "<C-w>", KeyRight)
+
+	// Ctrl-W k: focus up
+	bindCW("k", func(ks *KeyState) {
+		e.ActiveTab().FocusUp()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	})
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.ActiveTab().FocusUp()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	}, "<C-w>", KeyUp)
+
+	// Ctrl-W j: focus down
+	bindCW("j", func(ks *KeyState) {
+		e.ActiveTab().FocusDown()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	})
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.ActiveTab().FocusDown()
+		e.syncActiveBuffer()
+		ks.ResetAction()
+	}, "<C-w>", KeyDown)
+
+	// Ctrl-W v: vertical split
+	bindCW("v", func(ks *KeyState) {
+		e.VSplit(nil)
+		ks.ResetAction()
+	})
+
+	// Ctrl-W s: horizontal split
+	bindCW("s", func(ks *KeyState) {
+		e.HSplit(nil)
+		ks.ResetAction()
+	})
+
+	// Ctrl-W q: close pane
+	bindCW("q", func(ks *KeyState) {
+		e.ClosePane()
+		ks.ResetAction()
+	})
+
+	// gt: next tab
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.NextTab()
+		ks.ResetAction()
+	}, "g", "t")
+
+	// gT: previous tab
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.PrevTab()
+		ks.ResetAction()
+	}, "g", "T")
 }
 
-// OpenFile opens a file in a new view.
+// --- Tab management ---
+
+// ActiveTab returns the current tab.
+func (e *Editor) ActiveTab() *Tab {
+	if len(e.tabs) == 0 {
+		return nil
+	}
+	return e.tabs[e.curtab]
+}
+
+// ActiveView returns the focused view in the current tab.
+func (e *Editor) ActiveView() *View {
+	t := e.ActiveTab()
+	if t == nil {
+		return nil
+	}
+	return t.ActiveView()
+}
+
+// syncActiveBuffer updates the KeyState to point at the active view's buffer.
+func (e *Editor) syncActiveBuffer() {
+	if v := e.ActiveView(); v != nil {
+		e.ks.SetBuffer(v.buf)
+	}
+}
+
+// NewTabWithView creates a new tab containing the given view.
+func (e *Editor) NewTabWithView(v *View) {
+	t := NewTab(v, e.w, e.h-1) // -1 for infobar
+	e.tabs = append(e.tabs, t)
+	e.curtab = len(e.tabs) - 1
+	e.syncActiveBuffer()
+}
+
+// NextTab switches to the next tab.
+func (e *Editor) NextTab() {
+	if len(e.tabs) > 1 {
+		e.curtab = (e.curtab + 1) % len(e.tabs)
+		e.syncActiveBuffer()
+	}
+}
+
+// PrevTab switches to the previous tab.
+func (e *Editor) PrevTab() {
+	if len(e.tabs) > 1 {
+		e.curtab = (e.curtab - 1 + len(e.tabs)) % len(e.tabs)
+		e.syncActiveBuffer()
+	}
+}
+
+// CloseTab closes the current tab.
+func (e *Editor) CloseTab() {
+	if len(e.tabs) <= 1 {
+		e.running = false
+		return
+	}
+	e.tabs = append(e.tabs[:e.curtab], e.tabs[e.curtab+1:]...)
+	if e.curtab >= len(e.tabs) {
+		e.curtab = len(e.tabs) - 1
+	}
+	e.syncActiveBuffer()
+}
+
+// --- Split management ---
+
+// VSplit creates a vertical split. If args is non-nil, opens that file;
+// otherwise duplicates the current buffer.
+func (e *Editor) VSplit(args []string) {
+	v := e.makeNewView(args)
+	if v == nil {
+		return
+	}
+	e.ActiveTab().VSplit(v)
+	e.syncActiveBuffer()
+}
+
+// HSplit creates a horizontal split.
+func (e *Editor) HSplit(args []string) {
+	v := e.makeNewView(args)
+	if v == nil {
+		return
+	}
+	e.ActiveTab().HSplit(v)
+	e.syncActiveBuffer()
+}
+
+// ClosePane closes the active pane. If it's the last pane in the tab,
+// closes the tab.
+func (e *Editor) ClosePane() {
+	t := e.ActiveTab()
+	if t == nil {
+		return
+	}
+	if !t.Unsplit() {
+		e.CloseTab()
+		return
+	}
+	e.syncActiveBuffer()
+}
+
+// makeNewView creates a view for a split. Opens the file from args[0] or
+// creates a view of the current buffer.
+func (e *Editor) makeNewView(args []string) *View {
+	if len(args) > 0 && args[0] != "" {
+		data, err := os.ReadFile(args[0])
+		if err != nil {
+			if os.IsNotExist(err) {
+				data = []byte{}
+			} else {
+				e.infobar.Error(fmt.Sprintf("open: %v", err))
+				return nil
+			}
+		}
+		buf, err := NewBuffer(data, args[0])
+		if err != nil {
+			e.infobar.Error(fmt.Sprintf("open: %v", err))
+			return nil
+		}
+		return e.configureView(buf, args[0])
+	}
+	// Duplicate current buffer in a new view (no re-init of syntax/LSP/watcher).
+	cur := e.ActiveView()
+	if cur == nil {
+		return nil
+	}
+	v := e.newViewWithOptions(cur.buf)
+	// Initialize the new view's cursor from the current cursor position.
+	v.savedCursor = *cur.buf.Cursor()
+	return v
+}
+
+// --- Opening files ---
+
+// OpenFile opens a file in a new view. If no tabs exist, creates one.
+// Otherwise adds to the current tab.
 func (e *Editor) OpenFile(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -104,18 +339,38 @@ func (e *Editor) OpenFile(path string) error {
 	if err != nil {
 		return err
 	}
-	e.addView(buf, path)
+	v := e.configureView(buf, path)
+
+	if len(e.tabs) == 0 {
+		e.NewTabWithView(v)
+	} else {
+		// Replace the active pane's view with the new one.
+		t := e.ActiveTab()
+		t.panes[t.cur] = v
+		t.Resize(t.w, t.h)
+		e.syncActiveBuffer()
+	}
 	return nil
 }
 
 // OpenEmpty opens an empty buffer.
 func (e *Editor) OpenEmpty() {
 	buf := NewEmptyBuffer()
-	e.addView(buf, "")
+	v := e.configureView(buf, "")
+	if len(e.tabs) == 0 {
+		e.NewTabWithView(v)
+	} else {
+		t := e.ActiveTab()
+		t.panes[t.cur] = v
+		t.Resize(t.w, t.h)
+		e.syncActiveBuffer()
+	}
 }
 
-func (e *Editor) addView(buf *Buffer, path string) {
-	opts := e.config.BufferOptions(path, "")
+// newViewWithOptions creates a View for a buffer and applies display options
+// from the config. Does not initialize buffer-level state (syntax, LSP, etc.).
+func (e *Editor) newViewWithOptions(buf *Buffer) *View {
+	opts := e.config.BufferOptions(buf.Path, "")
 	tabsize, _ := GetOptInt(opts, "tabsize")
 	if tabsize == 0 {
 		tabsize = 4
@@ -138,20 +393,22 @@ func (e *Editor) addView(buf *Buffer, path string) {
 		v.HScrollMargin = n
 	}
 
-	v.Resize(e.w, e.h-2)
-	e.views = append(e.views, v)
-	e.active = len(e.views) - 1
-	e.ks.SetBuffer(buf)
+	return v
+}
+
+// configureView creates a View and fully initializes the buffer (syntax,
+// LSP, file watcher, readonly detection). Use for newly opened files.
+func (e *Editor) configureView(buf *Buffer, path string) *View {
+	v := e.newViewWithOptions(buf)
+
 	buf.updateModTime()
 	buf.onReload = func(_ *Buffer) {
-		// Post a redraw event so the screen updates.
 		if e.screen != nil {
 			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
 		}
 	}
 	buf.StartWatcher()
 
-	// Detect filetype, initialize syntax highlighting and LSP.
 	ft := DetectFiletype(e.config, path, buf.GetLine(0))
 	if ft != "" {
 		buf.InitSyntax(e.config, ft)
@@ -161,27 +418,20 @@ func (e *Editor) addView(buf *Buffer, path string) {
 	if path != "" && isReadonly(path) {
 		buf.readonly = true
 	}
-}
 
-// ActiveView returns the currently focused view.
-func (e *Editor) ActiveView() *View {
-	if len(e.views) == 0 {
-		return nil
-	}
-	return e.views[e.active]
+	return v
 }
 
 // Resize handles terminal resize events.
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
-	for _, v := range e.views {
-		v.Resize(w, h-2)
+	for _, t := range e.tabs {
+		t.Resize(w, h-1)
 	}
 	e.screen.Sync()
 }
 
 // checkExternalModified prompts the user if the file changed on disk.
-// If the buffer is unmodified, it reloads silently.
 func (e *Editor) checkExternalModified() {
 	v := e.ActiveView()
 	if v == nil || e.infobar.IsActive() {
@@ -192,7 +442,6 @@ func (e *Editor) checkExternalModified() {
 		return
 	}
 	if !b.Modified() {
-		// Buffer is clean: auto-reload.
 		if err := b.Reload(); err != nil {
 			e.infobar.Error(fmt.Sprintf("reload: %v", err))
 		} else {
@@ -200,7 +449,6 @@ func (e *Editor) checkExternalModified() {
 		}
 		return
 	}
-	// Buffer has unsaved changes: ask.
 	e.infobar.Prompt(fmt.Sprintf("\"%s\" changed on disk. Reload? (y/n)", b.Path), func(key string) {
 		if key == "y" {
 			if err := b.Reload(); err != nil {
@@ -209,7 +457,6 @@ func (e *Editor) checkExternalModified() {
 				e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", b.Path))
 			}
 		} else {
-			// User declined: update mtime so we don't ask again.
 			b.updateModTime()
 		}
 	})
@@ -228,6 +475,9 @@ func (e *Editor) Error(msg string) {
 // Run starts the main event loop. Shuts down LSP servers on exit.
 func (e *Editor) Run() {
 	defer e.lspManager.ShutdownAll()
+	defer e.screen.SetCursorStyle(tcell.CursorStyleDefault)
+
+	e.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
 	e.running = true
 	e.Display()
 
@@ -243,14 +493,11 @@ func (e *Editor) Run() {
 			if key == "" {
 				continue
 			}
-			// Check for external modifications before processing keys.
 			e.checkExternalModified()
 
-			// If the infobar prompt is active, send keys there.
 			if e.infobar.IsActive() {
 				e.infobar.HandleKey(key)
 			} else {
-				// Clear transient messages on normal keypress.
 				e.infobar.Clear()
 				e.ks.HandleKey(key)
 			}
@@ -268,50 +515,92 @@ func (e *Editor) Display() {
 	defStyle := e.theme.Default().TCellStyle()
 	e.screen.Fill(' ', defStyle)
 
-	v := e.ActiveView()
-	if v == nil {
+	// Recalculate Vx for all cursors unless the last action was a
+	// purely vertical motion (j/k/Ctrl-D/Ctrl-U).
+	if !e.ks.vertical {
+		b := e.ks.Buf()
+		for i := 0; i < b.NumCursors(); i++ {
+			b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
+		}
+	}
+	e.ks.vertical = false
+
+	t := e.ActiveTab()
+	if t == nil {
 		e.screen.Show()
 		return
 	}
 
-	v.Relocate()
-
-	// Check if syntax window needs re-centering.
-	v.buf.SyntaxCheckWindow(v.buf.Cursor().Pos)
-
-	// Draw buffer contents.
-	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {
+	// Draw all panes in the tab (with status bars and dividers).
+	t.Display(func(x, y int, mainc rune, combc []rune, style Style) {
 		e.screen.SetContent(x, y, mainc, combc, style.TCellStyle())
 	}, func(x, y int, main bool) {
 		if main && !e.infobar.IsActive() && !e.infobar.showCursor {
 			e.screen.ShowCursor(x, y)
 		}
-	}, e.theme)
+	}, e.theme, e.ks.Mode().Name)
 
-	// Show diagnostic for cursor line in infobar (if no other message).
-	if !e.infobar.IsActive() && e.infobar.message == "" {
+	// Show diagnostic for cursor line in infobar.
+	v := e.ActiveView()
+	if v != nil && !e.infobar.IsActive() && e.infobar.message == "" {
 		line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
 		if d, ok := v.buf.GetDiagnosticAt(line); ok {
 			e.infobar.Message(fmt.Sprintf("[%s] %s", d.Type.String(), d.Text))
 		}
 	}
 
-	// Status bar (or completion bar if completing).
-	if e.infobar.HasCompletions() {
-		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
+	// Tab bar (if multiple tabs).
+	if len(e.tabs) > 1 {
+		e.drawTabBar(e.h - 2)
+		e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
+	} else if e.infobar.HasCompletions() {
+		// Show completion bar where status bar would be (for single-pane tab).
+		e.infobar.DrawCompletions(e.screen, e.h-1, e.w, e.theme)
 	} else {
-		e.drawStatusBar(e.h - 2)
+		e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
 	}
-
-	// Info bar.
-	e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
 
 	e.screen.Show()
 }
 
+// drawTabBar renders a tab bar showing all tab names.
+func (e *Editor) drawTabBar(y int) {
+	style := e.theme.Style("tabbar")
+	if !e.theme.HasStyle("tabbar") {
+		style = e.theme.Style("statusline")
+	}
+	activeStyle := style.Add(AttrReverse)
+	ts := style.TCellStyle()
+	ats := activeStyle.TCellStyle()
+
+	x := 0
+	for i, t := range e.tabs {
+		name := "[No Name]"
+		if v := t.ActiveView(); v != nil && v.buf.Path != "" {
+			name = v.buf.Path
+		}
+		label := fmt.Sprintf(" %s ", name)
+
+		s := ts
+		if i == e.curtab {
+			s = ats
+		}
+		for _, r := range label {
+			if x >= e.w {
+				break
+			}
+			e.screen.SetContent(x, y, r, nil, s)
+			x++
+		}
+	}
+	for x < e.w {
+		e.screen.SetContent(x, y, ' ', nil, ts)
+		x++
+	}
+}
+
 // --- Key event conversion ---
 
-// keyEventToString converts a tcell key event to our key string format.
 func keyEventToString(ev *tcell.EventKey) string {
 	mod := ev.Modifiers()
 

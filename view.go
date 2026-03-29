@@ -13,10 +13,12 @@ type DrawFunc func(x, y int, mainc rune, combc []rune, style Style)
 type CursorFunc func(x, y int, main bool)
 
 // View manages the visible window into a Buffer: scrolling, viewport
-// dimensions, and rendering.
+// dimensions, and rendering. Each View has its own saved cursor so that
+// multiple views of the same buffer scroll independently.
 type View struct {
-	buf *Buffer
-	vis Visualizer
+	buf         *Buffer
+	vis         Visualizer
+	savedCursor Cursor // this view's cursor (synced on activate/deactivate)
 
 	topline int // first visible buffer line
 	topcol  int // first visible byte column (softwrap)
@@ -54,6 +56,18 @@ func NewView(buf *Buffer, tabsize int) *View {
 	}
 	buf.vis = &v.vis
 	return v
+}
+
+// Activate restores this view's saved cursor to the buffer. Call when
+// switching focus to this view.
+func (v *View) Activate() {
+	*v.buf.Cursor() = v.savedCursor
+}
+
+// Deactivate saves the buffer's current cursor to this view. Call before
+// switching focus away.
+func (v *View) Deactivate() {
+	v.savedCursor = *v.buf.Cursor()
 }
 
 // Resize sets the viewport dimensions.
@@ -162,14 +176,15 @@ func (v *View) Relocate() {
 // --- Rendering ---
 
 // Display renders the view by calling draw for each cell and showCursor for
-// each cursor position.
-func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme) {
+// each cursor position. If active is false, cursorline highlighting is skipped.
+func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active ...bool) {
+	isActive := len(active) == 0 || active[0]
 	gutter := v.gutterTotalWidth()
 	lines := make([]int, v.height) // maps visual row -> buffer line+1
 
 	// Track which lines have cursors (for cursorline).
 	cursorlines := make(map[int]bool)
-	if v.CursorLine {
+	if v.CursorLine && isActive {
 		for _, c := range v.buf.Cursors() {
 			line, _ := v.buf.LineColAt(c.Pos)
 			cursorlines[line] = true
@@ -207,7 +222,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme) {
 			lines[vy] = by + 1
 			sx := gutter + vx - v.stcol
 			for i, c := range v.buf.Cursors() {
-				if !c.HasSelection() && c.Pos == off && sx >= gutter && sx < v.width {
+				if c.Pos == off && sx >= gutter && sx < v.width {
 					showCursor(sx, vy, i == 0)
 				}
 			}

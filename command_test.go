@@ -23,13 +23,12 @@ func newTestEditor() *Editor {
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()
 
-	// Open an empty buffer.
+	// Open an empty buffer in a tab.
 	buf := NewEmptyBuffer()
 	buf.Path = "test.txt"
 	v := NewView(buf, 4)
 	v.Resize(80, 22)
-	ed.views = append(ed.views, v)
-	ed.active = 0
+	ed.NewTabWithView(v)
 	ed.ks.SetBuffer(buf)
 
 	return ed
@@ -92,10 +91,15 @@ func TestCmdForceQuit(t *testing.T) {
 
 func TestCmdEdit(t *testing.T) {
 	ed := newTestEditor()
-	initial := len(ed.views)
 	ed.RunCommand("e command_test.go")
-	if len(ed.views) != initial+1 {
-		t.Fatalf("edit should open new view: got %d views, want %d", len(ed.views), initial+1)
+	// edit replaces the current pane, so the buffer path should change.
+	v := ed.ActiveView()
+	if v == nil || v.buf.Path != "command_test.go" {
+		path := ""
+		if v != nil {
+			path = v.buf.Path
+		}
+		t.Fatalf("edit should open file: got path %q", path)
 	}
 }
 
