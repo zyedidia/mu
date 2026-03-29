@@ -47,6 +47,13 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		h:       h,
 	}
 
+	ks.halfPageSize = func() int {
+		if v := ed.ActiveView(); v != nil {
+			return v.height / 2
+		}
+		return 10
+	}
+
 	ed.initTCL()
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()
@@ -60,8 +67,14 @@ func (e *Editor) registerEditorBindings() {
 		e.running = false
 	}, "Z", "Q")
 
-	// ZZ: save (TODO) and quit
+	// ZZ: save and quit
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		if v := e.ActiveView(); v != nil && v.buf.Path != "" {
+			if err := v.buf.Save(); err != nil {
+				e.infobar.Error(err.Error())
+				return
+			}
+		}
 		e.running = false
 	}, "Z", "Z")
 
@@ -125,11 +138,23 @@ func (e *Editor) addView(buf *Buffer, path string) {
 	e.views = append(e.views, v)
 	e.active = len(e.views) - 1
 	e.ks.SetBuffer(buf)
+	buf.updateModTime()
+	buf.onReload = func(_ *Buffer) {
+		// Post a redraw event so the screen updates.
+		if e.screen != nil {
+			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
+		}
+	}
+	buf.StartWatcher()
 
 	// Detect filetype and initialize syntax highlighting.
 	ft := DetectFiletype(e.config, path, buf.GetLine(0))
 	if ft != "" {
 		buf.InitSyntax(e.config, ft)
+	}
+
+	if path != "" && isReadonly(path) {
+		buf.readonly = true
 	}
 }
 
@@ -148,6 +173,41 @@ func (e *Editor) Resize(w, h int) {
 		v.Resize(w, h-2)
 	}
 	e.screen.Sync()
+}
+
+// checkExternalModified prompts the user if the file changed on disk.
+// If the buffer is unmodified, it reloads silently.
+func (e *Editor) checkExternalModified() {
+	v := e.ActiveView()
+	if v == nil || e.infobar.IsActive() {
+		return
+	}
+	b := v.buf
+	if !b.ExternallyModified() {
+		return
+	}
+	if !b.Modified() {
+		// Buffer is clean: auto-reload.
+		if err := b.Reload(); err != nil {
+			e.infobar.Error(fmt.Sprintf("reload: %v", err))
+		} else {
+			e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", b.Path))
+		}
+		return
+	}
+	// Buffer has unsaved changes: ask.
+	e.infobar.Prompt(fmt.Sprintf("\"%s\" changed on disk. Reload? (y/n)", b.Path), func(key string) {
+		if key == "y" {
+			if err := b.Reload(); err != nil {
+				e.infobar.Error(fmt.Sprintf("reload: %v", err))
+			} else {
+				e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", b.Path))
+			}
+		} else {
+			// User declined: update mtime so we don't ask again.
+			b.updateModTime()
+		}
+	})
 }
 
 // Message displays a message in the info bar.
@@ -177,6 +237,9 @@ func (e *Editor) Run() {
 			if key == "" {
 				continue
 			}
+			// Check for external modifications before processing keys.
+			e.checkExternalModified()
+
 			// If the infobar prompt is active, send keys there.
 			if e.infobar.IsActive() {
 				e.infobar.HandleKey(key)
@@ -214,7 +277,7 @@ func (e *Editor) Display() {
 	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {
 		e.screen.SetContent(x, y, mainc, combc, style.TCellStyle())
 	}, func(x, y int, main bool) {
-		if main && !e.infobar.IsActive() {
+		if main && !e.infobar.IsActive() && !e.infobar.showCursor {
 			e.screen.ShowCursor(x, y)
 		}
 	}, e.theme)

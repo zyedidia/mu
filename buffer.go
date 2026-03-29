@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"encoding/gob"
+	"os"
+	"time"
 
 	"github.com/zyedidia/mu/text"
 )
@@ -20,9 +24,15 @@ type Buffer struct {
 	cur     int // active cursor index
 
 	modified    bool
+	readonly    bool
 	Path        string
+	modTime     time.Time // mtime when last loaded/saved
+	savedHash   []byte    // md5 of contents at last save/load (nil if too large)
 	diagnostics []Diagnostic
 	syntax      *SyntaxState
+
+	watchDone chan struct{}   // closed to stop the file watcher
+	onReload  func(*Buffer)  // called from watcher when auto-reloaded
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting
@@ -48,6 +58,7 @@ func newBufferFromText(tb *text.Buffer, path string) *Buffer {
 		Path:    path,
 	}
 	b.undo = NewUndoTree[*Buffer, Cursor](b, NoCutoff)
+	b.markUnmodified()
 	return b
 }
 
@@ -92,11 +103,33 @@ func (b *Buffer) GetLine(i int) []byte { return b.text.GetLine(i) }
 // ReadAt implements io.ReaderAt, used by search to avoid copying the buffer.
 func (b *Buffer) ReadAt(p []byte, off int64) (int, error) { return b.text.ReadAt(p, off) }
 
-// Modified returns whether the buffer has been modified since last save.
-func (b *Buffer) Modified() bool { return b.modified }
+const hashCutoff = 1024 * 1024 // 1MB
 
-// ClearModified marks the buffer as unmodified.
-func (b *Buffer) ClearModified() { b.modified = false }
+// Modified returns whether the buffer has been modified since last save.
+// For small files, uses a hash comparison to avoid false positives (e.g.
+// after undoing all changes).
+func (b *Buffer) Modified() bool {
+	if b.savedHash != nil {
+		return !bytes.Equal(b.hash(), b.savedHash)
+	}
+	return b.modified
+}
+
+// markUnmodified records the current state as the "saved" baseline.
+func (b *Buffer) markUnmodified() {
+	b.modified = false
+	if b.Len() <= hashCutoff {
+		b.savedHash = b.hash()
+	} else {
+		b.savedHash = nil
+	}
+}
+
+func (b *Buffer) hash() []byte {
+	h := md5.New()
+	b.text.WriteTo(h)
+	return h.Sum(nil)
+}
 
 // Text returns the underlying text.Buffer.
 func (b *Buffer) Text() *text.Buffer { return b.text }
@@ -208,4 +241,119 @@ func (b *Buffer) Redo() {
 // UndoBarrier prevents the next edit from coalescing with the previous one.
 func (b *Buffer) UndoBarrier() {
 	b.undo.Barrier()
+}
+
+// --- File watcher ---
+
+// StartWatcher launches a background goroutine that checks the file for
+// external changes every second. If the buffer is unmodified and the file
+// has changed, it auto-reloads. The onReload callback (if set) is called
+// after a successful reload so the editor can trigger a redraw.
+func (b *Buffer) StartWatcher() {
+	if b.Path == "" {
+		return
+	}
+	b.watchDone = make(chan struct{})
+	go b.watchLoop()
+}
+
+// StopWatcher stops the background file watcher.
+func (b *Buffer) StopWatcher() {
+	if b.watchDone != nil {
+		close(b.watchDone)
+		b.watchDone = nil
+	}
+}
+
+func (b *Buffer) watchLoop() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-b.watchDone:
+			return
+		case <-ticker.C:
+			if b.Modified() || !b.ExternallyModified() {
+				continue
+			}
+			if err := b.Reload(); err == nil {
+				if b.onReload != nil {
+					b.onReload(b)
+				}
+			}
+		}
+	}
+}
+
+// --- Reload and external change detection ---
+
+const diffCutoff = 4096 * 64 // 256KB: above this, skip diff and replace
+
+// SetContent replaces the buffer contents with those of newb. For small
+// buffers it diffs and applies edits so undo history is preserved. For large
+// buffers it replaces wholesale (losing undo history).
+func (b *Buffer) SetContent(newb *text.Buffer) {
+	if b.Len() >= diffCutoff || newb.Len() >= diffCutoff {
+		b.text = newb
+		b.undo = NewUndoTree[*Buffer, Cursor](b, NoCutoff)
+		b.markUnmodified()
+		return
+	}
+
+	b.UndoBarrier()
+	edits := Diff(b.text, newb)
+	var pos int
+	for _, e := range edits {
+		switch e.Kind {
+		case DiffInsert:
+			b.Insert(pos, e.Text)
+			pos += e.Length
+		case DiffDelete:
+			b.Remove(pos, pos+e.Length)
+		case DiffEqual:
+			pos += e.Length
+		}
+	}
+	b.markUnmodified()
+}
+
+// Reload reads the file from disk and applies changes via diff.
+func (b *Buffer) Reload() error {
+	if b.Path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(b.Path)
+	if err != nil {
+		return err
+	}
+	newb, err := text.NewBuffer(data, b.text.Opts)
+	if err != nil {
+		return err
+	}
+	b.SetContent(newb)
+	b.updateModTime()
+	return nil
+}
+
+// updateModTime stores the file's current mtime.
+func (b *Buffer) updateModTime() {
+	if b.Path == "" {
+		return
+	}
+	if fi, err := os.Stat(b.Path); err == nil {
+		b.modTime = fi.ModTime()
+	}
+}
+
+// ExternallyModified returns true if the file on disk has been modified
+// since we last loaded or saved it.
+func (b *Buffer) ExternallyModified() bool {
+	if b.Path == "" {
+		return false
+	}
+	fi, err := os.Stat(b.Path)
+	if err != nil {
+		return false
+	}
+	return fi.ModTime().After(b.modTime)
 }

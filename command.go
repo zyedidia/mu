@@ -88,19 +88,39 @@ func cmdForceQuit(e *Editor, args []string) error {
 }
 
 func cmdWrite(e *Editor, args []string) error {
-	// TODO: implement saving (step 12)
 	v := e.ActiveView()
 	if v == nil {
 		return fmt.Errorf("no buffer")
 	}
-	path := v.buf.Path
+	b := v.buf
+	path := b.Path
 	if len(args) > 0 {
 		path = args[0]
 	}
 	if path == "" {
 		return fmt.Errorf("no file name")
 	}
-	e.infobar.Message(fmt.Sprintf("TODO: write %q not implemented yet", path))
+
+	// Check if file is readonly before attempting save.
+	if fileExists(path) && isReadonly(path) {
+		e.infobar.Prompt("File is read-only. Save with sudo? (y/n)", func(key string) {
+			if key == "y" {
+				if err := e.saveWithSudo(b, path); err != nil {
+					e.infobar.Error(err.Error())
+				} else {
+					e.infobar.Message(fmt.Sprintf("\"%s\" written (sudo)", b.Path))
+				}
+			} else {
+				e.infobar.Message("Save canceled")
+			}
+		})
+		return nil
+	}
+
+	if err := b.SaveAs(path); err != nil {
+		return err
+	}
+	e.infobar.Message(fmt.Sprintf("\"%s\" written", b.Path))
 	return nil
 }
 

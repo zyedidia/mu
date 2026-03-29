@@ -23,11 +23,14 @@ func (e *Editor) drawStatusBar(y int) {
 	if name == "" {
 		name = "[No Name]"
 	}
-	mod := ""
+	flags := ""
 	if b.Modified() {
-		mod = " [+]"
+		flags += " [+]"
 	}
-	left := fmt.Sprintf(" %s | %s%s ", mode, name, mod)
+	if b.readonly {
+		flags += " [RO]"
+	}
+	left := fmt.Sprintf(" %s | %s%s ", mode, name, flags)
 
 	// Right: encoding | endings | line:col
 	line, col := b.LineColAt(b.Cursor().Pos)

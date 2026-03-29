@@ -8,8 +8,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/gdamore/tcell/v2"
 )
 
 // SearchState tracks the current search pattern and direction.
@@ -364,82 +362,66 @@ func (e *Editor) substituteAll(re *regexp.Regexp, replacement string) {
 func (e *Editor) substituteInteractive(re *regexp.Regexp, replacement string) {
 	b := e.ActiveView().buf
 	b.UndoBarrier()
+	e.subStep(re, replacement, 0, 0)
+}
 
-	off := 0
-	count := 0
+// subStep finds the next match from off and prompts the user. It chains
+// via the Prompt callback so the event loop drives each step.
+func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) {
+	b := e.ActiveView().buf
 
-	for {
-		sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
-		br := bufio.NewReader(sr)
-		loc := re.FindReaderSubmatchIndex(br)
-		if loc == nil {
-			break
-		}
-		for i := range loc {
-			loc[i] += off
-		}
+	sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
+	br := bufio.NewReader(sr)
+	loc := re.FindReaderSubmatchIndex(br)
+	if loc == nil {
+		e.subDone(re, count)
+		return
+	}
+	for i := range loc {
+		loc[i] += off
+	}
 
-		// Move cursor to match and show prompt.
-		*b.Cursor() = b.Cursor().MoveTo(loc[0])
-		matched := string(b.Slice(loc[0], loc[1]))
-		e.infobar.Message(fmt.Sprintf("Replace \"%s\"? (y/n/q/a)", matched))
-		e.Display()
+	*b.Cursor() = b.Cursor().MoveTo(loc[0])
+	matched := string(b.Slice(loc[0], loc[1]))
 
-		resp := e.readChar()
-		switch resp {
+	e.infobar.Prompt(fmt.Sprintf("Replace \"%s\"? (y/n/q/a)", matched), func(key string) {
+		switch key {
 		case "y":
 			n := b.Replace(re, loc, replacement)
-			off = loc[0] + n
-			count++
+			e.subStep(re, replacement, loc[0]+n, count+1)
 		case "n":
-			off = loc[1]
+			e.subStep(re, replacement, loc[1], count)
 		case "a":
-			// Replace this and all remaining.
 			n := b.Replace(re, loc, replacement)
-			off = loc[0] + n
-			count++
+			newOff := loc[0] + n
+			newCount := count + 1
+			// Replace all remaining without asking.
 			for {
-				sr2 := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
+				sr2 := io.NewSectionReader(b, int64(newOff), int64(b.Len()-newOff))
 				br2 := bufio.NewReader(sr2)
 				rloc := re.FindReaderSubmatchIndex(br2)
 				if rloc == nil {
 					break
 				}
 				for i := range rloc {
-					rloc[i] += off
+					rloc[i] += newOff
 				}
 				n = b.Replace(re, rloc, replacement)
-				off = rloc[0] + n
-				count++
+				newOff = rloc[0] + n
+				newCount++
 			}
-			resp = "q" // exit outer loop
-		default:
-			resp = "q"
+			e.subDone(re, newCount)
+		default: // q, Escape, anything else
+			e.subDone(re, count)
 		}
-		if resp == "q" || resp == KeyEscape {
-			break
-		}
-	}
+	})
+}
 
+func (e *Editor) subDone(re *regexp.Regexp, count int) {
 	if count == 0 {
 		e.infobar.Error(fmt.Sprintf("Pattern not found: %s", re.String()))
 	} else {
 		e.infobar.Message(fmt.Sprintf("%d substitution(s)", count))
-	}
-}
-
-func (e *Editor) readChar() string {
-	if e.screen == nil {
-		return KeyEscape
-	}
-	for {
-		ev := e.screen.PollEvent()
-		if ev == nil {
-			return KeyEscape
-		}
-		if kev, ok := ev.(*tcell.EventKey); ok {
-			return keyEventToString(kev)
-		}
 	}
 }
 

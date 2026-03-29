@@ -475,6 +475,34 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"{"}, MotionDef{Fn: motionParaUp})
 	registerMotion(ks, []string{"}"}, MotionDef{Fn: motionParaDown})
 
+	// Ctrl-D / Ctrl-U: half-page down/up. These need the view height, so
+	// the motion function captures it dynamically via the KeyState's buffer.
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		halfPage := 10 // fallback
+		if ks.halfPageSize != nil {
+			halfPage = ks.halfPageSize()
+		}
+		applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
+			if count == 0 {
+				count = 1
+			}
+			return motionDown(b, c, halfPage*count)
+		}}, false)
+	}, "<C-d>")
+
+	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		halfPage := 10
+		if ks.halfPageSize != nil {
+			halfPage = ks.halfPageSize()
+		}
+		applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
+			if count == 0 {
+				count = 1
+			}
+			return motionUp(b, c, halfPage*count)
+		}}, false)
+	}, "<C-u>")
+
 	registerCharMotion(ks, "f", motionFindChar, Inclusive)
 	registerCharMotion(ks, "F", motionFindCharBack, Charwise)
 	registerCharMotion(ks, "t", motionTillChar, Inclusive)

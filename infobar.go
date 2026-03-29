@@ -7,8 +7,9 @@ import (
 // InfoBar is the command/message bar at the bottom of the editor.
 type InfoBar struct {
 	// Message display.
-	message string
-	msgErr  bool
+	message    string
+	msgErr     bool
+	showCursor bool // show cursor at end of message (for y/n prompts)
 
 	// Command-line input state.
 	active    bool
@@ -18,6 +19,9 @@ type InfoBar struct {
 	callback  func(input string) // called on Enter
 	onChange  func(input string) // called on each input change (incremental search)
 	onCancel  func()             // called on Escape (restore state)
+
+	// Single-key prompt state (for y/n prompts).
+	charCallback func(key string)
 }
 
 // NewInfoBar creates a new info bar.
@@ -29,6 +33,16 @@ func NewInfoBar() *InfoBar {
 func (ib *InfoBar) Message(msg string) {
 	ib.message = msg
 	ib.msgErr = false
+	ib.showCursor = false
+}
+
+// Prompt shows a message and waits for a single keypress, which is passed
+// to the callback. The prompt closes automatically after one key.
+func (ib *InfoBar) Prompt(msg string, cb func(key string)) {
+	ib.message = msg
+	ib.msgErr = false
+	ib.showCursor = true
+	ib.charCallback = cb
 }
 
 // Error shows an error message in the info bar.
@@ -43,9 +57,9 @@ func (ib *InfoBar) Clear() {
 	ib.msgErr = false
 }
 
-// IsActive returns true if command-line input is active.
+// IsActive returns true if any input (command-line or single-key prompt) is active.
 func (ib *InfoBar) IsActive() bool {
-	return ib.active
+	return ib.active || ib.charCallback != nil
 }
 
 // StartPrompt activates command-line input with the given prompt character.
@@ -92,6 +106,16 @@ func (ib *InfoBar) Cancel() {
 // HandleKey processes a key event while the command-line is active.
 // Returns true if the editor should redraw, false if the prompt closed.
 func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
+	// Single-key prompt: deliver the key and close.
+	if ib.charCallback != nil {
+		cb := ib.charCallback
+		ib.charCallback = nil
+		ib.showCursor = false
+		ib.message = ""
+		cb(key)
+		return true, true
+	}
+
 	changed := false
 
 	switch key {
@@ -207,6 +231,11 @@ func (ib *InfoBar) drawMessage(screen tcell.Screen, y, w int, th *Theme) {
 		screen.SetContent(x, y, r, nil, ts)
 		x++
 	}
+
+	if ib.showCursor {
+		screen.ShowCursor(x, y)
+	}
+
 	// Clear rest of line.
 	defTs := th.Default().TCellStyle()
 	for x < w {

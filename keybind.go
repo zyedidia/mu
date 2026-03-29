@@ -133,6 +133,10 @@ type KeyState struct {
 
 	// lastAction records the last completed action for . repeat.
 	lastKeys []string
+
+	// halfPageSize returns half the viewport height. Set by the editor
+	// so motions like Ctrl-D/Ctrl-U know the page size.
+	halfPageSize func() int
 }
 
 // NewKeyState creates a new key dispatch state machine.
