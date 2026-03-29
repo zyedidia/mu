@@ -19,8 +19,9 @@ type Buffer struct {
 	cursors []Cursor
 	cur     int // active cursor index
 
-	modified bool
-	Path     string
+	modified    bool
+	Path        string
+	diagnostics []Diagnostic
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting
