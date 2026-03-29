@@ -1,0 +1,16 @@
+autoindent = true
+cursor = "block"
+theme = "monokai"
+syntax = true
+tabsize = 4
+tabstospaces = true
+scrollmargin = 5
+hscrollmargin = 5
+linenums = true
+softwrap = false
+wordwrap = false
+clipboard = "external"
+cursorline = true
+
+[makefile]
+tabstospaces = false
