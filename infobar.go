@@ -122,6 +122,8 @@ func (ib *InfoBar) Cancel() {
 	ib.callback = nil
 	ib.onChange = nil
 	ib.onCancel = nil
+	ib.completer = nil
+	ib.completion.reset()
 	if onCancel != nil {
 		onCancel()
 	}
@@ -167,6 +169,8 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		ib.callback = nil
 		ib.onChange = nil
 		ib.onCancel = nil
+		ib.completer = nil
+		ib.completion.reset()
 		if cb != nil {
 			cb(input)
 		}
@@ -283,6 +287,9 @@ func (ib *InfoBar) historyNav(dir int) {
 
 // tabComplete performs one step of tab completion. dir is +1 for forward
 // (Tab) or -1 for backward (Shift-Tab).
+//
+// The cycle includes the original (uncompleted) input as index -1, then
+// candidates at indices 0..n-1. First Tab goes to candidate 0 immediately.
 func (ib *InfoBar) tabComplete(dir int) {
 	if ib.completer == nil {
 		return
@@ -290,7 +297,7 @@ func (ib *InfoBar) tabComplete(dir int) {
 
 	cs := &ib.completion
 	if !cs.active {
-		// First Tab press: compute candidates from the original input.
+		// First Tab: compute candidates and save original input.
 		input := string(ib.input)
 		cs.candidates = ib.completer(input)
 		if len(cs.candidates) == 0 {
@@ -298,47 +305,32 @@ func (ib *InfoBar) tabComplete(dir int) {
 		}
 		word := lastWord(input)
 		cs.replaceFrom = len([]rune(input)) - len([]rune(word))
-		cs.index = -1
+		cs.origWord = word
+		cs.index = -1 // -1 = original input
 		cs.active = true
-
-		// If there's a common prefix longer than what's typed, complete
-		// to that first without cycling.
-		if lcp := longestCommonPrefix(cs.candidates); len(lcp) > len(word) {
-			prefix := ib.input[:cs.replaceFrom]
-			ib.input = append(append([]rune{}, prefix...), []rune(lcp)...)
-			ib.cursorPos = len(ib.input)
-			return
-		}
-
-		// If there's only one candidate and it matches the word, nothing to do.
-		if len(cs.candidates) == 1 && cs.candidates[0] == word {
-			cs.reset()
-			return
-		}
 	}
 
 	if len(cs.candidates) == 0 {
 		return
 	}
 
-	// Advance index, skipping candidates that match what's already displayed.
-	current := string(ib.input[cs.replaceFrom:])
-	for range cs.candidates {
-		cs.index += dir
-		if cs.index >= len(cs.candidates) {
-			cs.index = 0
-		} else if cs.index < 0 {
-			cs.index = len(cs.candidates) - 1
-		}
-		if cs.candidates[cs.index] != current {
-			break
-		}
-	}
+	// Advance: cycle through -1 (original), 0, 1, ..., n-1, back to -1.
+	total := len(cs.candidates) + 1 // +1 for original
+	// Map index from [-1, n-1] to [0, n], advance, map back.
+	pos := cs.index + 1 // now [0, n]
+	pos = (pos + dir + total) % total
+	cs.index = pos - 1 // back to [-1, n-1]
 
-	// Replace from the saved position with the selected candidate.
+	// Replace the word portion with the selected candidate or original.
+	var replacement string
+	if cs.index == -1 {
+		replacement = cs.origWord
+	} else {
+		replacement = cs.candidates[cs.index]
+	}
 	prefix := ib.input[:cs.replaceFrom]
 	newInput := append([]rune{}, prefix...)
-	newInput = append(newInput, []rune(cs.candidates[cs.index])...)
+	newInput = append(newInput, []rune(replacement)...)
 	ib.input = newInput
 	ib.cursorPos = len(ib.input)
 }
@@ -376,8 +368,9 @@ func (ib *InfoBar) HasCompletions() bool {
 	return ib.completion.active && len(ib.completion.candidates) > 0
 }
 
-// DrawCompletions renders the completion candidates on the given screen row
-// (typically the status bar row). The selected candidate is shown in brackets.
+// DrawCompletions renders the completion candidates on the given screen row.
+// The selected candidate is shown in brackets. Horizontally scrolls so the
+// selected item is always visible.
 func (ib *InfoBar) DrawCompletions(screen tcell.Screen, y, w int, th *Theme) {
 	cs := &ib.completion
 	if !cs.active || len(cs.candidates) == 0 {
@@ -387,7 +380,12 @@ func (ib *InfoBar) DrawCompletions(screen tcell.Screen, y, w int, th *Theme) {
 	style := th.Default().Add(AttrReverse)
 	ts := style.TCellStyle()
 
-	x := 0
+	// Build display strings and compute widths.
+	type item struct {
+		text  string
+		width int
+	}
+	items := make([]item, len(cs.candidates))
 	for i, s := range cs.candidates {
 		if len(s) > 25 {
 			s = "..." + s[len(s)-22:]
@@ -398,15 +396,41 @@ func (ib *InfoBar) DrawCompletions(screen tcell.Screen, y, w int, th *Theme) {
 		} else {
 			display = " " + s + " "
 		}
-		for _, r := range display {
-			if x >= w {
-				goto fill
-			}
-			screen.SetContent(x, y, r, nil, ts)
-			x++
+		items[i] = item{display, len([]rune(display))}
+	}
+
+	// Find the horizontal offset so the selected item is visible.
+	scroll := 0
+	if cs.index >= 0 {
+		// Compute start position of selected item.
+		selStart := 0
+		for i := 0; i < cs.index; i++ {
+			selStart += items[i].width
+		}
+		selEnd := selStart + items[cs.index].width
+
+		if selEnd > scroll+w {
+			scroll = selEnd - w
+		}
+		if selStart < scroll {
+			scroll = selStart
 		}
 	}
-fill:
+
+	// Render items starting from the scroll offset.
+	x := 0
+	col := 0 // virtual column (before scrolling)
+	for _, it := range items {
+		for _, r := range it.text {
+			if col >= scroll && x < w {
+				screen.SetContent(x, y, r, nil, ts)
+				x++
+			}
+			col++
+		}
+	}
+
+	// Fill rest of line.
 	for x < w {
 		screen.SetContent(x, y, ' ', nil, ts)
 		x++

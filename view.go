@@ -262,10 +262,12 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 
 	// Draw gutter (diagnostic markers).
 	if v.GutterWidth > 0 {
+		lastRow := 0
 		for i, l := range lines {
 			if l == 0 {
 				break
 			}
+			lastRow = i
 			ch := ' '
 			style := th.Style("line-number")
 			if d, ok := v.buf.GetDiagnosticAt(l - 1); ok {
@@ -274,6 +276,45 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			}
 			for x := 0; x < v.GutterWidth; x++ {
 				draw(x, i, ch, nil, style)
+			}
+		}
+
+		// Off-screen diagnostic indicators: show ^ on the first row if
+		// there are diagnostics above the viewport, v on the last row if
+		// there are diagnostics below. Use the color of the nearest
+		// off-screen diagnostic.
+		botLine := -1
+		if lines[lastRow] > 0 {
+			botLine = lines[lastRow] - 1
+		}
+		var nearestAbove, nearestBelow *Diagnostic
+		for i := range v.buf.GetDiagnostics() {
+			d := &v.buf.GetDiagnostics()[i]
+			if d.Line < v.topline {
+				if nearestAbove == nil || d.Line > nearestAbove.Line {
+					nearestAbove = d
+				}
+			}
+			if botLine >= 0 && d.Line > botLine {
+				if nearestBelow == nil || d.Line < nearestBelow.Line {
+					nearestBelow = d
+				}
+			}
+		}
+		if nearestAbove != nil && lines[0] > 0 {
+			if _, ok := v.buf.GetDiagnosticAt(lines[0] - 1); !ok {
+				s := th.Style(nearestAbove.Type.String()).Add(AttrReverse)
+				for x := 0; x < v.GutterWidth; x++ {
+					draw(x, 0, '^', nil, s)
+				}
+			}
+		}
+		if nearestBelow != nil && botLine >= 0 {
+			if _, ok := v.buf.GetDiagnosticAt(botLine); !ok {
+				s := th.Style(nearestBelow.Type.String()).Add(AttrReverse)
+				for x := 0; x < v.GutterWidth; x++ {
+					draw(x, lastRow, 'v', nil, s)
+				}
 			}
 		}
 	}

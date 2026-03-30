@@ -122,22 +122,22 @@ func TestInfoBarTabCompletion(t *testing.T) {
 	ed.infobar.StartPrompt(":", func(input string) {})
 	ed.infobar.SetCompleter(cmdCompleter(ed))
 
-	// Type "q" then Tab.
+	// Type "q" then Tab repeatedly to cycle through candidates.
 	ed.infobar.HandleKey("q")
-	ed.infobar.HandleKey(KeyTab)
 
-	input := string(ed.infobar.input)
-	if input == "q" {
-		t.Fatal("Tab should have completed 'q' to something")
+	// Collect all values as we cycle through.
+	seen := make(map[string]bool)
+	for i := 0; i < 10; i++ {
+		ed.infobar.HandleKey(KeyTab)
+		seen[string(ed.infobar.input)] = true
 	}
-
-	// Another Tab should cycle.
-	prev := input
-	ed.infobar.HandleKey(KeyTab)
-	next := string(ed.infobar.input)
-	// If there are multiple candidates, it should have changed.
-	_ = prev
-	_ = next
+	// Should have cycled through multiple candidates including the original.
+	if !seen["q"] {
+		t.Fatal("cycle should include original 'q'")
+	}
+	if !seen["quit"] {
+		t.Fatalf("cycle should include 'quit', got: %v", seen)
+	}
 
 	// Typing a new character resets completion.
 	ed.infobar.HandleKey("x")

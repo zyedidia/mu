@@ -14,13 +14,15 @@ type Completer func(input string) []string
 // completionState tracks cycling through tab-completion candidates.
 type completionState struct {
 	candidates  []string
-	replaceFrom int // rune index in input where replacement starts
-	index       int // current candidate index (-1 = none selected)
+	replaceFrom int    // rune index in input where replacement starts
+	origWord    string // the original word before any completion
+	index       int    // -1 = original input, 0..n-1 = candidates
 	active      bool
 }
 
 func (cs *completionState) reset() {
 	cs.candidates = nil
+	cs.origWord = ""
 	cs.replaceFrom = 0
 	cs.index = -1
 	cs.active = false
@@ -91,7 +93,7 @@ func completeCommandArg(e *Editor, cmd, argStr string) []string {
 	}
 
 	switch canonical {
-	case "edit", "write":
+	case "edit", "write", "vsplit", "hsplit", "split", "tabnew":
 		return completeFilePath(lastArg)
 	case "set":
 		if argIndex == 0 {
@@ -120,6 +122,9 @@ func completeFilePath(prefix string) []string {
 	if prefix == "" || strings.HasSuffix(prefix, string(filepath.Separator)) {
 		dir = expanded
 		base = ""
+	}
+	if dir == "" {
+		dir = "."
 	}
 
 	var candidates []string

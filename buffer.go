@@ -39,8 +39,9 @@ type Buffer struct {
 
 	vis *Visualizer // set by the view, used for visual column calculations
 
-	watchDone chan struct{} // closed to stop the file watcher
-	onReload  func(*Buffer) // called from watcher when auto-reloaded
+	watchDone   chan struct{} // closed to stop the file watcher
+	onReload    func(*Buffer) // called from watcher when auto-reloaded
+	onHighlight func()        // called when background highlighting finishes
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting
@@ -237,6 +238,7 @@ func (b *Buffer) Undo() {
 	c, ok := b.undo.PrevState()
 	b.undo.Undo()
 	if ok {
+		c.HasSel = false
 		b.PutCursor(c)
 	}
 }
@@ -244,7 +246,9 @@ func (b *Buffer) Undo() {
 // Redo reapplies the most recently undone edit.
 func (b *Buffer) Redo() {
 	if ep, ok := b.undo.MostRecent(); ok {
-		b.PutCursor(b.undo.NextState(ep))
+		c := b.undo.NextState(ep)
+		c.HasSel = false
+		b.PutCursor(c)
 		b.undo.Redo(ep)
 	}
 }

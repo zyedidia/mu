@@ -424,6 +424,11 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
 		}
 	}
+	buf.onHighlight = func() {
+		if e.screen != nil {
+			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
+		}
+	}
 	buf.StartWatcher()
 
 	ft := DetectFiletype(e.config, path, buf.GetLine(0))
@@ -608,16 +613,15 @@ func (e *Editor) Display() {
 		}
 	}
 
-	// Tab bar (if multiple tabs).
-	if len(e.tabs) > 1 {
+	// Completion bar (above the infobar, replacing tab bar row).
+	if e.infobar.HasCompletions() {
+		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
+	} else if len(e.tabs) > 1 {
 		e.drawTabBar(e.h - 2)
-		e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
-	} else if e.infobar.HasCompletions() {
-		// Show completion bar where status bar would be (for single-pane tab).
-		e.infobar.DrawCompletions(e.screen, e.h-1, e.w, e.theme)
-	} else {
-		e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
 	}
+
+	// Info bar (always the bottom row).
+	e.infobar.Draw(e.screen, e.h-1, e.w, e.theme)
 
 	e.screen.Show()
 }
@@ -701,4 +705,5 @@ var specialKeyMap = map[tcell.Key]string{
 	tcell.KeyEnd:        KeyEnd,
 	tcell.KeyPgUp:       KeyPgUp,
 	tcell.KeyPgDn:       KeyPgDn,
+	tcell.KeyBacktab:    "<S-Tab>",
 }

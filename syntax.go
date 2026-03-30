@@ -163,6 +163,10 @@ func (b *Buffer) initialHighlight() {
 
 	r := io.NewSectionReader(b, int64(ss.hlStart), int64(ss.hlEnd-ss.hlStart))
 	ss.highlighter.HighlightFunc(r, ss.syntbl, nil, &vm.Interval{Low: 0, High: 0})
+
+	if b.onHighlight != nil {
+		b.onHighlight()
+	}
 }
 
 // SyntaxApplyEdit updates the memo table after a text edit.
