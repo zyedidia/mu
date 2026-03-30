@@ -490,13 +490,8 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}, KeyEnter)
 
-	// Tab in insert mode
-	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
-		b := ks.Buf()
-		for i := 0; i < b.NumCursors(); i++ {
-			b.Insert(b.cursors[i].Pos, []byte("\t"))
-		}
-	}, KeyTab)
+	// Tab in insert mode is handled by registerCompletionBindings
+	// (triggers completion or inserts tab depending on context).
 
 	// Default key handler for insert mode: insert the character.
 	ks.modes[ModeInsert].OnKey = func(ks *KeyState, key string) {

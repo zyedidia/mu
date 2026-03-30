@@ -25,6 +25,7 @@ type Editor struct {
 	infobar    *InfoBar
 	search     SearchState
 	lspManager *LspManager
+	completion EditorCompletion
 
 	running bool
 	w, h    int
@@ -81,6 +82,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()
 	ed.registerLspBindings()
+	ed.registerCompletionBindings()
 
 	// Load command history from disk.
 	if b, ok := GetOptBool(cfg.opts.top, "savehistory"); !ok || b {
@@ -561,6 +563,8 @@ func (e *Editor) Run() {
 
 			if e.infobar.IsActive() {
 				e.infobar.HandleKey(key)
+			} else if e.hasCompletion() {
+				e.handleCompletionKey(key)
 			} else {
 				e.infobar.Clear()
 				e.ks.HandleKey(key)
@@ -616,6 +620,8 @@ func (e *Editor) Display() {
 	// Completion bar (above the infobar, replacing tab bar row).
 	if e.infobar.HasCompletions() {
 		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
+	} else if e.hasCompletion() {
+		e.drawEditorCompletions(e.h - 2)
 	} else if len(e.tabs) > 1 {
 		e.drawTabBar(e.h - 2)
 	}
@@ -706,4 +712,5 @@ var specialKeyMap = map[tcell.Key]string{
 	tcell.KeyPgUp:       KeyPgUp,
 	tcell.KeyPgDn:       KeyPgDn,
 	tcell.KeyBacktab:    "<S-Tab>",
+	tcell.KeyCtrlSpace:  "<C-space>",
 }

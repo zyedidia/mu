@@ -171,12 +171,13 @@ func (e *Edit) Undo(buf *Buffer) {
 // applyEdit performs a raw edit on the text buffer and adjusts all cursor
 // positions accordingly.
 func (b *Buffer) applyEdit(start, end int, val []byte) {
+	// Compute LSP positions before modifying the buffer, since the LSP
+	// expects ranges in the pre-edit document.
+	b.lspSendEdit(start, end, val)
+
 	b.text.Remove(start, end)
 	b.text.Insert(start, val)
 	b.modified = true
-
-	// Notify LSP server of the change.
-	b.lspSendEdit(start, end, val)
 
 	// Update syntax highlighting memo table.
 	b.SyntaxApplyEdit(start, end, len(val))

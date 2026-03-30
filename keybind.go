@@ -308,8 +308,8 @@ func (ks *KeyState) HandleKey(key string) {
 
 	mode := ks.modes[ks.mode]
 
-	// Try to accumulate as count digit (only before any trie keys).
-	if len(ks.keys) == 0 && ks.tryCount(key) {
+	// Try to accumulate as count digit (only in normal/visual/operator-pending, before any trie keys).
+	if len(ks.keys) == 0 && ks.mode != ModeInsert && ks.mode != ModeReplace && ks.tryCount(key) {
 		return
 	}
 
