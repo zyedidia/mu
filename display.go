@@ -146,6 +146,21 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 			for _, c := range str {
 				drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style)
 			}
+			// If the newline is selected, highlight one cell past end of line.
+			if tracker.Draw != nil {
+				selStyle := th.Default()
+				for _, cur := range b.cursors {
+					if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {
+						selStyle = th.Default().Add(AttrReverse)
+						break
+					}
+				}
+				if x < width && selStyle != th.Default() {
+					tracker.Draw(bx, by, x, y, ' ', nil, selStyle)
+					x++
+					vx++
+				}
+			}
 			// Fill to end of line (for cursorline highlighting).
 			for x < width && tracker.Draw != nil {
 				tracker.Draw(bx, by, x, y, ' ', nil, th.Default())

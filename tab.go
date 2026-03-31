@@ -224,13 +224,28 @@ func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeN
 		left = fmt.Sprintf(" %s | %s%s ", modeName, name, flags)
 	}
 
-	// Right: endings | line:col
+	// Right: filetype | endings | line:col | pct
 	line, col := b.LineColAt(b.Cursor().Pos)
 	endings := ""
 	if b.Text().Opts.Endings != nil {
 		endings = b.Text().Opts.Endings.String() + " | "
 	}
-	right := fmt.Sprintf(" %s%d:%d ", endings, line+1, col+1)
+	ft := ""
+	if b.Filetype != "" {
+		ft = b.Filetype + " | "
+	}
+	numLines := b.NumLines() + 1
+	pct := "Top"
+	if numLines <= 1 {
+		pct = "All"
+	} else if line+1 >= numLines {
+		pct = "Bot"
+	} else if line == 0 {
+		pct = "Top"
+	} else {
+		pct = fmt.Sprintf("%d%%", (line+1)*100/numLines)
+	}
+	right := fmt.Sprintf(" %s%s%d:%d %s ", ft, endings, line+1, col+1, pct)
 
 	x := 0
 	for _, r := range left {

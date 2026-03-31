@@ -28,6 +28,7 @@ type Buffer struct {
 	modified    bool
 	readonly    bool
 	Path        string
+	Filetype    string
 	modTime     time.Time // mtime when last loaded/saved
 	savedHash   []byte    // md5 of contents at last save/load (nil if too large)
 	diagnostics []Diagnostic

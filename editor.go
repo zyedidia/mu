@@ -62,6 +62,8 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
 		case ModeOperatorPending:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
+		case ModeVisual, ModeVisualLine:
+			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
 		default:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
 		}
@@ -435,6 +437,7 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 	buf.StartWatcher()
 
 	ft := DetectFiletype(e.config, path, buf.GetLine(0))
+	buf.Filetype = ft
 	if ft != "" {
 		buf.InitSyntax(e.config, ft)
 		e.initBufferLsp(buf, ft)
