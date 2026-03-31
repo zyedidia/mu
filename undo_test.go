@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"testing"
+	"time"
 )
 
 type testAdd struct {
@@ -68,11 +69,12 @@ func TestUndoSerialize(t *testing.T) {
 	u.Undo()
 	checkVal(t, base, 47)
 
-	b, err := u.ToBytes()
+	mtime := time.Now()
+	b, err := u.ToBytes(mtime)
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err = FromBytes[*int, bool](b, &base, NoCutoff)
+	u, err = FromBytes[*int, bool](b, &base, NoCutoff, mtime)
 	if err != nil {
 		t.Fatal(err)
 	}

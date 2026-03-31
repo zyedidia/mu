@@ -107,7 +107,11 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 			// Selection overlay.
 			for _, cur := range b.cursors {
 				if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {
-					style = th.Default().Add(AttrReverse)
+					if th.HasStyle("selection") {
+						style.Bg = th.Style("selection").Bg
+					} else {
+						style = th.Default().Add(AttrReverse)
+					}
 				}
 			}
 			tracker.Draw(bx, by, x, y, c, combc, style)
@@ -148,14 +152,20 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 			}
 			// If the newline is selected, highlight one cell past end of line.
 			if tracker.Draw != nil {
-				selStyle := th.Default()
+				hasSel := false
 				for _, cur := range b.cursors {
 					if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {
-						selStyle = th.Default().Add(AttrReverse)
+						hasSel = true
 						break
 					}
 				}
-				if x < width && selStyle != th.Default() {
+				if x < width && hasSel {
+					selStyle := th.Default()
+					if th.HasStyle("selection") {
+						selStyle.Bg = th.Style("selection").Bg
+					} else {
+						selStyle = selStyle.Add(AttrReverse)
+					}
 					tracker.Draw(bx, by, x, y, ' ', nil, selStyle)
 					x++
 					vx++

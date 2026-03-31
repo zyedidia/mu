@@ -220,6 +220,8 @@ func (e *Editor) handleCompletionKey(key string) {
 		e.acceptCompletion()
 	case KeyEscape, "<C-c>":
 		e.cancelCompletion()
+		// Pass through so Escape also exits insert mode, etc.
+		e.ks.HandleKey(key)
 	default:
 		// Accept current completion and pass the key through.
 		e.acceptCompletion()

@@ -38,7 +38,8 @@ func escapePath(path string) string {
 
 // --- Undo history persistence ---
 
-// SaveUndoHistory serializes the buffer's undo tree to disk.
+// SaveUndoHistory serializes the buffer's undo tree to disk with the
+// file's modification time so stale history can be detected on reload.
 func (b *Buffer) SaveUndoHistory() {
 	if b.Path == "" {
 		return
@@ -50,12 +51,14 @@ func (b *Buffer) SaveUndoHistory() {
 		return
 	}
 	defer f.Close()
-	if err := b.undo.Serialize(f); err != nil {
+	if err := b.undo.Serialize(f, b.modTime); err != nil {
 		log.Printf("save undo: %v", err)
 	}
 }
 
-// LoadUndoHistory restores the buffer's undo tree from disk.
+// LoadUndoHistory restores the buffer's undo tree from disk. If the
+// file's current modification time doesn't match the saved mtime, the
+// history is discarded.
 func (b *Buffer) LoadUndoHistory() {
 	if b.Path == "" {
 		return
@@ -66,12 +69,14 @@ func (b *Buffer) LoadUndoHistory() {
 		return // no saved undo, that's fine
 	}
 	defer f.Close()
-	t, err := FromReader[*Buffer, Cursor](f, b, NoCutoff)
+	t, err := FromReader[*Buffer, Cursor](f, b, NoCutoff, b.modTime)
 	if err != nil {
 		log.Printf("load undo: %v", err)
 		return
 	}
-	b.undo = t
+	if t != nil {
+		b.undo = t
+	}
 }
 
 // --- Cursor position persistence ---

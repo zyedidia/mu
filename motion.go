@@ -528,7 +528,7 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp, Vertical: true})
 	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp, Vertical: true})
 
-	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionBOL})
+	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionFirstNonBlank})
 	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionFirstNonBlank})
 	registerMotion(ks, []string{KeyHome}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL})

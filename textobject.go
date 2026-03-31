@@ -320,6 +320,13 @@ func RegisterTextObjects(ks *KeyState) {
 	// Paragraph objects.
 	registerTextObject(ks, "i", "p", TextObjectDef{Fn: toInnerParagraph})
 	registerTextObject(ks, "a", "p", TextObjectDef{Fn: toAroundParagraph})
+
+	// Entire buffer objects.
+	entireBuf := TextObjectDef{Fn: func(b *Buffer, pos int, count int) (int, int) {
+		return 0, b.Len()
+	}}
+	registerTextObject(ks, "i", "e", entireBuf)
+	registerTextObject(ks, "a", "e", entireBuf)
 }
 
 // SetupBindings registers all vim bindings on the given key state.

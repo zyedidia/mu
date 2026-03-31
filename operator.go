@@ -128,46 +128,84 @@ func closerFor(opener byte) rune {
 	return 0
 }
 
-// insertNewline inserts a newline at cursor i and applies autoindent if
-// enabled. It handles copying leading whitespace, extra indent after
-// opening brackets, and splitting bracket pairs.
-func insertNewline(ks *KeyState, b *Buffer, i int) {
-	b.Insert(b.cursors[i].Pos, []byte("\n"))
+// applyAutoindent inserts indentation at cursor i based on the previous
+// line (refLine). It copies leading whitespace and adds an extra indent
+// level if the reference line ends with an opening bracket or colon.
+// If splitPair is true and the cursor is on a matching closer, it also
+// splits the bracket pair across lines.
+func applyAutoindent(ks *KeyState, b *Buffer, i int, refLine int, splitPair bool) {
+	ref := b.GetLine(refLine)
+	ws := leadingWS(ref)
+	if len(ws) > 0 {
+		b.Insert(b.cursors[i].Pos, ws)
+	}
+	trimmed := bytes.TrimRight(ref, " \t")
+	if len(trimmed) > 0 {
+		last := trimmed[len(trimmed)-1]
+		if last == '{' || last == '(' || last == '[' || last == ':' {
+			b.Insert(b.cursors[i].Pos, indentBytes(ks))
+			if splitPair {
+				r, _, sz := b.DecodeGraphemeAt(b.cursors[i].Pos)
+				closer := closerFor(last)
+				if sz > 0 && r == closer {
+					pos := b.cursors[i].Pos
+					nl := append([]byte("\n"), ws...)
+					b.Insert(pos, nl)
+					b.cursors[i] = b.cursors[i].MoveTo(pos)
+				}
+			}
+		}
+	}
+}
 
+// insertNewline inserts a newline at cursor i and applies autoindent if
+// enabled. For whitespace-only lines, the whitespace is removed instead
+// of copied (matching vis).
+func insertNewline(ks *KeyState, b *Buffer, i int) {
 	v := ks.ActiveView()
 	autoindent := false
 	if v != nil && v.Opts != nil {
 		autoindent, _ = GetOptBool(v.Opts, "autoindent")
 	}
+
 	if !autoindent {
+		b.Insert(b.cursors[i].Pos, []byte("\n"))
 		return
 	}
 
 	line, _ := b.LineColAt(b.cursors[i].Pos)
-	if line == 0 {
+	curLine := b.GetLine(line)
+	ws := leadingWS(curLine)
+	trimmed := bytes.TrimRight(curLine, " \t")
+
+	// Whitespace-only line: remove the whitespace and just insert newline.
+	if len(trimmed) == 0 && len(ws) > 0 {
+		lineStart := b.OffsetAt(line, 0)
+		b.Remove(lineStart, lineStart+len(ws))
+		b.Insert(b.cursors[i].Pos, []byte("\n"))
 		return
 	}
-	prevLine := b.GetLine(line - 1)
-	ws := leadingWS(prevLine)
-	if len(ws) > 0 {
-		b.Insert(b.cursors[i].Pos, ws)
+
+	b.Insert(b.cursors[i].Pos, []byte("\n"))
+
+	newLine, _ := b.LineColAt(b.cursors[i].Pos)
+	if newLine == 0 {
+		return
 	}
-	// Extra indent after opening bracket/colon.
-	trimmed := bytes.TrimRight(prevLine, " \t")
-	if len(trimmed) > 0 {
-		last := trimmed[len(trimmed)-1]
-		if last == '{' || last == '(' || last == '[' || last == ':' {
-			b.Insert(b.cursors[i].Pos, indentBytes(ks))
-			// Split bracket pair: if cursor is on matching closer,
-			// add a newline + dedented line for the closer.
-			r, _, sz := b.DecodeGraphemeAt(b.cursors[i].Pos)
-			closer := closerFor(last)
-			if sz > 0 && r == closer {
-				pos := b.cursors[i].Pos
-				nl := append([]byte("\n"), ws...)
-				b.Insert(pos, nl)
-				b.cursors[i] = b.cursors[i].MoveTo(pos)
-			}
+	applyAutoindent(ks, b, i, newLine-1, true)
+}
+
+// cleanAutoindent removes trailing autoindent whitespace from the cursor
+// line if the line contains only whitespace. Called when leaving insert mode.
+func cleanAutoindent(b *Buffer) {
+	for i := range b.cursors {
+		c := b.cursors[i]
+		line, _ := b.LineColAt(c.Pos)
+		lineContent := b.GetLine(line)
+		ws := leadingWS(lineContent)
+		if len(ws) == len(lineContent) && len(ws) > 0 {
+			start := b.OffsetAt(line, 0)
+			b.Remove(start, start+len(ws))
 		}
 	}
 }
@@ -280,6 +318,23 @@ func execLineChange(ks *KeyState) {
 		end := start + b.LineLen(line)
 		if end > start {
 			opDelete(ks, b, start, end)
+		}
+		// Autoindent from neighboring line.
+		v := ks.ActiveView()
+		autoindent := false
+		if v != nil && v.Opts != nil {
+			autoindent, _ = GetOptBool(v.Opts, "autoindent")
+		}
+		if autoindent {
+			refLine := -1
+			if line > 0 {
+				refLine = line - 1
+			} else if line+1 <= b.NumLines() {
+				refLine = line + 1
+			}
+			if refLine >= 0 {
+				applyAutoindent(ks, b, i, refLine, false)
+			}
 		}
 	}
 	ks.SetMode(ModeInsert)
@@ -443,6 +498,15 @@ func RegisterOperators(ks *KeyState) {
 		paste(ks, true)
 	}, "P")
 
+	// p/P in visual modes: replace selection with register content.
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+		for _, key := range []string{"p", "P"} {
+			ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+				visualPaste(ks)
+			}, key)
+		}
+	}
+
 	// J: join lines
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
@@ -572,16 +636,59 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		c := b.Cursor()
-		line, _ := b.LineColAt(c.Pos)
-		start := b.OffsetAt(line, 0)
-		end := b.OffsetAt(line+1, 0)
-		if end > b.Len() {
-			end = b.Len()
-		}
-		c.Orig = [2]int{start, start}
-		c.Sel = [2]int{start, end}
+		// Anchor at cursor position (not line start) so that switching
+		// to charwise visual mode preserves the original column.
+		c.Orig = [2]int{c.Pos, c.Pos}
+		c.Sel = [2]int{c.Pos, c.Pos}
 		c.HasSel = true
+		adjustVisualLine(b, c)
 		ks.SetMode(ModeVisualLine)
+	}, "V")
+
+	// V in visual mode: switch to visual-line, extending selection to full lines.
+	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		for i := range b.cursors {
+			adjustVisualLine(b, &b.cursors[i])
+		}
+		ks.mode = ModeVisualLine
+		if ks.onModeChange != nil {
+			ks.onModeChange(ModeVisualLine)
+		}
+	}, "V")
+
+	// v in visual-line mode: switch to visual (charwise).
+	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		// Recompute Sel as charwise from Orig and Pos.
+		for i := range b.cursors {
+			c := &b.cursors[i]
+			if c.HasSel {
+				c.Sel[0] = min(c.Orig[0], c.Pos)
+				c.Sel[1] = max(c.Orig[1], c.Pos)
+				adjustVisualChar(b, c)
+			}
+		}
+		ks.mode = ModeVisual
+		if ks.onModeChange != nil {
+			ks.onModeChange(ModeVisual)
+		}
+	}, "v")
+
+	// v in visual mode / V in visual-line mode: exit to normal.
+	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		for i := range b.cursors {
+			b.cursors[i].HasSel = false
+		}
+		ks.SetMode(ModeNormal)
+	}, "v")
+	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		for i := range b.cursors {
+			b.cursors[i].HasSel = false
+		}
+		ks.SetMode(ModeNormal)
 	}, "V")
 
 	// Escape in visual modes: back to normal
@@ -608,6 +715,7 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
+		cleanAutoindent(b)
 		c := b.Cursor()
 		if c.Pos > 0 {
 			_, _, sz := b.DecodeGraphemeBefore(c.Pos)
@@ -1018,13 +1126,32 @@ func RegisterOperators(ks *KeyState) {
 			b := ks.Buf()
 			for i := range b.cursors {
 				c := &b.cursors[i]
-				if c.HasSel {
-					if c.Pos == c.Sel[0] {
-						c.Pos = c.Sel[1]
-					} else {
-						c.Pos = c.Sel[0]
+				if !c.HasSel {
+					continue
+				}
+				// Swap cursor to the other end. Set Orig to anchor
+				// at the current cursor's end so SelectTo on the next
+				// motion preserves the full selection.
+				if c.Pos <= c.Sel[0] {
+					// Cursor at start → move to end.
+					anchor := c.Sel[0]
+					c.Orig = [2]int{anchor, anchor}
+					end := c.Sel[1]
+					_, _, sz := b.DecodeGraphemeBefore(end)
+					if sz > 0 {
+						end -= sz
 					}
-					c.Orig[0], c.Orig[1] = c.Orig[1], c.Orig[0]
+					c.Pos = end
+				} else {
+					// Cursor at end → move to start.
+					// Anchor at a position on the last selected line.
+					anchor := c.Sel[1]
+					_, _, sz := b.DecodeGraphemeBefore(anchor)
+					if sz > 0 {
+						anchor -= sz
+					}
+					c.Orig = [2]int{anchor, anchor}
+					c.Pos = c.Sel[0]
 				}
 			}
 		}, "o")
@@ -1081,6 +1208,29 @@ func paste(ks *KeyState, before bool) {
 		}
 	}
 	ks.ResetAction()
+}
+
+// visualPaste replaces the visual selection with the register content.
+func visualPaste(ks *KeyState) {
+	b := ks.Buf()
+	b.UndoBarrier()
+	reg := ks.regs.Get(ks.Register())
+	if len(reg.Content) == 0 {
+		ks.ResetAction()
+		return
+	}
+	content := reg.Content
+	for i := 0; i < b.NumCursors(); i++ {
+		c := b.cursors[i]
+		if !c.HasSelection() {
+			continue
+		}
+		start, end := c.Sel[0], c.Sel[1]
+		b.Remove(start, end)
+		b.Insert(start, content)
+		b.cursors[i].HasSel = false
+	}
+	ks.SetMode(ModeNormal)
 }
 
 // opCase changes the case of characters in [start, end) using transform.

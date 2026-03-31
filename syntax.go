@@ -22,8 +22,8 @@ import (
 // region extends syntaxOverlap beyond the core on each side, so there is
 // pre-highlighted content when crossing the boundary.
 const (
-	syntaxWindowSize = 10 * 1024 * 1024 // 10MB core window
-	syntaxOverlap    = 5 * 1024 * 1024  // 5MB overlap on each side
+	syntaxWindowSize = 1024 * 1024     // 1MB core window
+	syntaxOverlap    = 100 * 1024      // 100KB overlap on each side
 )
 
 // SyntaxState holds the syntax highlighting state for a buffer.

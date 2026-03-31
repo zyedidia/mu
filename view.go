@@ -186,11 +186,21 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 	lines := make([]int, v.height) // maps visual row -> buffer line+1
 
 	// Track which lines have cursors (for cursorline).
+	// Disable cursorline when any cursor has an active selection.
 	cursorlines := make(map[int]bool)
 	if v.CursorLine && isActive {
+		hasSelection := false
 		for _, c := range v.buf.Cursors() {
-			line, _ := v.buf.LineColAt(c.Pos)
-			cursorlines[line] = true
+			if c.HasSelection() {
+				hasSelection = true
+				break
+			}
+		}
+		if !hasSelection {
+			for _, c := range v.buf.Cursors() {
+				line, _ := v.buf.LineColAt(c.Pos)
+				cursorlines[line] = true
+			}
 		}
 	}
 	cursorlineStyle := th.Style("cursorline")

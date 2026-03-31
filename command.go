@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -30,6 +31,7 @@ var editorCommands = []CommandDef{
 	{"tabnew", cmdTabNew, "tabnew [filename]: open file in new tab"},
 	{"tabnext", cmdTabNext, "tabnext: switch to next tab"},
 	{"tabprev", cmdTabPrev, "tabprev: switch to previous tab"},
+	{"goto", cmdGoto, "goto <line>: go to line number"},
 }
 
 // vimAliases maps vim-style short commands to TCL command strings.
@@ -49,11 +51,16 @@ var vimAliases = map[string]string{
 }
 
 // RunCommand parses and executes an ex command string. It expands vim
-// aliases, then evaluates the result as TCL.
+// aliases, then evaluates the result as TCL. A bare number goes to that line.
 func (e *Editor) RunCommand(input string) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return
+	}
+
+	// Bare number: go to line.
+	if _, err := strconv.Atoi(input); err == nil {
+		input = "goto " + input
 	}
 
 	expanded := expandAlias(input)
@@ -295,5 +302,29 @@ func cmdTabNext(e *Editor, args []string) error {
 
 func cmdTabPrev(e *Editor, args []string) error {
 	e.PrevTab()
+	return nil
+}
+
+func cmdGoto(e *Editor, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("goto: missing line number")
+	}
+	n, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("goto: invalid line number %q", args[0])
+	}
+	v := e.ActiveView()
+	if v == nil {
+		return fmt.Errorf("no buffer")
+	}
+	b := v.buf
+	line := n - 1
+	if line < 0 {
+		line = 0
+	}
+	if line > b.NumLines() {
+		line = b.NumLines()
+	}
+	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(line, 0))
 	return nil
 }

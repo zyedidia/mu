@@ -151,7 +151,15 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 	case "<S-Tab>":
 		ib.tabComplete(-1)
 		return true, false
-	case KeyEscape, "<C-c>":
+	case KeyEscape:
+		if ib.completion.active {
+			ib.completion.reset()
+			return true, false
+		}
+		ib.Cancel()
+		return true, true
+	case "<C-c>":
+		ib.completion.reset()
 		ib.Cancel()
 		return true, true
 	case KeyEnter:

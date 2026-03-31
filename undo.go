@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/gob"
+	"fmt"
 	"io"
 	"sort"
 	"time"
@@ -66,41 +67,55 @@ func NewUndoTree[T, S any](base T, cutoff int) *UndoTree[T, S] {
 	return u
 }
 
-// Serialize compresses and writes the tree into a byte stream.
-func (u *UndoTree[T, S]) Serialize(w io.Writer) error {
+// Serialize compresses and writes the file mtime followed by the tree.
+func (u *UndoTree[T, S]) Serialize(w io.Writer, mtime time.Time) error {
 	fz := gzip.NewWriter(w)
 	enc := gob.NewEncoder(fz)
+	if err := enc.Encode(mtime); err != nil {
+		fz.Close()
+		return err
+	}
 	err := enc.Encode(u)
 	fz.Close()
 	return err
 }
 
-// FromReader loads an undo tree from a serialized byte stream.
-func FromReader[T, S any](r io.Reader, base T, cutoff int) (*UndoTree[T, S], error) {
-	u := UndoTree[T, S]{
-		base:   base,
-		cutoff: cutoff,
-	}
+// FromReader loads an undo tree from a serialized byte stream. If the
+// stored mtime doesn't match currentMtime, returns nil (stale history).
+func FromReader[T, S any](r io.Reader, base T, cutoff int, currentMtime time.Time) (*UndoTree[T, S], error) {
 	fz, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, err
 	}
+	defer fz.Close()
 	dec := gob.NewDecoder(fz)
-	err = dec.Decode(&u)
-	fz.Close()
-	return &u, err
+	var savedMtime time.Time
+	if err := dec.Decode(&savedMtime); err != nil {
+		return nil, fmt.Errorf("decode mtime: %w", err)
+	}
+	if !savedMtime.Equal(currentMtime) {
+		return nil, nil
+	}
+	u := UndoTree[T, S]{
+		base:   base,
+		cutoff: cutoff,
+	}
+	if err := dec.Decode(&u); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // ToBytes serializes the tree to a byte slice.
-func (u *UndoTree[T, S]) ToBytes() ([]byte, error) {
+func (u *UndoTree[T, S]) ToBytes(mtime time.Time) ([]byte, error) {
 	var buf bytes.Buffer
-	err := u.Serialize(&buf)
+	err := u.Serialize(&buf, mtime)
 	return buf.Bytes(), err
 }
 
 // FromBytes loads an undo tree from a byte slice.
-func FromBytes[T, S any](b []byte, base T, cutoff int) (*UndoTree[T, S], error) {
-	return FromReader[T, S](bytes.NewReader(b), base, cutoff)
+func FromBytes[T, S any](b []byte, base T, cutoff int, mtime time.Time) (*UndoTree[T, S], error) {
+	return FromReader[T, S](bytes.NewReader(b), base, cutoff, mtime)
 }
 
 // AdjustSize ensures the cutoff is respected by advancing the root.

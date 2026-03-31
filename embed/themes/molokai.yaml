@@ -60,6 +60,8 @@ hidden-char:
     bg: 233
 cursorline:
     bg: 234
+selection:
+    bg: 237
 current-line-number:
     fg: 208
     bg: 233
