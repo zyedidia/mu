@@ -90,6 +90,22 @@ func clamp(a, lo, hi int) int {
 	return a
 }
 
+// VimClamp ensures the cursor is not on a newline in normal mode.
+// If the cursor is on a '\n' and the previous character is not '\n'
+// (i.e., the line is not empty), it moves back one character.
+func (c Cursor) VimClamp(b *Buffer) Cursor {
+	r, sz := b.DecodeRuneAt(c.Pos)
+	if r != '\n' || sz == 0 {
+		return c
+	}
+	pr, psz := b.DecodeRuneBefore(c.Pos)
+	if pr == '\n' || psz == 0 {
+		return c // empty line, stay
+	}
+	c.Pos -= psz
+	return c
+}
+
 // Right moves the cursor one grapheme to the right.
 func (c Cursor) Right(b *Buffer) Cursor {
 	_, _, sz := b.DecodeGraphemeAt(c.Pos)

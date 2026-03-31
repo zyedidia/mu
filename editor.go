@@ -395,6 +395,7 @@ func (e *Editor) newViewWithOptions(buf *Buffer) *View {
 		tabsize = 4
 	}
 	v := NewView(buf, tabsize)
+	v.Opts = opts
 
 	if b, ok := GetOptBool(opts, "linenums"); ok {
 		v.LineNums = b

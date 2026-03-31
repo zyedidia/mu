@@ -42,6 +42,9 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 			}
 		} else {
 			b.cursors[i] = c.MoveTo(newPos)
+			if ks.ModeID() == ModeNormal {
+				b.cursors[i] = b.cursors[i].VimClamp(b)
+			}
 		}
 	}
 	if m.Vertical {

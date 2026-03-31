@@ -19,9 +19,48 @@ func opDelete(ks *KeyState, b *Buffer, start, end int) {
 	b.Remove(start, end)
 }
 
-// opChange removes the range and switches to insert mode.
+// opChange removes the range and switches to insert mode. For linewise
+// ranges (ending with '\n'), it opens a new line at the deletion point
+// rather than leaving the cursor on the next line's content.
 func opChange(ks *KeyState, b *Buffer, start, end int) {
+	linewise := end > start && b.Slice(end-1, end)[0] == '\n'
 	opDelete(ks, b, start, end)
+	if linewise {
+		pos := start
+		if pos > 0 {
+			// Insert newline after the previous line's end.
+			b.Insert(pos-1, []byte("\n"))
+			// pos now points to the new empty line.
+		} else {
+			// Deleted from the top of the file; insert newline before.
+			b.Insert(0, []byte("\n"))
+			pos = 0
+		}
+		*b.Cursor() = b.Cursor().MoveTo(pos)
+		// Apply autoindent from the surrounding line.
+		v := ks.ActiveView()
+		autoindent := false
+		if v != nil && v.Opts != nil {
+			autoindent, _ = GetOptBool(v.Opts, "autoindent")
+		}
+		if autoindent {
+			line, _ := b.LineColAt(pos)
+			var refLine int
+			if line > 0 {
+				refLine = line - 1
+			} else if line < b.NumLines() {
+				refLine = line + 1
+			} else {
+				refLine = -1
+			}
+			if refLine >= 0 {
+				ws := leadingWS(b.GetLine(refLine))
+				if len(ws) > 0 {
+					b.Insert(pos, ws)
+				}
+			}
+		}
+	}
 	ks.SetMode(ModeInsert)
 }
 
@@ -36,6 +75,113 @@ func opYank(ks *KeyState, b *Buffer, start, end int) {
 	}
 }
 
+// indentBytes returns the indent string for one level based on view options.
+func indentBytes(ks *KeyState) []byte {
+	if v := ks.ActiveView(); v != nil && v.Opts != nil {
+		if tts, ok := GetOptBool(v.Opts, "tabstospaces"); ok && tts {
+			ts := 4
+			if n, ok := GetOptInt(v.Opts, "tabsize"); ok && n > 0 {
+				ts = n
+			}
+			return bytes.Repeat([]byte{' '}, ts)
+		}
+	}
+	return []byte("\t")
+}
+
+// tabSize returns the configured tab size from view options.
+func tabSize(ks *KeyState) int {
+	if v := ks.ActiveView(); v != nil && v.Opts != nil {
+		if n, ok := GetOptInt(v.Opts, "tabsize"); ok && n > 0 {
+			return n
+		}
+	}
+	return 4
+}
+
+// autoClosePairs maps opening characters to their closing counterparts.
+var autoClosePairs = map[byte]byte{
+	'{': '}',
+	'(': ')',
+	'[': ']',
+	'"': '"',
+	'\'': '\'',
+	'`': '`',
+}
+
+// autoCloseClosers is the set of closing characters for skip-over detection.
+var autoCloseClosers = map[byte]bool{
+	'}': true, ')': true, ']': true,
+	'"': true, '\'': true, '`': true,
+}
+
+// closerFor returns the matching closing rune for an opener.
+func closerFor(opener byte) rune {
+	switch opener {
+	case '{':
+		return '}'
+	case '(':
+		return ')'
+	case '[':
+		return ']'
+	}
+	return 0
+}
+
+// insertNewline inserts a newline at cursor i and applies autoindent if
+// enabled. It handles copying leading whitespace, extra indent after
+// opening brackets, and splitting bracket pairs.
+func insertNewline(ks *KeyState, b *Buffer, i int) {
+	b.Insert(b.cursors[i].Pos, []byte("\n"))
+
+	v := ks.ActiveView()
+	autoindent := false
+	if v != nil && v.Opts != nil {
+		autoindent, _ = GetOptBool(v.Opts, "autoindent")
+	}
+	if !autoindent {
+		return
+	}
+
+	line, _ := b.LineColAt(b.cursors[i].Pos)
+	if line == 0 {
+		return
+	}
+	prevLine := b.GetLine(line - 1)
+	ws := leadingWS(prevLine)
+	if len(ws) > 0 {
+		b.Insert(b.cursors[i].Pos, ws)
+	}
+	// Extra indent after opening bracket/colon.
+	trimmed := bytes.TrimRight(prevLine, " \t")
+	if len(trimmed) > 0 {
+		last := trimmed[len(trimmed)-1]
+		if last == '{' || last == '(' || last == '[' || last == ':' {
+			b.Insert(b.cursors[i].Pos, indentBytes(ks))
+			// Split bracket pair: if cursor is on matching closer,
+			// add a newline + dedented line for the closer.
+			r, _, sz := b.DecodeGraphemeAt(b.cursors[i].Pos)
+			closer := closerFor(last)
+			if sz > 0 && r == closer {
+				pos := b.cursors[i].Pos
+				nl := append([]byte("\n"), ws...)
+				b.Insert(pos, nl)
+				b.cursors[i] = b.cursors[i].MoveTo(pos)
+			}
+		}
+	}
+}
+
+// leadingWS returns the leading whitespace bytes of a line.
+func leadingWS(line []byte) []byte {
+	for i, b := range line {
+		if b != ' ' && b != '\t' {
+			return line[:i]
+		}
+	}
+	return line
+}
+
 // opIndent adds one level of indentation to each line in the range.
 func opIndent(ks *KeyState, b *Buffer, start, end int) {
 	sl, _ := b.LineColAt(start)
@@ -43,7 +189,7 @@ func opIndent(ks *KeyState, b *Buffer, start, end int) {
 	if el > sl && b.OffsetAt(el, 0) == end {
 		el-- // don't indent next line if range ends at BOL
 	}
-	indent := []byte("\t") // TODO: use tabstospaces option
+	indent := indentBytes(ks)
 	for line := el; line >= sl; line-- {
 		off := b.OffsetAt(line, 0)
 		if b.LineLen(line) > 0 {
@@ -59,6 +205,7 @@ func opDedent(ks *KeyState, b *Buffer, start, end int) {
 	if el > sl && b.OffsetAt(el, 0) == end {
 		el--
 	}
+	ts := tabSize(ks)
 	for line := el; line >= sl; line-- {
 		off := b.OffsetAt(line, 0)
 		if off >= b.Len() {
@@ -68,9 +215,8 @@ func opDedent(ks *KeyState, b *Buffer, start, end int) {
 		if r == '\t' {
 			b.Remove(off, off+1)
 		} else if r == ' ' {
-			// Remove up to tabsize spaces.
 			n := 0
-			for n < 4 { // TODO: use tabsize option
+			for n < ts {
 				if off+n >= b.Len() {
 					break
 				}
@@ -151,9 +297,6 @@ func execVisualOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
 			continue
 		}
 		start, end := c.Sel[0], c.Sel[1]
-		if ks.ModeID() == ModeVisualLine {
-			start, end = extendToLines(b, start, end)
-		}
 		opFn(ks, b, start, end)
 		b.cursors[i].HasSel = false
 	}
@@ -384,10 +527,8 @@ func RegisterOperators(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
 		c := b.Cursor()
-		end := c.LineEnd(b).Pos
-		b.Insert(end, []byte("\n"))
-		// Move cursor to the new line (end+1 because \n was inserted at end).
-		*b.Cursor() = b.Cursor().MoveTo(end + 1)
+		*c = c.MoveTo(c.LineEnd(b).Pos)
+		insertNewline(ks, b, b.cur)
 		ks.SetMode(ModeInsert)
 	}, "o")
 
@@ -396,9 +537,23 @@ func RegisterOperators(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
 		c := b.Cursor()
-		start := c.LineStart(b).Pos
+		line, _ := b.LineColAt(c.Pos)
+		start := b.OffsetAt(line, 0)
 		b.Insert(start, []byte("\n"))
+		// Cursor was pushed to start+1; move back to the new empty line.
 		*b.Cursor() = b.Cursor().MoveTo(start)
+		v := ks.ActiveView()
+		autoindent := false
+		if v != nil && v.Opts != nil {
+			autoindent, _ = GetOptBool(v.Opts, "autoindent")
+		}
+		if autoindent {
+			// Original line is now line+1 after the inserted newline.
+			ws := leadingWS(b.GetLine(line + 1))
+			if len(ws) > 0 {
+				b.Insert(b.Cursor().Pos, ws)
+			}
+		}
 		ks.SetMode(ModeInsert)
 	}, "O")
 
@@ -417,8 +572,15 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		c := b.Cursor()
-		*c = c.SelectTo(c.Pos)
-		adjustVisualLine(b, c)
+		line, _ := b.LineColAt(c.Pos)
+		start := b.OffsetAt(line, 0)
+		end := b.OffsetAt(line+1, 0)
+		if end > b.Len() {
+			end = b.Len()
+		}
+		c.Orig = [2]int{start, start}
+		c.Sel = [2]int{start, end}
+		c.HasSel = true
 		ks.SetMode(ModeVisualLine)
 	}, "V")
 
@@ -461,10 +623,25 @@ func RegisterOperators(ks *KeyState) {
 	// Backspace in insert mode
 	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
+		v := ks.ActiveView()
+		autoclose := false
+		if v != nil && v.Opts != nil {
+			autoclose, _ = GetOptBool(v.Opts, "autoclose")
+		}
 		for i := 0; i < b.NumCursors(); i++ {
 			c := b.cursors[i]
 			if c.Pos > 0 {
 				_, _, sz := b.DecodeGraphemeBefore(c.Pos)
+				// Auto-close: delete matching pair if cursor is between them.
+				if autoclose && sz == 1 {
+					r, _ := b.DecodeRuneAt(c.Pos - sz)
+					if closer, ok := autoClosePairs[byte(r)]; ok {
+						nr, _, nsz := b.DecodeGraphemeAt(c.Pos)
+						if nsz > 0 && byte(nr) == closer {
+							b.Remove(c.Pos, c.Pos+nsz)
+						}
+					}
+				}
 				b.Remove(c.Pos-sz, c.Pos)
 			}
 		}
@@ -482,11 +659,11 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}, KeyDelete)
 
-	// Enter in insert mode
+	// Enter in insert mode (with auto-indent)
 	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		for i := 0; i < b.NumCursors(); i++ {
-			b.Insert(b.cursors[i].Pos, []byte("\n"))
+			insertNewline(ks, b, i)
 		}
 	}, KeyEnter)
 
@@ -499,9 +676,45 @@ func RegisterOperators(ks *KeyState) {
 			return // ignore unbound special keys
 		}
 		b := ks.Buf()
+		v := ks.ActiveView()
+		autoclose := false
+		if v != nil && v.Opts != nil {
+			autoclose, _ = GetOptBool(v.Opts, "autoclose")
+		}
 		data := []byte(key)
 		for i := 0; i < b.NumCursors(); i++ {
-			b.Insert(b.cursors[i].Pos, data)
+			c := b.cursors[i]
+			if autoclose && len(data) == 1 {
+				ch := data[0]
+				// Skip over closing character if it matches what's under cursor.
+				if autoCloseClosers[ch] {
+					r, _, sz := b.DecodeGraphemeAt(c.Pos)
+					if sz > 0 && byte(r) == ch {
+						b.cursors[i] = c.MoveTo(c.Pos + sz)
+						continue
+					}
+				}
+				// Insert pair for opening character.
+				if closer, ok := autoClosePairs[ch]; ok {
+					// For quotes, don't pair if the character before cursor is a letter/digit
+					// (likely mid-word, e.g. contractions like "don't").
+					if ch == '\'' || ch == '"' || ch == '`' {
+						if c.Pos > 0 {
+							pr, _ := b.DecodeRuneBefore(c.Pos)
+							if pr != 0 && (unicode.IsLetter(pr) || unicode.IsDigit(pr)) {
+								b.Insert(c.Pos, data)
+								continue
+							}
+						}
+					}
+					pair := []byte{ch, closer}
+					b.Insert(c.Pos, pair)
+					// Insert advances cursor past both chars; move back before the closer.
+					b.cursors[i] = b.cursors[i].MoveTo(b.cursors[i].Pos - 1)
+					continue
+				}
+			}
+			b.Insert(c.Pos, data)
 		}
 	}
 

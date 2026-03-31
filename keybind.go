@@ -270,6 +270,13 @@ func (ks *KeyState) ResetAction() {
 	} else if ks.mode == ModeNormal {
 		ks.StopRecording()
 	}
+	// In normal mode, ensure cursor is not sitting on a newline.
+	if ks.mode == ModeNormal {
+		b := ks.Buf()
+		for i := range b.cursors {
+			b.cursors[i] = b.cursors[i].VimClamp(b)
+		}
+	}
 }
 
 // HandleKey processes a single key event through the vim state machine.

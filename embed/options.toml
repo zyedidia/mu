@@ -1,4 +1,5 @@
 autoindent = true
+autoclose = true
 cursor = "block"
 theme = "monokai"
 syntax = true

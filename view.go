@@ -38,6 +38,9 @@ type View struct {
 	// Highlight is a byte range [start, end) to display with a search
 	// highlight style. Set to [0,0] for no highlight.
 	Highlight [2]int
+
+	// Opts holds per-buffer resolved options (autoindent, tabsize, etc.).
+	Opts map[string]any
 }
 
 // NewView creates a new View for the given buffer.
@@ -199,6 +202,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 	}
 
 	var curOff int
+
 	stpos := v.buf.OffsetAt(v.topline, v.topcol)
 	v.buf.RenderForward(RenderTracker{
 		Draw: func(bx, by, vx, vy int, mainc rune, combc []rune, style Style) {
