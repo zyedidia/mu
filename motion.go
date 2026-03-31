@@ -497,8 +497,10 @@ func motionMatchBracket(b *Buffer, c Cursor, _ int) int {
 		depth := 0
 		pos := c.Pos
 		for pos >= 0 {
-			ch, sz := b.DecodeRuneBefore(pos)
-			pos -= sz
+			ch, sz := b.DecodeRuneAt(pos)
+			if sz == 0 {
+				break
+			}
 			if ch == r {
 				depth++
 			} else if ch == opener {
@@ -507,9 +509,11 @@ func motionMatchBracket(b *Buffer, c Cursor, _ int) int {
 					return pos
 				}
 			}
-			if sz == 0 {
+			_, bsz := b.DecodeRuneBefore(pos)
+			if bsz == 0 {
 				break
 			}
+			pos -= bsz
 		}
 	}
 	return c.Pos

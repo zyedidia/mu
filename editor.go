@@ -240,10 +240,19 @@ func (e *Editor) syncActiveBuffer() {
 
 // NewTabWithView creates a new tab containing the given view.
 func (e *Editor) NewTabWithView(v *View) {
-	t := NewTab(v, e.w, e.h-1) // -1 for infobar
+	t := NewTab(v, e.w, e.h-1-e.tabBarHeight())
 	e.tabs = append(e.tabs, t)
 	e.curtab = len(e.tabs) - 1
+	e.resizeTabs()
 	e.syncActiveBuffer()
+}
+
+// resizeTabs resizes all tabs to account for the current tab bar height.
+func (e *Editor) resizeTabs() {
+	th := e.tabBarHeight()
+	for _, t := range e.tabs {
+		t.Resize(e.w, e.h-1-th)
+	}
 }
 
 // NextTab switches to the next tab.
@@ -272,6 +281,7 @@ func (e *Editor) CloseTab() {
 	if e.curtab >= len(e.tabs) {
 		e.curtab = len(e.tabs) - 1
 	}
+	e.resizeTabs()
 	e.syncActiveBuffer()
 }
 
@@ -460,12 +470,18 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 	return v
 }
 
+// tabBarHeight returns 1 if there are multiple tabs, 0 otherwise.
+func (e *Editor) tabBarHeight() int {
+	if len(e.tabs) > 1 {
+		return 1
+	}
+	return 0
+}
+
 // Resize handles terminal resize events.
 func (e *Editor) Resize(w, h int) {
 	e.w, e.h = w, h
-	for _, t := range e.tabs {
-		t.Resize(w, h-1)
-	}
+	e.resizeTabs()
 	e.screen.Sync()
 }
 
@@ -603,12 +619,18 @@ func (e *Editor) Display() {
 		return
 	}
 
-	// Draw all panes in the tab (with status bars and dividers).
+	// Draw tab bar at the top if there are multiple tabs.
+	th := e.tabBarHeight()
+	if th > 0 {
+		e.drawTabBar(0)
+	}
+
+	// Draw all panes in the tab (offset by tab bar height).
 	t.Display(func(x, y int, mainc rune, combc []rune, style Style) {
-		e.screen.SetContent(x, y, mainc, combc, style.TCellStyle())
+		e.screen.SetContent(x, y+th, mainc, combc, style.TCellStyle())
 	}, func(x, y int, main bool) {
 		if main && !e.infobar.IsActive() && !e.infobar.showCursor {
-			e.screen.ShowCursor(x, y)
+			e.screen.ShowCursor(x, y+th)
 		}
 	}, e.theme, e.ks.Mode().Name)
 
@@ -621,13 +643,11 @@ func (e *Editor) Display() {
 		}
 	}
 
-	// Completion bar (above the infobar, replacing tab bar row).
+	// Completion bar (above the infobar).
 	if e.infobar.HasCompletions() {
 		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
 	} else if e.hasCompletion() {
 		e.drawEditorCompletions(e.h - 2)
-	} else if len(e.tabs) > 1 {
-		e.drawTabBar(e.h - 2)
 	}
 
 	// Info bar (always the bottom row).
