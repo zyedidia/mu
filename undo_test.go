@@ -70,13 +70,26 @@ func TestUndoSerialize(t *testing.T) {
 	checkVal(t, base, 47)
 
 	mtime := time.Now()
-	b, err := u.ToBytes(mtime)
+	hash := []byte{1, 2, 3}
+	b, err := u.ToBytes(mtime, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err = FromBytes[*int, bool](b, &base, NoCutoff, mtime)
+	u, err = FromBytes[*int, bool](b, &base, NoCutoff, mtime, hash)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if u == nil {
+		t.Fatal("matching mtime and hash should load")
+	}
+
+	// A mismatched content hash must discard the history.
+	stale, err := FromBytes[*int, bool](b, &base, NoCutoff, mtime, []byte{9, 9, 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stale != nil {
+		t.Fatal("mismatched hash should discard history")
 	}
 
 	u.RedoMostRecent()

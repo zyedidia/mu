@@ -67,11 +67,16 @@ func NewUndoTree[T, S any](base T, cutoff int) *UndoTree[T, S] {
 	return u
 }
 
-// Serialize compresses and writes the file mtime followed by the tree.
-func (u *UndoTree[T, S]) Serialize(w io.Writer, mtime time.Time) error {
+// Serialize compresses and writes the file mtime and content hash followed
+// by the tree.
+func (u *UndoTree[T, S]) Serialize(w io.Writer, mtime time.Time, hash []byte) error {
 	fz := gzip.NewWriter(w)
 	enc := gob.NewEncoder(fz)
 	if err := enc.Encode(mtime); err != nil {
+		fz.Close()
+		return err
+	}
+	if err := enc.Encode(hash); err != nil {
 		fz.Close()
 		return err
 	}
@@ -80,9 +85,11 @@ func (u *UndoTree[T, S]) Serialize(w io.Writer, mtime time.Time) error {
 	return err
 }
 
-// FromReader loads an undo tree from a serialized byte stream. If the
-// stored mtime doesn't match currentMtime, returns nil (stale history).
-func FromReader[T, S any](r io.Reader, base T, cutoff int, currentMtime time.Time) (*UndoTree[T, S], error) {
+// FromReader loads an undo tree from a serialized byte stream. If the stored
+// mtime or content hash doesn't match the current file, returns nil (stale
+// history): applying deltas from a tree whose current state doesn't match the
+// buffer contents would corrupt the buffer or panic on out-of-range offsets.
+func FromReader[T, S any](r io.Reader, base T, cutoff int, currentMtime time.Time, currentHash []byte) (*UndoTree[T, S], error) {
 	fz, err := gzip.NewReader(r)
 	if err != nil {
 		return nil, err
@@ -93,7 +100,11 @@ func FromReader[T, S any](r io.Reader, base T, cutoff int, currentMtime time.Tim
 	if err := dec.Decode(&savedMtime); err != nil {
 		return nil, fmt.Errorf("decode mtime: %w", err)
 	}
-	if !savedMtime.Equal(currentMtime) {
+	var savedHash []byte
+	if err := dec.Decode(&savedHash); err != nil {
+		return nil, fmt.Errorf("decode hash: %w", err)
+	}
+	if !savedMtime.Equal(currentMtime) || !bytes.Equal(savedHash, currentHash) {
 		return nil, nil
 	}
 	u := UndoTree[T, S]{
@@ -107,15 +118,15 @@ func FromReader[T, S any](r io.Reader, base T, cutoff int, currentMtime time.Tim
 }
 
 // ToBytes serializes the tree to a byte slice.
-func (u *UndoTree[T, S]) ToBytes(mtime time.Time) ([]byte, error) {
+func (u *UndoTree[T, S]) ToBytes(mtime time.Time, hash []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	err := u.Serialize(&buf, mtime)
+	err := u.Serialize(&buf, mtime, hash)
 	return buf.Bytes(), err
 }
 
 // FromBytes loads an undo tree from a byte slice.
-func FromBytes[T, S any](b []byte, base T, cutoff int, mtime time.Time) (*UndoTree[T, S], error) {
-	return FromReader[T, S](bytes.NewReader(b), base, cutoff, mtime)
+func FromBytes[T, S any](b []byte, base T, cutoff int, mtime time.Time, hash []byte) (*UndoTree[T, S], error) {
+	return FromReader[T, S](bytes.NewReader(b), base, cutoff, mtime, hash)
 }
 
 // AdjustSize ensures the cutoff is respected by advancing the root.

@@ -663,57 +663,57 @@ For now, the only pane type is `BufPane` (a View + Buffer).
 
 Each step builds on the previous.
 
-### Step 1: Text Buffer (done)
+### Step 1: Text Buffer
 `text/` package: rope, cache, linecache, endings, charset detection, Buffer.
 
-### Step 2: Editor Buffer, Cursor, Undo (done)
+### Step 2: Editor Buffer, Cursor, Undo
 `buffer.go`, `cursor.go`, `undo.go` — Buffer wrapping text.Buffer with
 multi-cursor support and tree-based undo. `unicode.go` — grapheme decoding,
 UnicodeLoc, VisualLoc.
 
-### Step 3: Configuration and Themes (done)
+### Step 3: Configuration and Themes
 `config.go`, `theme.go` — TOML options loading with filetype/glob overrides.
 YAML theme loading with hierarchical style lookups. Copy `embed/` resources
 from old mu.
 
-### Step 4: View and Display (done)
+### Step 4: View and Display
 `view.go`, `display.go`, `gutter.go` — Viewport management, scrolling,
 grapheme-based rendering, line numbers.
 
-### Step 5: Vim Mode System and Key Dispatch (done)
+### Step 5: Vim Mode System and Key Dispatch
 `mode.go`, `keybind.go`, `register.go` — Mode definitions, key parsing, binding
 lookup, register management, action composition framework.
 
-### Step 6: Vim Motions, Operators, Text Objects (done)
+### Step 6: Vim Motions, Operators, Text Objects
 `motion.go`, `operator.go`, `textobject.go` — Core vim commands. Start with
 the essentials (h/j/k/l, w/b/e, d/c/y, iw/aw) and expand.
 
-### Step 7: Editor Shell (done)
+### Step 7: Editor Shell
 `editor.go`, `main.go`, `tab.go`, `split.go` — Editor struct, tcell event
 loop, tab/split management. At this point the editor is functional for basic
 editing.
 
-### Step 8: UI Chrome (done)
+### Step 8: UI Chrome
 `statusbar.go`, `infobar.go` — Status line and command/message bar.
 
-### Step 9: Ex Commands and TCL (done)
+### Step 9: Ex Commands and TCL
 `command.go`, `tcl.go` — TCL interpreter, :w/:q/:e/:set/:sp/:vs commands,
 command-line prompt with completion.
 
-### Step 10: Search (done)
+### Step 10: Search
 `search.go` — Incremental forward/backward search (/, ?), next/prev (n, N),
 substitute command with interactive (y/n/q/a) and all modes. Search uses
 `FindReaderSubmatchIndex` directly on the buffer (no byte copies). `*` and `#`
 search for word under cursor.
 
-### Step 11: Syntax Highlighting (done)
+### Step 11: Syntax Highlighting
 `syntax.go` — Windowed flare integration with 10MB core window + 5MB overlap
 on each side. Background initial highlight via goroutine. Incremental
 re-highlighting via memo table on edits. Window re-centers when cursor leaves
 the core. Filetype detection via ftdetect. 24 highlighter grammars and 137
 filetype detectors embedded.
 
-### Step 12: File I/O (done)
+### Step 12: File I/O
 `save.go` — File saving with backup to `~/.config/mu/backup/`, readonly
 detection with `[RO]` status bar indicator, sudo save via `screen.Suspend()`
 with SIGINT protection. `:w` prompts for sudo on readonly files. `ZZ` saves
@@ -728,7 +728,7 @@ buffers. Per-keypress check prompts for modified buffers. Hash-based
 modification detection (md5) for files under 1MB eliminates false positives
 from undo.
 
-### Step 13: LSP (done — tier 1)
+### Step 13: LSP
 `lsp.go` — JSON-RPC 2.0 transport over stdin/stdout, ID-based request/response
 matching via channels, background receive goroutine. LspServer wraps subprocess
 with initialize/shutdown lifecycle. LspManager manages one server per language,
@@ -747,7 +747,7 @@ Tier 1 features: initialize/shutdown, didOpen/didChange/didSave/didClose,
 publishDiagnostics, go to definition, hover, formatting, completion request
 (UI not yet wired). See LSP.md for full plan including tier 2/3.
 
-### Step 14: Info Bar Tab Completion (done)
+### Step 14: Info Bar Tab Completion
 
 Context-aware tab completion in the `:` command prompt.
 

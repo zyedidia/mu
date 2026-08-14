@@ -123,8 +123,18 @@ func toAroundWORD(b *Buffer, pos int, count int) (int, int) {
 
 func makeInnerDelim(open, close rune) func(b *Buffer, pos int, count int) (int, int) {
 	return func(b *Buffer, pos int, _ int) (int, int) {
+		searchPos := pos
+		// If cursor is on the opening delimiter, step inside.
+		if r, _, sz := b.DecodeGraphemeAt(pos); r == open && sz > 0 {
+			searchPos = pos + sz
+		}
+		// If cursor is on the closing delimiter, search backward from before it.
+		if r, _, _ := b.DecodeGraphemeAt(pos); r == close {
+			searchPos = pos
+		}
+
 		// Search backward for opening delimiter.
-		start := pos
+		start := searchPos
 		depth := 0
 		found := false
 		for start > 0 {
@@ -147,7 +157,7 @@ func makeInnerDelim(open, close rune) func(b *Buffer, pos int, count int) (int, 
 		}
 
 		// Search forward for closing delimiter.
-		end := pos
+		end := searchPos
 		depth = 0
 		found = false
 		for end < b.Len() {
