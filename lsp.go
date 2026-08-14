@@ -34,27 +34,74 @@ type rpcNotification struct {
 	Params  any    `json:"params"`
 }
 
-type rpcResult struct {
+type rpcReply struct {
 	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id,omitempty"`
-	Method  string `json:"method,omitempty"`
+	ID      int    `json:"id"`
+	Result  any    `json:"result"`
 }
 
 // --- LspServer ---
 
 // LspServer communicates with a language server subprocess via JSON-RPC 2.0
 // over stdin/stdout.
+//
+// Concurrency model: all outgoing messages are serialized through sendq,
+// which a background goroutine drains once the initialize handshake is done
+// (the handshake itself writes directly while the queue is still parked, so
+// initialize/initialized always precede queued didOpen/didChange). Callers
+// therefore never block on the server. The response map and capabilities
+// are guarded by lock; raw writes are serialized by wlock.
 type LspServer struct {
-	cmd          *exec.Cmd
-	stdin        io.WriteCloser
-	stdout       *bufio.Reader
-	capabilities lsp.ServerCapabilities
-	lock         sync.Mutex
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+
+	lock         sync.Mutex // guards nextID, responses, capabilities
 	nextID       int
 	responses    map[int]chan json.RawMessage
+	capabilities lsp.ServerCapabilities
+
+	wlock sync.Mutex    // serializes writes to stdin
+	sendq chan any      // outgoing messages, drained after initialization
+	ready chan struct{} // closed when the initialize handshake finishes
+
+	dead     chan struct{} // closed when the server is unusable
+	deadOnce sync.Once
 }
 
 var ErrLspNotSupported = errors.New("lsp: operation not supported")
+
+const lspRequestTimeout = 10 * time.Second
+
+// newLspServerIO creates a server around raw pipes (factored out so tests
+// can use in-process pipes instead of a subprocess).
+func newLspServerIO(stdin io.WriteCloser, stdout io.Reader) *LspServer {
+	s := &LspServer{
+		stdin:     stdin,
+		stdout:    bufio.NewReader(stdout),
+		responses: make(map[int]chan json.RawMessage),
+		sendq:     make(chan any, 4096),
+		ready:     make(chan struct{}),
+		dead:      make(chan struct{}),
+	}
+	go s.sendLoop()
+	return s
+}
+
+// markDead flags the server as unusable so requests fail fast instead of
+// waiting out their timeout.
+func (s *LspServer) markDead() {
+	s.deadOnce.Do(func() { close(s.dead) })
+}
+
+func (s *LspServer) isDead() bool {
+	select {
+	case <-s.dead:
+		return true
+	default:
+		return false
+	}
+}
 
 func startLspServer(lang LspLanguage) (*LspServer, error) {
 	c := exec.Command(lang.Command, lang.Args...)
@@ -72,12 +119,73 @@ func startLspServer(lang LspLanguage) (*LspServer, error) {
 		return nil, err
 	}
 
-	return &LspServer{
-		cmd:       c,
-		stdin:     stdin,
-		stdout:    bufio.NewReader(stdout),
-		responses: make(map[int]chan json.RawMessage),
-	}, nil
+	s := newLspServerIO(stdin, stdout)
+	s.cmd = c
+	return s, nil
+}
+
+// sendLoop drains the outgoing queue once initialization has finished.
+func (s *LspServer) sendLoop() {
+	<-s.ready
+	for m := range s.sendq {
+		if s.isDead() {
+			continue // keep draining so enqueuers never block
+		}
+		if err := s.writeMessage(m); err != nil {
+			log.Printf("[lsp] write: %v", err)
+			s.markDead()
+		}
+	}
+}
+
+// allocResponse registers a response channel for a new request id.
+func (s *LspServer) allocResponse() (int, chan json.RawMessage) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	id := s.nextID
+	s.nextID++
+	ch := make(chan json.RawMessage, 1)
+	s.responses[id] = ch
+	return id, ch
+}
+
+func (s *LspServer) releaseResponse(id int) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	delete(s.responses, id)
+}
+
+// request enqueues a request and waits for its response.
+func (s *LspServer) request(method string, params any, timeout time.Duration) (json.RawMessage, error) {
+	if s.isDead() {
+		return nil, fmt.Errorf("lsp: server unavailable")
+	}
+	id, ch := s.allocResponse()
+	defer s.releaseResponse(id)
+	s.sendq <- rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}
+	select {
+	case resp := <-ch:
+		return resp, nil
+	case <-s.dead:
+		return nil, fmt.Errorf("lsp: server unavailable")
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("lsp: %s timed out", method)
+	}
+}
+
+// notify enqueues a notification without waiting.
+func (s *LspServer) notify(method string, params any) {
+	if s.isDead() {
+		return
+	}
+	s.sendq <- rpcNotification{JSONRPC: "2.0", Method: method, Params: params}
+}
+
+// caps returns the server capabilities (safe against the init goroutine).
+func (s *LspServer) caps() lsp.ServerCapabilities {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.capabilities
 }
 
 // Initialize performs the LSP initialization handshake.
@@ -105,13 +213,27 @@ func (s *LspServer) Initialize(dir string, onShow func(lsp.ShowMessageParams), o
 
 	go s.receiveLoop(onShow, onDiag)
 
-	s.lock.Lock()
 	go func() {
-		defer s.lock.Unlock()
+		// Release the send queue when the handshake ends (successfully or
+		// not) so queued notifications are never stuck forever.
+		defer close(s.ready)
 
-		resp, err := s.sendRequestLocked(lsp.MethodInitialize, params)
-		if err != nil {
+		id, ch := s.allocResponse()
+		defer s.releaseResponse(id)
+		// Write directly: the send loop is still parked on s.ready, so
+		// initialize/initialized are guaranteed to precede queued messages.
+		if err := s.writeMessage(rpcRequest{JSONRPC: "2.0", ID: id, Method: lsp.MethodInitialize, Params: params}); err != nil {
 			log.Printf("[lsp] init error: %v", err)
+			return
+		}
+		var resp json.RawMessage
+		select {
+		case resp = <-ch:
+		case <-s.dead:
+			log.Printf("[lsp] server died during initialization")
+			return
+		case <-time.After(30 * time.Second):
+			log.Printf("[lsp] initialize timed out")
 			return
 		}
 
@@ -119,19 +241,20 @@ func (s *LspServer) Initialize(dir string, onShow func(lsp.ShowMessageParams), o
 			Result lsp.InitializeResult `json:"result"`
 		}
 		json.Unmarshal(resp, &init)
+		s.lock.Lock()
 		s.capabilities = init.Result.Capabilities
+		s.lock.Unlock()
 
-		s.sendNotificationLocked(lsp.MethodInitialized, struct{}{})
+		s.writeMessage(rpcNotification{JSONRPC: "2.0", Method: lsp.MethodInitialized, Params: struct{}{}})
 		log.Printf("[lsp] initialized")
 	}()
 }
 
-// Shutdown sends shutdown + exit to the server.
+// Shutdown sends shutdown + exit to the server. Uses a short timeout so a
+// hung server can't stall editor exit.
 func (s *LspServer) Shutdown() {
-	s.lock.Lock()
-	s.sendRequestLocked(lsp.MethodShutdown, nil)
-	s.sendNotificationLocked(lsp.MethodExit, nil)
-	s.lock.Unlock()
+	s.request(lsp.MethodShutdown, nil, 2*time.Second)
+	s.notify(lsp.MethodExit, nil)
 }
 
 // --- Notifications (client → server) ---
@@ -148,8 +271,7 @@ func (s *LspServer) DidOpen(filename, language, text string, version int32) {
 			Text:       text,
 		},
 	}
-	s.lock.Lock()
-	go s.sendNotificationUnlock(lsp.MethodTextDocumentDidOpen, params)
+	s.notify(lsp.MethodTextDocumentDidOpen, params)
 }
 
 func (s *LspServer) DidChange(filename string, version int32, changes []lsp.TextDocumentContentChangeEvent) {
@@ -163,8 +285,7 @@ func (s *LspServer) DidChange(filename string, version int32, changes []lsp.Text
 		},
 		ContentChanges: changes,
 	}
-	s.lock.Lock()
-	go s.sendNotificationUnlock(lsp.MethodTextDocumentDidChange, params)
+	s.notify(lsp.MethodTextDocumentDidChange, params)
 }
 
 func (s *LspServer) DidSave(filename string) {
@@ -174,8 +295,7 @@ func (s *LspServer) DidSave(filename string) {
 	params := lsp.DidSaveTextDocumentParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
 	}
-	s.lock.Lock()
-	go s.sendNotificationUnlock(lsp.MethodTextDocumentDidSave, params)
+	s.notify(lsp.MethodTextDocumentDidSave, params)
 }
 
 func (s *LspServer) DidClose(filename string) {
@@ -185,14 +305,13 @@ func (s *LspServer) DidClose(filename string) {
 	params := lsp.DidCloseTextDocumentParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
 	}
-	s.lock.Lock()
-	go s.sendNotificationUnlock(lsp.MethodTextDocumentDidClose, params)
+	s.notify(lsp.MethodTextDocumentDidClose, params)
 }
 
 // --- Requests (client → server → response) ---
 
 func (s *LspServer) Completion(filename string, pos lsp.Position) ([]lsp.CompletionItem, error) {
-	if s == nil || s.capabilities.CompletionProvider == nil {
+	if s == nil || s.caps().CompletionProvider == nil {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.CompletionParams{
@@ -202,8 +321,7 @@ func (s *LspServer) Completion(filename string, pos lsp.Position) ([]lsp.Complet
 		},
 		Context: &lsp.CompletionContext{TriggerKind: lsp.CompletionTriggerKindInvoked},
 	}
-	s.lock.Lock()
-	resp, err := s.sendRequestUnlock(lsp.MethodTextDocumentCompletion, params)
+	resp, err := s.request(lsp.MethodTextDocumentCompletion, params, lspRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -224,15 +342,14 @@ func (s *LspServer) Completion(filename string, pos lsp.Position) ([]lsp.Complet
 }
 
 func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
-	if s == nil || s.capabilities.HoverProvider == nil {
+	if s == nil || s.caps().HoverProvider == nil {
 		return "", ErrLspNotSupported
 	}
 	params := lsp.TextDocumentPositionParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
 		Position:     pos,
 	}
-	s.lock.Lock()
-	resp, err := s.sendRequestUnlock(lsp.MethodTextDocumentHover, params)
+	resp, err := s.request(lsp.MethodTextDocumentHover, params, lspRequestTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -264,7 +381,7 @@ func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
 }
 
 func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Location, error) {
-	if s == nil || s.capabilities.DefinitionProvider == nil {
+	if s == nil || s.caps().DefinitionProvider == nil {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DefinitionParams{
@@ -273,8 +390,7 @@ func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Locatio
 			Position:     pos,
 		},
 	}
-	s.lock.Lock()
-	resp, err := s.sendRequestUnlock(lsp.MethodTextDocumentDefinition, params)
+	resp, err := s.request(lsp.MethodTextDocumentDefinition, params, lspRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +404,7 @@ func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Locatio
 }
 
 func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
-	if s == nil || s.capabilities.DocumentFormattingProvider == nil {
+	if s == nil || s.caps().DocumentFormattingProvider == nil {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DocumentFormattingParams{
@@ -298,8 +414,7 @@ func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
 			InsertSpaces: true,
 		},
 	}
-	s.lock.Lock()
-	resp, err := s.sendRequestUnlock(lsp.MethodTextDocumentFormatting, params)
+	resp, err := s.request(lsp.MethodTextDocumentFormatting, params, lspRequestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -314,45 +429,6 @@ func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
 
 // --- JSON-RPC transport ---
 
-func (s *LspServer) sendRequestLocked(method string, params any) (json.RawMessage, error) {
-	id := s.nextID
-	s.nextID++
-	ch := make(chan json.RawMessage, 1)
-	s.responses[id] = ch
-
-	if err := s.writeMessage(rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}); err != nil {
-		delete(s.responses, id)
-		return nil, err
-	}
-
-	var resp json.RawMessage
-	var err error
-	select {
-	case resp = <-ch:
-	case <-time.After(10 * time.Second):
-		err = fmt.Errorf("lsp: %s timed out", method)
-	}
-	delete(s.responses, id)
-	return resp, err
-}
-
-func (s *LspServer) sendNotificationLocked(method string, params any) {
-	s.writeMessage(rpcNotification{JSONRPC: "2.0", Method: method, Params: params})
-}
-
-// sendRequestUnlock sends a request and unlocks the mutex (for use with
-// Lock() before the call).
-func (s *LspServer) sendRequestUnlock(method string, params any) (json.RawMessage, error) {
-	defer s.lock.Unlock()
-	return s.sendRequestLocked(method, params)
-}
-
-// sendNotificationUnlock sends a notification and unlocks the mutex.
-func (s *LspServer) sendNotificationUnlock(method string, params any) {
-	defer s.lock.Unlock()
-	s.sendNotificationLocked(method, params)
-}
-
 func (s *LspServer) writeMessage(m any) error {
 	body, err := json.Marshal(m)
 	if err != nil {
@@ -360,8 +436,17 @@ func (s *LspServer) writeMessage(m any) error {
 	}
 	body = append(body, '\r', '\n')
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
+	s.wlock.Lock()
+	defer s.wlock.Unlock()
 	_, err = s.stdin.Write(append([]byte(header), body...))
 	return err
+}
+
+// reply sends a response to a server → client request.
+func (s *LspServer) reply(id int, result any) {
+	if err := s.writeMessage(rpcReply{JSONRPC: "2.0", ID: id, Result: result}); err != nil {
+		log.Printf("[lsp] reply: %v", err)
+	}
 }
 
 func (s *LspServer) readMessage() (json.RawMessage, error) {
@@ -399,13 +484,17 @@ func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(
 			if err != io.EOF {
 				log.Printf("[lsp] receive error: %v", err)
 			}
+			s.markDead()
 			return
 		}
 		if len(msg) == 0 {
 			continue
 		}
 
-		var header rpcResult
+		var header struct {
+			ID     *int   `json:"id"`
+			Method string `json:"method"`
+		}
 		if err := json.Unmarshal(msg, &header); err != nil {
 			continue
 		}
@@ -429,11 +518,33 @@ func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(
 			}
 		case "":
 			// Response to a request.
-			if ch, ok := s.responses[header.ID]; ok {
+			if header.ID == nil {
+				continue
+			}
+			s.lock.Lock()
+			ch, ok := s.responses[*header.ID]
+			s.lock.Unlock()
+			if ok {
 				ch <- msg
 			}
+		case "workspace/configuration":
+			// Answer with one null per requested item so the server isn't
+			// left waiting (we have no workspace configuration).
+			if header.ID != nil {
+				var m struct {
+					Params lsp.ConfigurationParams `json:"params"`
+				}
+				json.Unmarshal(msg, &m)
+				s.reply(*header.ID, make([]any, len(m.Params.Items)))
+			}
 		default:
-			log.Printf("[lsp] unhandled: %s", header.Method)
+			if header.ID != nil {
+				// Unknown server → client request: reply with a null
+				// result so the server doesn't block on us.
+				s.reply(*header.ID, nil)
+			} else {
+				log.Printf("[lsp] unhandled: %s", header.Method)
+			}
 		}
 	}
 }

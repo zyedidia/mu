@@ -30,7 +30,11 @@ func NewRegisterSet() *RegisterSet {
 }
 
 // Get returns the register contents. Returns an empty register if not set.
+// Uppercase A-Z reads the corresponding lowercase register (vim: "Ap = "ap).
 func (rs *RegisterSet) Get(id RegisterID) Register {
+	if id >= 'A' && id <= 'Z' {
+		id = RegisterID(id - 'A' + 'a')
+	}
 	return rs.regs[id]
 }
 
@@ -44,7 +48,12 @@ func (rs *RegisterSet) Set(id RegisterID, content []byte, linewise bool) {
 		lower := RegisterID(id - 'A' + 'a')
 		r := rs.regs[lower]
 		r.Content = append(r.Content, content...)
-		r.Linewise = linewise
+		// If either part is linewise the result is linewise, and linewise
+		// content always ends with a newline.
+		r.Linewise = r.Linewise || linewise
+		if r.Linewise && (len(r.Content) == 0 || r.Content[len(r.Content)-1] != '\n') {
+			r.Content = append(r.Content, '\n')
+		}
 		rs.regs[lower] = r
 		return
 	}

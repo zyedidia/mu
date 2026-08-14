@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml"
@@ -65,14 +66,25 @@ func LoadOptions(data []byte) (*Options, error) {
 	opts := &Options{
 		top: make(map[string]any),
 	}
+	var fts, globs []ftOpts
 	for k, v := range optmap {
 		switch v := v.(type) {
 		case map[string]any:
-			opts.ft = append(opts.ft, ftOpts{ft: k, opts: v})
+			if strings.HasPrefix(k, "glob:") {
+				globs = append(globs, ftOpts{ft: k, opts: v})
+			} else {
+				fts = append(fts, ftOpts{ft: k, opts: v})
+			}
 		default:
 			opts.top[k] = v
 		}
 	}
+	// Deterministic application order (Resolve applies later sections over
+	// earlier ones): filetype sections first, then glob sections, so glob
+	// matches override filetype matches (see PLAN.md resolution order).
+	sort.Slice(fts, func(i, j int) bool { return fts[i].ft < fts[j].ft })
+	sort.Slice(globs, func(i, j int) bool { return globs[i].ft < globs[j].ft })
+	opts.ft = append(fts, globs...)
 	return opts, nil
 }
 

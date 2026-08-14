@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"sort"
 	"strings"
 
-	"github.com/gdamore/tcell/v2"
 	lsp "go.lsp.dev/protocol"
 )
 
@@ -18,18 +18,18 @@ func (e *Editor) initLsp() {
 		langs = make(map[string]LspLanguage)
 	}
 
+	// Both callbacks run on the LSP receive goroutine; marshal the state
+	// changes onto the main event loop.
 	e.lspManager = NewLspManager(langs,
 		func(msg lsp.ShowMessageParams) {
-			e.infobar.Message(msg.Message)
-			if e.screen != nil {
-				e.screen.PostEvent(tcell.NewEventInterrupt(nil))
-			}
+			e.postToMain(func() {
+				e.infobar.Message(msg.Message)
+			})
 		},
 		func(diag lsp.PublishDiagnosticsParams) {
-			e.handleDiagnostics(diag)
-			if e.screen != nil {
-				e.screen.PostEvent(tcell.NewEventInterrupt(nil))
-			}
+			e.postToMain(func() {
+				e.handleDiagnostics(diag)
+			})
 		},
 	)
 }
@@ -245,16 +245,38 @@ func cmdLspFormat(e *Editor, args []string) error {
 		return err
 	}
 	b.UndoBarrier()
-	// Apply edits in reverse order so positions stay valid.
-	for i := len(edits) - 1; i >= 0; i-- {
-		edit := edits[i]
+	applyTextEdits(b, edits)
+	e.infobar.Message("Formatted")
+	return nil
+}
+
+// applyTextEdits applies LSP text edits to a buffer. Edits are applied
+// bottom-up so earlier positions stay valid; the spec does not guarantee
+// the server returns them sorted, but it does require that multiple
+// inserts at the same position apply in array order — hence the stable
+// ascending sort walked backwards.
+func applyTextEdits(b *Buffer, edits []lsp.TextEdit) {
+	sorted := make([]lsp.TextEdit, len(edits))
+	copy(sorted, edits)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		si, sj := sorted[i].Range.Start, sorted[j].Range.Start
+		if si.Line != sj.Line {
+			return si.Line < sj.Line
+		}
+		return si.Character < sj.Character
+	})
+	for i := len(sorted) - 1; i >= 0; i-- {
+		edit := sorted[i]
 		start := b.FromLspPosition(edit.Range.Start)
 		end := b.FromLspPosition(edit.Range.End)
-		b.Remove(start, end)
+		if end < start {
+			start, end = end, start
+		}
+		if end > start {
+			b.Remove(start, end)
+		}
 		if len(edit.NewText) > 0 {
 			b.Insert(start, []byte(edit.NewText))
 		}
 	}
-	e.infobar.Message("Formatted")
-	return nil
 }

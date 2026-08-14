@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/zyedidia/gotcl"
@@ -27,8 +28,42 @@ type Editor struct {
 	lspManager *LspManager
 	completion EditorCompletion
 
+	// mainq holds actions posted from background goroutines (LSP receive
+	// loop, file watchers) to run on the main event-loop goroutine.
+	mainq chan func()
+
 	running bool
 	w, h    int
+}
+
+// postToMain schedules fn to run on the main event-loop goroutine and wakes
+// the event loop. Editor state must only be mutated there.
+func (e *Editor) postToMain(fn func()) {
+	if e.mainq == nil {
+		return
+	}
+	select {
+	case e.mainq <- fn:
+	default:
+		// Queue full: drop. Watcher reloads re-fire on the next tick, but
+		// a dropped diagnostics push is lost until the server republishes,
+		// so the queue is sized generously.
+	}
+	if e.screen != nil {
+		e.screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+}
+
+// drainMain runs all posted actions. Called from the event loop.
+func (e *Editor) drainMain() {
+	for {
+		select {
+		case fn := <-e.mainq:
+			fn()
+		default:
+			return
+		}
+	}
 }
 
 // NewEditor creates a new editor with the given screen, config, and theme.
@@ -45,6 +80,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		ks:      ks,
 		regs:    regs,
 		infobar: NewInfoBar(),
+		mainq:   make(chan func(), 1024),
 		w:       w,
 		h:       h,
 	}
@@ -277,12 +313,16 @@ func (e *Editor) CloseTab() {
 		e.running = false
 		return
 	}
+	closed := e.tabs[e.curtab]
 	e.tabs = append(e.tabs[:e.curtab], e.tabs[e.curtab+1:]...)
 	if e.curtab >= len(e.tabs) {
 		e.curtab = len(e.tabs) - 1
 	}
 	e.resizeTabs()
 	e.syncActiveBuffer()
+	for _, v := range closed.panes {
+		e.releaseViewBuffer(v)
+	}
 }
 
 // --- Split management ---
@@ -315,11 +355,13 @@ func (e *Editor) ClosePane() {
 	if t == nil {
 		return
 	}
+	removed := t.ActiveView()
 	if !t.Unsplit() {
 		e.CloseTab()
 		return
 	}
 	e.syncActiveBuffer()
+	e.releaseViewBuffer(removed)
 }
 
 // makeNewView creates a view for a split. Opens the file from args[0] or
@@ -371,16 +413,48 @@ func (e *Editor) OpenFile(path string) error {
 		return err
 	}
 	v := e.configureView(buf, path)
+	e.showView(v)
+	return nil
+}
 
-	if len(e.tabs) == 0 {
-		e.NewTabWithView(v)
-	} else {
-		// Replace the active pane's view with the new one.
-		t := e.ActiveTab()
-		t.panes[t.cur] = v
-		t.Resize(t.w, t.h)
+// OpenFiles opens several files: the first in the current pane, the rest
+// each in their own tab, focusing the first.
+func (e *Editor) OpenFiles(paths []string) error {
+	var firstErr error
+	for i, path := range paths {
+		var err error
+		if i == 0 {
+			err = e.OpenFile(path)
+		} else {
+			err = e.OpenFileInTab(path)
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if len(paths) > 1 && len(e.tabs) > 0 {
+		e.curtab = 0
 		e.syncActiveBuffer()
 	}
+	return firstErr
+}
+
+// OpenFileInTab opens a file in a new tab.
+func (e *Editor) OpenFileInTab(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			data = []byte{}
+		} else {
+			return err
+		}
+	}
+	buf, err := NewBuffer(data, path)
+	if err != nil {
+		return err
+	}
+	v := e.configureView(buf, path)
+	e.NewTabWithView(v)
 	return nil
 }
 
@@ -388,27 +462,78 @@ func (e *Editor) OpenFile(path string) error {
 func (e *Editor) OpenEmpty() {
 	buf := NewEmptyBuffer()
 	v := e.configureView(buf, "")
+	e.showView(v)
+}
+
+// showView places a fully configured view on screen: in a new tab if none
+// exists, otherwise replacing the active pane. The replaced view's buffer
+// is released if no other pane shows it.
+func (e *Editor) showView(v *View) {
 	if len(e.tabs) == 0 {
 		e.NewTabWithView(v)
-	} else {
-		t := e.ActiveTab()
-		t.panes[t.cur] = v
-		t.Resize(t.w, t.h)
-		e.syncActiveBuffer()
+		return
+	}
+	t := e.ActiveTab()
+	old := t.panes[t.cur]
+	t.panes[t.cur] = v
+	t.Resize(t.w, t.h)
+	e.syncActiveBuffer()
+	e.releaseViewBuffer(old)
+}
+
+// releaseViewBuffer stops per-buffer background state (file watcher, LSP
+// document) for a view's buffer once no pane shows it anymore. Call after
+// the view has been removed from all tabs.
+func (e *Editor) releaseViewBuffer(v *View) {
+	if v == nil {
+		return
+	}
+	b := v.buf
+	for _, t := range e.tabs {
+		for _, p := range t.panes {
+			if p.buf == b {
+				return // still visible somewhere
+			}
+		}
+	}
+	b.StopWatcher()
+	if b.lspServer != nil {
+		// LSP documents are keyed by URI, not by buffer: if another buffer
+		// of the same file is still open (e.g. :vs foo.go opened it twice),
+		// a didClose here would kill the surviving buffer's document.
+		abs, _ := filepath.Abs(b.Path)
+		for _, t := range e.tabs {
+			for _, p := range t.panes {
+				if p.buf.lspServer == nil {
+					continue
+				}
+				if pabs, _ := filepath.Abs(p.buf.Path); pabs == abs {
+					b.lspServer = nil // drop our handle without closing
+					return
+				}
+			}
+		}
+		b.LspClose()
 	}
 }
 
 // newViewWithOptions creates a View for a buffer and applies display options
 // from the config. Does not initialize buffer-level state (syntax, LSP, etc.).
 func (e *Editor) newViewWithOptions(buf *Buffer) *View {
-	opts := e.config.BufferOptions(buf.Path, "")
-	tabsize, _ := GetOptInt(opts, "tabsize")
-	if tabsize == 0 {
-		tabsize = 4
-	}
-	v := NewView(buf, tabsize)
+	v := NewView(buf, 4)
+	e.applyViewOptions(v)
+	return v
+}
+
+// applyViewOptions resolves the buffer's options (using its path and
+// filetype) and applies them to the view's display settings.
+func (e *Editor) applyViewOptions(v *View) {
+	opts := e.config.BufferOptions(v.buf.Path, v.buf.Filetype)
 	v.Opts = opts
 
+	if n, ok := GetOptInt(opts, "tabsize"); ok && n > 0 {
+		v.vis.TabSize = n
+	}
 	if b, ok := GetOptBool(opts, "linenums"); ok {
 		v.LineNums = b
 	}
@@ -424,20 +549,37 @@ func (e *Editor) newViewWithOptions(buf *Buffer) *View {
 	if n, ok := GetOptInt(opts, "hscrollmargin"); ok {
 		v.HScrollMargin = n
 	}
+}
 
-	return v
+// refreshViewOptions re-resolves and applies options for every open view
+// (after :set changes an option).
+func (e *Editor) refreshViewOptions() {
+	for _, t := range e.tabs {
+		for _, v := range t.panes {
+			e.applyViewOptions(v)
+		}
+	}
 }
 
 // configureView creates a View and fully initializes the buffer (syntax,
 // LSP, file watcher, readonly detection). Use for newly opened files.
 func (e *Editor) configureView(buf *Buffer, path string) *View {
+	// Detect the filetype first: option resolution and the view's display
+	// settings depend on it ([filetype] sections in options.toml).
+	ft := DetectFiletype(e.config, path, buf.GetLine(0))
+	buf.Filetype = ft
+
 	v := e.newViewWithOptions(buf)
 
 	buf.updateModTime()
-	buf.onReload = func(_ *Buffer) {
-		if e.screen != nil {
-			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
-		}
+	// The watcher only detects external changes; the reload itself runs on
+	// the main goroutine so the buffer is never mutated concurrently.
+	buf.onReload = func(b *Buffer) {
+		e.postToMain(func() {
+			if !b.Modified() && b.ExternallyModified() {
+				b.Reload()
+			}
+		})
 	}
 	buf.onHighlight = func() {
 		if e.screen != nil {
@@ -446,8 +588,6 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 	}
 	buf.StartWatcher()
 
-	ft := DetectFiletype(e.config, path, buf.GetLine(0))
-	buf.Filetype = ft
 	if ft != "" {
 		buf.InitSyntax(e.config, ft)
 		e.initBufferLsp(buf, ft)
@@ -485,15 +625,17 @@ func (e *Editor) Resize(w, h int) {
 	e.screen.Sync()
 }
 
-// checkExternalModified prompts the user if the file changed on disk.
-func (e *Editor) checkExternalModified() {
+// checkExternalModified reloads or prompts if the file changed on disk.
+// Returns true if a prompt was opened, in which case the triggering
+// keystroke must not be dispatched (it would answer the prompt).
+func (e *Editor) checkExternalModified() bool {
 	v := e.ActiveView()
 	if v == nil || e.infobar.IsActive() {
-		return
+		return false
 	}
 	b := v.buf
 	if !b.ExternallyModified() {
-		return
+		return false
 	}
 	if !b.Modified() {
 		if err := b.Reload(); err != nil {
@@ -501,7 +643,7 @@ func (e *Editor) checkExternalModified() {
 		} else {
 			e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", b.Path))
 		}
-		return
+		return false
 	}
 	e.infobar.Prompt(fmt.Sprintf("\"%s\" changed on disk. Reload? (y/n)", b.Path), func(key string) {
 		if key == "y" {
@@ -514,6 +656,7 @@ func (e *Editor) checkExternalModified() {
 			b.updateModTime()
 		}
 	})
+	return true
 }
 
 // Message displays a message in the info bar.
@@ -579,7 +722,11 @@ func (e *Editor) Run() {
 			if key == "" {
 				continue
 			}
-			e.checkExternalModified()
+			if e.checkExternalModified() {
+				// A reload prompt was just opened: show it and let the
+				// NEXT keystroke answer it, not this one.
+				break
+			}
 
 			if e.infobar.IsActive() {
 				e.infobar.HandleKey(key)
@@ -592,6 +739,8 @@ func (e *Editor) Run() {
 		case *tcell.EventResize:
 			w, h := ev.Size()
 			e.Resize(w, h)
+		case *tcell.EventInterrupt:
+			e.drainMain()
 		}
 
 		e.Display()
@@ -656,7 +805,23 @@ func (e *Editor) Display() {
 	e.screen.Show()
 }
 
-// drawTabBar renders a tab bar showing all tab names.
+// tabBarScroll returns the index of the first tab to draw so that tab cur
+// is fully visible within width w (or at least starts at the left edge).
+func tabBarScroll(widths []int, cur, w int) int {
+	start := 0
+	sum := 0
+	for i := start; i <= cur; i++ {
+		sum += widths[i]
+	}
+	for sum > w && start < cur {
+		sum -= widths[start]
+		start++
+	}
+	return start
+}
+
+// drawTabBar renders a tab bar showing all tab names. Scrolls so the
+// active tab is always visible.
 func (e *Editor) drawTabBar(y int) {
 	style := e.theme.Style("tabbar")
 	if !e.theme.HasStyle("tabbar") {
@@ -666,19 +831,24 @@ func (e *Editor) drawTabBar(y int) {
 	ts := style.TCellStyle()
 	ats := activeStyle.TCellStyle()
 
-	x := 0
+	labels := make([]string, len(e.tabs))
+	widths := make([]int, len(e.tabs))
 	for i, t := range e.tabs {
 		name := "[No Name]"
 		if v := t.ActiveView(); v != nil && v.buf.Path != "" {
-			name = v.buf.Path
+			name = filepath.Base(v.buf.Path)
 		}
-		label := fmt.Sprintf(" %s ", name)
+		labels[i] = fmt.Sprintf(" %s ", name)
+		widths[i] = len([]rune(labels[i]))
+	}
 
+	x := 0
+	for i := tabBarScroll(widths, e.curtab, e.w); i < len(e.tabs); i++ {
 		s := ts
 		if i == e.curtab {
 			s = ats
 		}
-		for _, r := range label {
+		for _, r := range labels[i] {
 			if x >= e.w {
 				break
 			}

@@ -274,4 +274,3 @@ func (n *SplitNode) neighbor(id uint, isDir func(cur, cand *SplitNode) bool, dis
 	})
 	return bestID
 }
-

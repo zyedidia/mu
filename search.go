@@ -17,56 +17,132 @@ type SearchState struct {
 	re        *regexp.Regexp
 }
 
-// --- Buffer search methods (work directly on the reader) ---
+// --- Buffer search methods ---
+
+// compileSearch compiles a search pattern with multi-line mode enabled so
+// that ^ and $ anchor to line boundaries, as in vim.
+func compileSearch(pattern string) (*regexp.Regexp, error) {
+	return regexp.Compile("(?m)" + pattern)
+}
+
+// findAllInLine returns all matches of re within line l, with indices
+// converted to absolute buffer offsets. Running the regex on the isolated
+// line keeps ^ and $ anchored to the real line boundaries.
+func (b *Buffer) findAllInLine(re *regexp.Regexp, l int) [][]int {
+	ls := b.OffsetAt(l, 0)
+	if ls >= b.Len() && b.Len() > 0 {
+		// The phantom position after a trailing newline is not a line
+		// (vim: no match for ^ there).
+		return nil
+	}
+	matches := re.FindAllSubmatchIndex(b.GetLine(l), -1)
+	for _, m := range matches {
+		for i := range m {
+			if m[i] >= 0 {
+				m[i] += ls
+			}
+		}
+	}
+	return matches
+}
 
 // FindDown finds the first match at or after off, wrapping to the start if
 // needed. Returns the submatch indices (adjusted to absolute offsets), or nil.
 func (b *Buffer) FindDown(re *regexp.Regexp, off int) []int {
-	sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
-	br := bufio.NewReader(sr)
-
-	loc := re.FindReaderSubmatchIndex(br)
+	loc := b.findDownFrom(re, off)
 	if loc == nil && off != 0 {
 		// Wrap to start.
-		return b.FindDown(re, 0)
-	}
-	for i := range loc {
-		loc[i] += off
+		return b.findDownFrom(re, 0)
 	}
 	return loc
 }
 
-// FindUp finds the last match before off, wrapping to the end if needed.
-// Returns the submatch indices (adjusted to absolute offsets), or nil.
-func (b *Buffer) FindUp(re *regexp.Regexp, off int) []int {
-	sr := io.NewSectionReader(b, 0, int64(off))
+// findDownFrom finds the first match at or after off without wrapping.
+func (b *Buffer) findDownFrom(re *regexp.Regexp, off int) []int {
+	if off > b.Len() {
+		return nil
+	}
+	// Search the remainder of the line containing off line-locally, so a
+	// mid-line starting offset can't produce a false ^ anchor.
+	l, _ := b.LineColAt(off)
+	for _, m := range b.findAllInLine(re, l) {
+		if m[0] >= off {
+			return m
+		}
+	}
+	// Search the rest of the buffer with the streaming reader. The section
+	// begins at a true line start, so (?m) anchors line up. If the next
+	// line start is at (or past) EOF there is nothing left to search —
+	// scanning an empty section would let ^ falsely match at EOF.
+	next := b.OffsetAt(l+1, 0)
+	if next >= b.Len() || next <= off {
+		return nil
+	}
+	sr := io.NewSectionReader(b, int64(next), int64(b.Len()-next))
 	br := bufio.NewReader(sr)
-	var last []int
-	var start int
-	for {
-		match := re.FindReaderSubmatchIndex(br)
-		if match == nil {
-			break
-		}
-		if last == nil {
-			last = make([]int, len(match))
-		}
-		for i := range match {
-			last[i] = start + match[i]
-		}
-		next := start + match[1]
-		if next >= off {
-			break
-		}
-		sr = io.NewSectionReader(b, int64(next), int64(off-next))
-		br = bufio.NewReader(sr)
-		start = next
+	loc := re.FindReaderSubmatchIndex(br)
+	if loc == nil {
+		return nil
 	}
-	if last == nil && off != b.Len() {
+	for i := range loc {
+		if loc[i] >= 0 {
+			loc[i] += next
+		}
+	}
+	return loc
+}
+
+// FindUp finds the last match beginning before off, wrapping to the end if
+// needed. Returns the submatch indices (adjusted to absolute offsets), or nil.
+func (b *Buffer) FindUp(re *regexp.Regexp, off int) []int {
+	loc := b.findUpFrom(re, off)
+	if loc == nil && off != b.Len() {
 		// Wrap to end.
-		return b.FindUp(re, b.Len())
+		return b.findUpFrom(re, b.Len())
 	}
-	return last
+	return loc
+}
+
+// findUpFrom scans lines backward from off without wrapping, returning the
+// last match that begins before off.
+func (b *Buffer) findUpFrom(re *regexp.Regexp, off int) []int {
+	if off > b.Len() {
+		off = b.Len()
+	}
+	startLine, _ := b.LineColAt(off)
+	for l := startLine; l >= 0; l-- {
+		var last []int
+		for _, m := range b.findAllInLine(re, l) {
+			if m[0] < off {
+				last = m
+			}
+		}
+		if last != nil {
+			return last
+		}
+	}
+	return nil
+}
+
+// advancePast returns the next search offset after a match at loc that was
+// replaced by n bytes (n < 0 means not replaced), guaranteeing progress on
+// empty matches.
+func (b *Buffer) advancePast(loc []int, n int) int {
+	var off int
+	if n >= 0 {
+		off = loc[0] + n
+	} else {
+		off = loc[1]
+	}
+	if loc[1] == loc[0] {
+		// Empty match: step one rune forward so the loop can't stall.
+		_, sz := b.DecodeRuneAt(off)
+		if sz == 0 {
+			return b.Len() + 1 // past the end: terminates the caller's loop
+		}
+		off += sz
+	}
+	return off
 }
 
 // Replace replaces the match at loc with repl, expanding submatch references
@@ -194,7 +270,7 @@ func (e *Editor) incrementalSearch(input string, origPos int, dir int) {
 		v.Highlight = [2]int{}
 		return
 	}
-	re, err := regexp.Compile(input)
+	re, err := compileSearch(input)
 	if err != nil {
 		*b.Cursor() = b.Cursor().MoveTo(origPos)
 		v.Highlight = [2]int{}
@@ -228,7 +304,7 @@ func (e *Editor) finalizeSearch(pattern string, dir int) {
 	if pattern == "" {
 		return
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := compileSearch(pattern)
 	if err != nil {
 		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
 		return
@@ -240,7 +316,7 @@ func (e *Editor) searchForward(pattern string) {
 	if pattern == "" {
 		return
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := compileSearch(pattern)
 	if err != nil {
 		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
 		return
@@ -253,7 +329,7 @@ func (e *Editor) searchBackward(pattern string) {
 	if pattern == "" {
 		return
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := compileSearch(pattern)
 	if err != nil {
 		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
 		return
@@ -316,7 +392,7 @@ func cmdSubstitute(e *Editor, args []string) error {
 	replacement := args[1]
 	replaceAll := len(args) >= 3 && args[2] == "all"
 
-	re, err := regexp.Compile(pattern)
+	re, err := compileSearch(pattern)
 	if err != nil {
 		return fmt.Errorf("invalid pattern: %v", err)
 	}
@@ -337,19 +413,14 @@ func (e *Editor) substituteAll(re *regexp.Regexp, replacement string) {
 
 	count := 0
 	off := 0
-	for {
-		sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
-		br := bufio.NewReader(sr)
-		loc := re.FindReaderSubmatchIndex(br)
+	for off <= b.Len() {
+		loc := b.findDownFrom(re, off)
 		if loc == nil {
 			break
 		}
-		for i := range loc {
-			loc[i] += off
-		}
 		n := b.Replace(re, loc, replacement)
-		off = loc[0] + n
 		count++
+		off = b.advancePast(loc, n)
 	}
 
 	if count == 0 {
@@ -371,15 +442,10 @@ func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) 
 	v := e.ActiveView()
 	b := v.buf
 
-	sr := io.NewSectionReader(b, int64(off), int64(b.Len()-off))
-	br := bufio.NewReader(sr)
-	loc := re.FindReaderSubmatchIndex(br)
+	loc := b.findDownFrom(re, off)
 	if loc == nil {
 		e.subDone(re, count)
 		return
-	}
-	for i := range loc {
-		loc[i] += off
 	}
 
 	*b.Cursor() = b.Cursor().MoveTo(loc[0])
@@ -390,27 +456,22 @@ func (e *Editor) subStep(re *regexp.Regexp, replacement string, off, count int) 
 		switch key {
 		case "y":
 			n := b.Replace(re, loc, replacement)
-			e.subStep(re, replacement, loc[0]+n, count+1)
+			e.subStep(re, replacement, b.advancePast(loc, n), count+1)
 		case "n":
-			e.subStep(re, replacement, loc[1], count)
+			e.subStep(re, replacement, b.advancePast(loc, -1), count)
 		case "a":
 			n := b.Replace(re, loc, replacement)
-			newOff := loc[0] + n
+			newOff := b.advancePast(loc, n)
 			newCount := count + 1
 			// Replace all remaining without asking.
-			for {
-				sr2 := io.NewSectionReader(b, int64(newOff), int64(b.Len()-newOff))
-				br2 := bufio.NewReader(sr2)
-				rloc := re.FindReaderSubmatchIndex(br2)
+			for newOff <= b.Len() {
+				rloc := b.findDownFrom(re, newOff)
 				if rloc == nil {
 					break
 				}
-				for i := range rloc {
-					rloc[i] += newOff
-				}
 				n = b.Replace(re, rloc, replacement)
-				newOff = rloc[0] + n
 				newCount++
+				newOff = b.advancePast(rloc, n)
 			}
 			e.subDone(re, newCount)
 		default: // q, Escape, anything else
@@ -499,6 +560,7 @@ func (e *Editor) registerSearchBindings() {
 		if word != "" {
 			e.searchForward(`\b` + regexp.QuoteMeta(word) + `\b`)
 		}
+		ks.ResetAction()
 	}, "*")
 
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
@@ -506,6 +568,7 @@ func (e *Editor) registerSearchBindings() {
 		if word != "" {
 			e.searchBackward(`\b` + regexp.QuoteMeta(word) + `\b`)
 		}
+		ks.ResetAction()
 	}, "#")
 }
 

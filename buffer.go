@@ -284,6 +284,17 @@ func (b *Buffer) lspSendEdit(start, end int, text []byte) {
 	b.lspServer.DidChange(absPath, b.lspVersion, []lsp.TextDocumentContentChangeEvent{change})
 }
 
+// LspClose notifies the language server that this buffer's document is
+// closed. Call when the buffer is dropped from the editor.
+func (b *Buffer) LspClose() {
+	if b.lspServer == nil {
+		return
+	}
+	absPath, _ := filepath.Abs(b.Path)
+	b.lspServer.DidClose(absPath)
+	b.lspServer = nil
+}
+
 // LspPosition converts a (line, byte-col) pair to an LSP Position (UTF-16).
 func (b *Buffer) LspPosition(line, col int) lsp.Position {
 	_, col16 := b.Utf16Loc(line, col)
@@ -306,8 +317,9 @@ func (b *Buffer) StartWatcher() {
 	if b.Path == "" {
 		return
 	}
-	b.watchDone = make(chan struct{})
-	go b.watchLoop()
+	done := make(chan struct{})
+	b.watchDone = done
+	go b.watchLoop(done)
 }
 
 // StopWatcher stops the background file watcher.
@@ -318,21 +330,26 @@ func (b *Buffer) StopWatcher() {
 	}
 }
 
-func (b *Buffer) watchLoop() {
+// watchLoop polls for external modifications until done is closed. The
+// channel is passed in (rather than read from the field) so StopWatcher can
+// clear the field without racing this goroutine.
+func (b *Buffer) watchLoop(done chan struct{}) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-b.watchDone:
+		case <-done:
 			return
 		case <-ticker.C:
 			if b.Modified() || !b.ExternallyModified() {
 				continue
 			}
-			if err := b.Reload(); err == nil {
-				if b.onReload != nil {
-					b.onReload(b)
-				}
+			if b.onReload != nil {
+				// The owner performs the reload (on the editor's main
+				// goroutine) to avoid concurrent buffer mutation.
+				b.onReload(b)
+			} else {
+				b.Reload()
 			}
 		}
 	}
@@ -342,32 +359,51 @@ func (b *Buffer) watchLoop() {
 
 const diffCutoff = 4096 * 64 // 256KB: above this, skip diff and replace
 
-// SetContent replaces the buffer contents with those of newb. For small
-// buffers it diffs and applies edits so undo history is preserved. For large
-// buffers it replaces wholesale (losing undo history).
-func (b *Buffer) SetContent(newb *text.Buffer) {
-	if b.Len() >= diffCutoff || newb.Len() >= diffCutoff {
-		b.text = newb
-		b.undo = NewUndoTree[*Buffer, Cursor](b, NoCutoff)
-		b.markUnmodified()
-		return
-	}
+// maxReloadDiffNodes bounds the search nodes DiffBounded may allocate when
+// diffing a reload (~24 bytes each). Large enough to preserve undo history
+// across formatter-sized changes and cheap large appends; completely
+// dissimilar content exhausts it in tens of milliseconds and falls back to
+// wholesale replacement.
+const maxReloadDiffNodes = 2 << 20
 
-	b.UndoBarrier()
-	edits := Diff(b.text, newb)
-	var pos int
-	for _, e := range edits {
-		switch e.Kind {
-		case DiffInsert:
-			b.Insert(pos, e.Text)
-			pos += e.Length
-		case DiffDelete:
-			b.Remove(pos, pos+e.Length)
-		case DiffEqual:
-			pos += e.Length
+// SetContent replaces the buffer contents with those of newb. For small
+// buffers with modest changes it diffs and applies edits so undo history is
+// preserved. Otherwise it replaces wholesale (losing undo history).
+func (b *Buffer) SetContent(newb *text.Buffer) {
+	if b.Len() < diffCutoff && newb.Len() < diffCutoff {
+		if edits, ok := DiffBounded(b.text, newb, maxReloadDiffNodes); ok {
+			b.UndoBarrier()
+			var pos int
+			for _, e := range edits {
+				switch e.Kind {
+				case DiffInsert:
+					b.Insert(pos, e.Text)
+					pos += e.Length
+				case DiffDelete:
+					b.Remove(pos, pos+e.Length)
+				case DiffEqual:
+					pos += e.Length
+				}
+			}
+			b.markUnmodified()
+			return
 		}
 	}
+
+	// Wholesale replacement. The incremental channels must not silently
+	// diverge: describe the change to the LSP server as one edit covering
+	// the whole old document (computed against the pre-swap content), and
+	// reset the syntax window afterwards.
+	if b.lspServer != nil {
+		b.lspSendEdit(0, b.Len(), newb.Bytes())
+	}
+	b.text = newb
+	b.undo = NewUndoTree[*Buffer, Cursor](b, NoCutoff)
+	for i := range b.cursors {
+		b.cursors[i] = b.cursors[i].Clamp(b)
+	}
 	b.markUnmodified()
+	b.SyntaxReset()
 }
 
 // Reload reads the file from disk and applies changes via diff.

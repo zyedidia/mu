@@ -39,10 +39,10 @@ type UndoTree[T, S any] struct {
 	Current EventPtr
 	Events  []Event[T, S]
 
-	cutoff       int
-	base         T
-	barrier      bool
-	BarrierOnly  bool // when true, only split undo events on explicit barriers (ignore time)
+	cutoff      int
+	base        T
+	barrier     bool
+	BarrierOnly bool // when true, only split undo events on explicit barriers (ignore time)
 }
 
 const NoCutoff = -1

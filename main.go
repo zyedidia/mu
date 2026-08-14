@@ -2,18 +2,23 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 func main() {
-	// Set up logging.
-	logf, err := os.Create("/tmp/mu.log")
+	// Set up logging. Never leave the default stderr output in place: once
+	// tcell owns the terminal, stray log writes would corrupt the screen.
+	logf, err := os.Create(filepath.Join(os.TempDir(), fmt.Sprintf("mu-%d.log", os.Getpid())))
 	if err == nil {
 		log.SetOutput(logf)
 		defer logf.Close()
+	} else {
+		log.SetOutput(io.Discard)
 	}
 
 	// Load config.
@@ -46,19 +51,19 @@ func main() {
 	}
 	defer screen.Fini()
 
-	screen.EnableMouse()
+	// Mouse support is deferred (see PLAN.md); leaving mouse reporting off
+	// keeps the terminal's native text selection working.
 	screen.SetStyle(th.Default().TCellStyle())
 
 	// Create editor.
 	ed := NewEditor(screen, cfg, th)
 
-	// Open files from arguments, or an empty buffer.
+	// Open files from arguments (the first in the current pane, the rest in
+	// their own tabs), or an empty buffer.
 	args := os.Args[1:]
 	if len(args) > 0 {
-		for _, path := range args {
-			if err := ed.OpenFile(path); err != nil {
-				ed.Error(fmt.Sprintf("open %s: %v", path, err))
-			}
+		if err := ed.OpenFiles(args); err != nil {
+			ed.Error(fmt.Sprintf("open: %v", err))
 		}
 	}
 	if len(ed.tabs) == 0 {

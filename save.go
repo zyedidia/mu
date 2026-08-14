@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -34,7 +35,7 @@ func (b *Buffer) SaveAs(path string) error {
 	if fileExists(absPath) {
 		if err := createBackup(absPath); err != nil {
 			// Non-fatal: log but continue saving.
-			_ = err
+			log.Printf("save: backup %s: %v", absPath, err)
 		}
 	}
 
@@ -62,9 +63,61 @@ func (b *Buffer) SaveAs(path string) error {
 	return nil
 }
 
-// writeToFile creates/truncates the file and writes the buffer contents,
-// converting back to the original line endings and charset.
+// writeToFile writes the buffer contents to path, converting back to the
+// original line endings and charset. The content is written to a temporary
+// file in the same directory and renamed into place, so a failure mid-write
+// (full disk, crash) can never leave the target truncated. Falls back to an
+// in-place write when the directory isn't writable.
 func (b *Buffer) writeToFile(path string) error {
+	// Resolve symlinks so the rename replaces the link's target rather
+	// than turning the link into a regular file.
+	target := path
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		target = resolved
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(target), ".mu-save-*")
+	if err != nil {
+		return b.writeToFileInPlace(target)
+	}
+	tmpPath := tmp.Name()
+
+	// Carry over the target's permissions (CreateTemp uses 0600).
+	if fi, err := os.Stat(target); err == nil {
+		tmp.Chmod(fi.Mode().Perm())
+	} else {
+		tmp.Chmod(0644)
+	}
+
+	fail := func(err error) error {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+
+	bw := bufio.NewWriter(tmp)
+	if _, err := b.text.WriteTo(bw); err != nil {
+		return fail(fmt.Errorf("save: write: %w", err))
+	}
+	if err := bw.Flush(); err != nil {
+		return fail(fmt.Errorf("save: flush: %w", err))
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(fmt.Errorf("save: sync: %w", err))
+	}
+	if err := tmp.Close(); err != nil {
+		return fail(fmt.Errorf("save: close: %w", err))
+	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		os.Remove(tmpPath)
+		return b.writeToFileInPlace(target)
+	}
+	return nil
+}
+
+// writeToFileInPlace truncates and rewrites the file directly. Only used
+// when the atomic temp-file strategy isn't possible.
+func (b *Buffer) writeToFileInPlace(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("save: %w", err)
@@ -99,8 +152,11 @@ func createBackup(path string) error {
 
 	// Encode the full path as a filename: replace path separators.
 	encoded := strings.ReplaceAll(absPath, string(filepath.Separator), "%")
-	if encoded[0] == '%' {
+	if len(encoded) > 0 && encoded[0] == '%' {
 		encoded = encoded[1:]
+	}
+	if encoded == "" {
+		return fmt.Errorf("backup: empty path")
 	}
 	backupPath := filepath.Join(backupDir, encoded)
 
@@ -203,6 +259,12 @@ func (e *Editor) saveWithSudo(b *Buffer, path string) error {
 
 	b.Path = path
 	b.markUnmodified()
+	// Record the new mtime so the file watcher doesn't treat our own
+	// write as an external modification and reload over it.
+	b.updateModTime()
+	if b.lspServer != nil {
+		b.lspServer.DidSave(absPath)
+	}
 	return nil
 }
 

@@ -14,8 +14,10 @@ const (
 )
 
 // MotionDef defines a cursor motion. Fn computes a new byte offset from the
-// current cursor. Count is the raw count (0 = unset). Name is used for
-// special-casing (e.g. vim's cw→ce quirk).
+// current cursor, or a negative value if the motion failed (no match for
+// f/t/%, j at the last line, ...): a failed motion moves nothing and
+// aborts a pending operator, as in vim. Count is the raw count (0 = unset).
+// Name is used for special-casing (e.g. vim's cw→ce quirk).
 type MotionDef struct {
 	Fn       func(b *Buffer, c Cursor, count int) int
 	Flags    MotionFlags
@@ -32,8 +34,16 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		newPos := m.Fn(b, c, count)
+		if newPos < 0 {
+			continue // failed motion: don't move this cursor
+		}
 		newPos = clamp(newPos, 0, b.Len())
 		if selecting {
+			// In charwise visual mode the cursor cannot rest on a line's
+			// newline (vim: v$ selects up to the last character).
+			if ks.ModeID() == ModeVisual {
+				newPos = (Cursor{Pos: newPos}).VimClamp(b).Pos
+			}
 			b.cursors[i] = c.SelectTo(newPos)
 			if ks.ModeID() == ModeVisual {
 				adjustVisualChar(b, &b.cursors[i])
@@ -54,7 +64,7 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	if !selecting && ks.ModeID() == ModeNormal {
 		ks.recording = nil
 	}
-	ks.count = 0
+	ks.ClearCounts()
 }
 
 // adjustVisualChar ensures the selection includes the grapheme at the cursor
@@ -114,10 +124,16 @@ func execMotionOp(ks *KeyState, m MotionDef) {
 	}
 
 	b.UndoBarrier()
+	if m.Flags&Linewise != 0 {
+		ks.forceLinewise = true
+	}
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		start := c.Pos
 		end := m.Fn(b, c, count)
+		if end < 0 {
+			continue // failed motion: the operation does nothing
+		}
 		if start > end {
 			start, end = end, start
 		}
@@ -127,10 +143,29 @@ func execMotionOp(ks *KeyState, m MotionDef) {
 		}
 		if m.Flags&Linewise != 0 {
 			start, end = extendToLines(b, start, end)
+			if op.Key == "d" {
+				start = linewiseEOFAdjust(b, start, end)
+			}
+		}
+		if start == end {
+			// Empty range (e.g. dh at column 0): vim aborts the operation
+			// without touching the register.
+			continue
 		}
 		op.Fn(ks, b, start, end)
 	}
+	ks.forceLinewise = false
 	ks.ResetAction()
+}
+
+// linewiseEOFAdjust extends a linewise delete range to include the newline
+// preceding it when the range reaches EOF without a trailing newline, so
+// deleting the last line(s) doesn't leave a dangling empty line.
+func linewiseEOFAdjust(b *Buffer, start, end int) int {
+	if end == b.Len() && start > 0 && (end == start || b.ByteAt(end-1) != '\n') {
+		return start - 1
+	}
+	return start
 }
 
 // extendToLines extends a byte range to full lines.
@@ -183,7 +218,9 @@ func registerCharMotion(ks *KeyState, key string, fn func(b *Buffer, c Cursor, c
 	handler := func(ks *KeyState) {
 		ks.WaitForChar(func(ks *KeyState, ch string) {
 			rs := []rune(ch)
-			if len(rs) == 0 {
+			if len(rs) != 1 {
+				// Special key (<Esc>, <CR>, ...): cancel.
+				ks.ResetAction()
 				return
 			}
 			// Save for ; and , repeat.
@@ -253,11 +290,14 @@ func motionDown(b *Buffer, c Cursor, count int) int {
 		count = 1
 	}
 	line, _ := b.LineColAt(c.Pos)
-	line += count
-	if line > b.NumLines() {
-		line = b.NumLines()
+	target := line + count
+	if target > b.NumLines() {
+		target = b.NumLines()
 	}
-	return b.VisualLoc(line, c.Vx)
+	if target == line {
+		return -1 // already at the last line (vim: dj there does nothing)
+	}
+	return b.VisualLoc(target, c.Vx)
 }
 
 func motionUp(b *Buffer, c Cursor, count int) int {
@@ -265,11 +305,14 @@ func motionUp(b *Buffer, c Cursor, count int) int {
 		count = 1
 	}
 	line, _ := b.LineColAt(c.Pos)
-	line -= count
-	if line < 0 {
-		line = 0
+	target := line - count
+	if target < 0 {
+		target = 0
 	}
-	return b.VisualLoc(line, c.Vx)
+	if target == line {
+		return -1 // already at the first line
+	}
+	return b.VisualLoc(target, c.Vx)
 }
 
 func motionLineStart(_ *Buffer, c Cursor, _ int) int {
@@ -389,7 +432,7 @@ func motionFindChar(b *Buffer, c Cursor, count int, ch rune) int {
 		for {
 			r, _, sz := b.DecodeGraphemeAt(pos)
 			if r == '\n' || sz == 0 {
-				return c.Pos // not found
+				return -1 // not found
 			}
 			if r == ch {
 				break
@@ -411,7 +454,7 @@ func motionFindCharBack(b *Buffer, c Cursor, count int, ch rune) int {
 		for {
 			r, _, sz := b.DecodeGraphemeBefore(pos)
 			if r == '\n' || sz == 0 {
-				return c.Pos
+				return -1 // not found
 			}
 			pos -= sz
 			if r == ch {
@@ -424,7 +467,7 @@ func motionFindCharBack(b *Buffer, c Cursor, count int, ch rune) int {
 
 func motionTillChar(b *Buffer, c Cursor, count int, ch rune) int {
 	pos := motionFindChar(b, c, count, ch)
-	if pos != c.Pos {
+	if pos >= 0 {
 		_, _, sz := b.DecodeGraphemeBefore(pos)
 		pos -= sz
 	}
@@ -433,7 +476,7 @@ func motionTillChar(b *Buffer, c Cursor, count int, ch rune) int {
 
 func motionTillCharBack(b *Buffer, c Cursor, count int, ch rune) int {
 	pos := motionFindCharBack(b, c, count, ch)
-	if pos != c.Pos {
+	if pos >= 0 {
 		_, _, sz := b.DecodeGraphemeAt(pos)
 		pos += sz
 	}
@@ -516,7 +559,7 @@ func motionMatchBracket(b *Buffer, c Cursor, _ int) int {
 			pos -= bsz
 		}
 	}
-	return c.Pos
+	return -1 // not on a bracket, or no match: the motion fails
 }
 
 // --- Registration ---
@@ -527,19 +570,22 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{KeyLeft}, MotionDef{Fn: motionLeft})
 	registerMotion(ks, []string{"l"}, MotionDef{Fn: motionRight})
 	registerMotion(ks, []string{KeyRight}, MotionDef{Fn: motionRight})
-	registerMotion(ks, []string{"j"}, MotionDef{Fn: motionDown, Vertical: true})
-	registerMotion(ks, []string{KeyDown}, MotionDef{Fn: motionDown, Vertical: true})
-	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp, Vertical: true})
-	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp, Vertical: true})
+	registerMotion(ks, []string{"j"}, MotionDef{Fn: motionDown, Vertical: true, Flags: Linewise})
+	registerMotion(ks, []string{KeyDown}, MotionDef{Fn: motionDown, Vertical: true, Flags: Linewise})
+	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp, Vertical: true, Flags: Linewise})
+	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp, Vertical: true, Flags: Linewise})
 
+	// Deliberately swapped from vim: 0 goes to the first non-blank and
+	// ^ to column 0. (0 while a count is pending is still a count digit;
+	// see tryCount.)
 	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionFirstNonBlank})
-	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionFirstNonBlank})
+	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{KeyHome}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL})
 	registerMotion(ks, []string{KeyEnd}, MotionDef{Fn: motionEOL})
 
-	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop})
-	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom})
+	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop, Flags: Linewise})
+	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom, Flags: Linewise})
 
 	registerMotion(ks, []string{"w"}, MotionDef{Fn: motionWordRight, Name: "w"})
 	registerMotion(ks, []string{"b"}, MotionDef{Fn: motionWordLeft, Name: "b"})
@@ -593,7 +639,7 @@ func RegisterMotions(ks *KeyState) {
 		}
 		*c = c.MoveTo(b.VisualLoc(newLine, c.Vx))
 		ks.vertical = true
-		ks.count = 0
+		ks.ClearCounts()
 	}
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		scrollHalfPage(ks, 1)
@@ -607,8 +653,8 @@ func RegisterMotions(ks *KeyState) {
 	registerCharMotion(ks, "t", motionTillChar, motionTillCharBack, Inclusive)
 	registerCharMotion(ks, "T", motionTillCharBack, motionTillChar, Charwise)
 
-	// %: matching bracket
-	registerMotion(ks, []string{"%"}, MotionDef{Fn: motionMatchBracket})
+	// %: matching bracket (inclusive: d% deletes both brackets)
+	registerMotion(ks, []string{"%"}, MotionDef{Fn: motionMatchBracket, Flags: Inclusive})
 
 	// ;: repeat last f/t/F/T
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {

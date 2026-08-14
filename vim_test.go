@@ -80,8 +80,8 @@ func TestVimMotionWordAndLineEnds(t *testing.T) {
 		t.Fatalf("b: pos=%d, want 0", cursorPos(ks))
 	}
 	feedKeys(ks, "$")
-	if cursorPos(ks) != 15 { // at '\n'
-		t.Fatalf("$: pos=%d, want 15", cursorPos(ks))
+	if cursorPos(ks) != 14 { // on the last char 'o' (vim clamps off the '\n')
+		t.Fatalf("$: pos=%d, want 14", cursorPos(ks))
 	}
 	feedKeys(ks, "0")
 	if cursorPos(ks) != 0 {

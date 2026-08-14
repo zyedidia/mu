@@ -186,7 +186,10 @@ func cmdSet(e *Editor, args []string) error {
 			val := e.config.GlobalOpt(name)
 			e.infobar.Message(fmt.Sprintf("%s=%v", name, val))
 		} else if v := e.ActiveView(); v != nil {
-			opts := e.config.BufferOptions(v.buf.Path, "")
+			opts := v.Opts
+			if opts == nil {
+				opts = e.config.BufferOptions(v.buf.Path, v.buf.Filetype)
+			}
 			if val, ok := opts[name]; ok {
 				e.infobar.Message(fmt.Sprintf("%s=%v", name, val))
 			} else {
@@ -203,7 +206,7 @@ func cmdSet(e *Editor, args []string) error {
 	if err != nil {
 		// Try buffer options for type hint.
 		if v := e.ActiveView(); v != nil {
-			opts := e.config.BufferOptions(v.buf.Path, "")
+			opts := e.config.BufferOptions(v.buf.Path, v.buf.Filetype)
 			coerced, err = coerceOptValue(opts[name], value)
 		}
 		if err != nil {
@@ -213,22 +216,30 @@ func cmdSet(e *Editor, args []string) error {
 	}
 
 	if IsGlobalOpt(name) {
-		if err := e.config.SetGlobalOpt(name, coerced); err != nil {
-			return err
-		}
-		// Apply theme change immediately.
+		// Validate a theme before storing the option so a typo doesn't
+		// leave a broken value behind.
 		if name == "theme" {
 			th, loadErr := e.config.LoadTheme(value)
 			if loadErr != nil {
 				return fmt.Errorf("theme: %w", loadErr)
 			}
+			if err := e.config.SetGlobalOpt(name, coerced); err != nil {
+				return err
+			}
 			e.theme = th
 			if e.screen != nil {
 				e.screen.SetStyle(th.Default().TCellStyle())
 			}
+		} else if err := e.config.SetGlobalOpt(name, coerced); err != nil {
+			return err
 		}
 	} else {
-		// TODO: apply to active buffer view options
+		// Buffer-scoped option: update the top-level default and re-apply
+		// options to all open views.
+		if err := e.config.SetGlobalOpt(name, coerced); err != nil {
+			return err
+		}
+		e.refreshViewOptions()
 	}
 
 	e.infobar.Message(fmt.Sprintf("%s=%v", name, coerced))

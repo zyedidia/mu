@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"io/fs"
@@ -22,11 +23,17 @@ import (
 // region extends syntaxOverlap beyond the core on each side, so there is
 // pre-highlighted content when crossing the boundary.
 const (
-	syntaxWindowSize = 1024 * 1024     // 1MB core window
-	syntaxOverlap    = 100 * 1024      // 100KB overlap on each side
+	syntaxWindowSize = 1024 * 1024 // 1MB core window
+	syntaxOverlap    = 100 * 1024  // 100KB overlap on each side
 )
 
 // SyntaxState holds the syntax highlighting state for a buffer.
+//
+// Concurrency: all fields are guarded by mu. The background highlight pass
+// works on a snapshot of the window content and a private memo table, so it
+// never touches the buffer or the live table; on completion it replays the
+// edits made meanwhile (pendingEdits) and swaps its table in, unless the
+// window was re-positioned (gen changed) in the meantime.
 type SyntaxState struct {
 	highlighter *flare.Highlighter
 	syntbl      memo.Table
@@ -41,6 +48,10 @@ type SyntaxState struct {
 	// Highlight region: the range actually fed to flare (core + overlap).
 	hlStart int
 	hlEnd   int
+
+	gen          int         // window generation; bumped when the window resets
+	bgActive     bool        // a background highlight is in flight
+	pendingEdits []memo.Edit // edits made while bgActive, replayed on completion
 
 	mu sync.Mutex
 }
@@ -114,7 +125,7 @@ func (b *Buffer) InitSyntax(cfg *Config, ft string) {
 	b.syntax.setWindow(0, b.Len())
 
 	// Run initial highlight in background.
-	go b.initialHighlight()
+	b.startBackgroundHighlight()
 }
 
 // setWindow positions the core window and highlight region around cursorPos.
@@ -151,25 +162,80 @@ func (ss *SyntaxState) setWindow(cursorPos, bufLen int) {
 	}
 }
 
-// initialHighlight fills the memo table for the highlight region without
-// generating matches. This makes subsequent incremental highlights fast.
-func (b *Buffer) initialHighlight() {
+// startBackgroundHighlight snapshots the highlight window and fills a memo
+// table for it in the background, making subsequent incremental highlights
+// fast. Must be called from the main goroutine: the snapshot is what allows
+// the highlight itself to run without touching the live buffer.
+func (b *Buffer) startBackgroundHighlight() {
 	ss := b.syntax
 	if ss == nil || ss.highlighter == nil {
 		return
 	}
-	ss.hisem.Acquire(context.Background(), 1)
-	defer ss.hisem.Release(1)
+	ss.mu.Lock()
+	gen := ss.gen
+	hlStart, hlEnd := ss.hlStart, ss.hlEnd
+	ss.bgActive = true
+	ss.pendingEdits = nil
+	ss.mu.Unlock()
 
-	r := io.NewSectionReader(b, int64(ss.hlStart), int64(ss.hlEnd-ss.hlStart))
-	ss.highlighter.HighlightFunc(r, ss.syntbl, nil, &vm.Interval{Low: 0, High: 0})
+	data := make([]byte, hlEnd-hlStart)
+	copy(data, b.Slice(hlStart, hlEnd))
 
-	if b.onHighlight != nil {
-		b.onHighlight()
-	}
+	go func() {
+		ss.hisem.Acquire(context.Background(), 1)
+		defer ss.hisem.Release(1)
+
+		tbl := memo.NewTreeTable(512)
+		ss.highlighter.HighlightFunc(bytes.NewReader(data), tbl, nil, &vm.Interval{Low: 0, High: 0})
+
+		ss.finishBackground(tbl, gen)
+
+		if b.onHighlight != nil {
+			b.onHighlight()
+		}
+	}()
 }
 
-// SyntaxApplyEdit updates the memo table after a text edit.
+// finishBackground publishes a completed background table if its window
+// generation is still current. A stale pass must not touch the pending
+// state: a newer pass for the current generation may still be queued and
+// needs those edits replayed into its own table.
+func (ss *SyntaxState) finishBackground(tbl memo.Table, gen int) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if ss.gen != gen {
+		return
+	}
+	for _, e := range ss.pendingEdits {
+		tbl.ApplyEdit(e)
+	}
+	ss.syntbl = tbl
+	ss.minvalid = true
+	ss.bgActive = false
+	ss.pendingEdits = nil
+}
+
+// SyntaxReset discards all highlighting state after the buffer content was
+// replaced wholesale, and starts a fresh background highlight. Must be
+// called from the main goroutine.
+func (b *Buffer) SyntaxReset() {
+	ss := b.syntax
+	if ss == nil {
+		return
+	}
+	ss.mu.Lock()
+	ss.setWindow(0, b.Len())
+	ss.syntbl = memo.NewTreeTable(512)
+	ss.matches = nil
+	ss.minvalid = true
+	ss.gen++
+	ss.bgActive = false
+	ss.pendingEdits = nil
+	ss.mu.Unlock()
+	b.startBackgroundHighlight()
+}
+
+// SyntaxApplyEdit updates the syntax state after a text edit.
 func (b *Buffer) SyntaxApplyEdit(start, end, insLen int) {
 	ss := b.syntax
 	if ss == nil {
@@ -178,24 +244,51 @@ func (b *Buffer) SyntaxApplyEdit(start, end, insLen int) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	// Adjust edit positions relative to the highlight region.
-	relStart := start - ss.hlStart
-	relEnd := end - ss.hlStart
-	if relStart < 0 {
-		relStart = 0
-	}
-
-	ss.syntbl.ApplyEdit(memo.Edit{
-		Start: relStart,
-		End:   relEnd,
-		Len:   insLen,
-	})
-	ss.minvalid = true
-
-	// Adjust window boundaries for the size change.
 	delta := insLen - (end - start)
-	ss.coreEnd += delta
-	ss.hlEnd += delta
+	switch {
+	case end <= ss.hlStart && start < ss.hlStart:
+		// Entirely before the window: the window's content is unchanged,
+		// only its position shifts.
+		ss.hlStart += delta
+		ss.hlEnd += delta
+		ss.coreStart += delta
+		ss.coreEnd += delta
+	case start >= ss.hlStart && end <= ss.hlEnd:
+		// Inside the window: update the memo table.
+		edit := memo.Edit{
+			Start: start - ss.hlStart,
+			End:   end - ss.hlStart,
+			Len:   insLen,
+		}
+		ss.syntbl.ApplyEdit(edit)
+		if ss.bgActive {
+			ss.pendingEdits = append(ss.pendingEdits, edit)
+		}
+		ss.minvalid = true
+		ss.coreEnd += delta
+		ss.hlEnd += delta
+	case start >= ss.hlEnd:
+		// Entirely after the window: no effect.
+	default:
+		// Spans a window boundary: the mapping is no longer reliable;
+		// reset and let the next highlight rebuild. Any in-flight
+		// background pass is now stale (gen changed), so drop its
+		// pending-edit state too.
+		ss.syntbl = memo.NewTreeTable(512)
+		ss.matches = nil
+		ss.minvalid = true
+		ss.gen++
+		ss.bgActive = false
+		ss.pendingEdits = nil
+		ss.coreEnd += delta
+		ss.hlEnd += delta
+		if ss.hlEnd < ss.hlStart {
+			ss.hlEnd = ss.hlStart
+		}
+		if ss.coreEnd < ss.coreStart {
+			ss.coreEnd = ss.coreStart
+		}
+	}
 }
 
 // SyntaxCheckWindow re-centers the window if the cursor has left the core.
@@ -204,15 +297,19 @@ func (b *Buffer) SyntaxCheckWindow(cursorPos int) {
 	if ss == nil || b.Len() <= syntaxWindowSize {
 		return
 	}
-	if cursorPos < ss.coreStart || cursorPos >= ss.coreEnd {
-		ss.mu.Lock()
+	ss.mu.Lock()
+	outside := cursorPos < ss.coreStart || cursorPos >= ss.coreEnd
+	if outside {
 		ss.setWindow(cursorPos, b.Len())
 		ss.syntbl = memo.NewTreeTable(512)
 		ss.matches = nil
 		ss.minvalid = true
-		ss.mu.Unlock()
+		ss.gen++
+	}
+	ss.mu.Unlock()
 
-		go b.initialHighlight()
+	if outside {
+		b.startBackgroundHighlight()
 	}
 }
 

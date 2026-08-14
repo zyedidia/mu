@@ -122,10 +122,16 @@ type KeyState struct {
 
 	keys     []string   // accumulated key buffer for trie lookup
 	count    int        // count prefix (0 means unset)
+	opCount  int        // count accumulated before an operator or register (multiplies with count)
 	register RegisterID // selected register (0 means default)
 	regWait  bool       // waiting for register char after "
 
 	pendingOp *PendingOp // operator waiting for motion/textobject
+
+	// forceLinewise is set while executing a linewise operation (dd, yy, dj,
+	// V-mode operators) so that register writes are marked linewise even when
+	// the affected range has no trailing newline (last line of the file).
+	forceLinewise bool
 
 	// charWait is set when an action needs the next keystroke as an argument
 	// (e.g. f, t, r). The function is called with the next key.
@@ -220,15 +226,35 @@ func (ks *KeyState) SetBuffer(b *Buffer) {
 
 // Count returns the effective count (1 if unset).
 func (ks *KeyState) Count() int {
-	if ks.count == 0 {
-		return 1
+	if n := ks.RawCount(); n > 0 {
+		return n
 	}
-	return ks.count
+	return 1
 }
 
-// RawCount returns the raw count (0 if unset).
+// RawCount returns the raw count (0 if unset). Counts given before an
+// operator or register multiply with counts given after (vim: 2d3w = 6dw).
 func (ks *KeyState) RawCount() int {
-	return ks.count
+	if ks.opCount == 0 {
+		return ks.count
+	}
+	if ks.count == 0 {
+		return ks.opCount
+	}
+	return ks.opCount * ks.count
+}
+
+// stashCount folds the current count into opCount so that a following count
+// multiplies with it. Called when an operator or register prefix is entered.
+func (ks *KeyState) stashCount() {
+	ks.opCount = ks.RawCount()
+	ks.count = 0
+}
+
+// ClearCounts resets both count accumulators.
+func (ks *KeyState) ClearCounts() {
+	ks.count = 0
+	ks.opCount = 0
 }
 
 // Register returns the selected register, or RegDefault if none selected.
@@ -246,6 +272,7 @@ func (ks *KeyState) Pending() *PendingOp {
 
 // SetPending sets the pending operator and switches to operator-pending mode.
 func (ks *KeyState) SetPending(op *PendingOp) {
+	ks.stashCount()
 	ks.pendingOp = op
 	ks.SetMode(ModeOperatorPending)
 }
@@ -262,7 +289,7 @@ func (ks *KeyState) WaitForChar(fn func(ks *KeyState, ch string)) {
 // ResetAction clears the accumulated count, register, pending operator, and
 // returns to normal mode if in operator-pending.
 func (ks *KeyState) ResetAction() {
-	ks.count = 0
+	ks.ClearCounts()
 	ks.register = 0
 	ks.pendingOp = nil
 	if ks.mode == ModeOperatorPending {
@@ -320,8 +347,10 @@ func (ks *KeyState) HandleKey(key string) {
 		return
 	}
 
-	// Try register prefix (only in normal mode, before any trie keys).
-	if len(ks.keys) == 0 && key == "\"" && ks.register == 0 && ks.mode == ModeNormal {
+	// Try register prefix (in normal and visual modes, before any trie keys).
+	if len(ks.keys) == 0 && key == "\"" && ks.register == 0 &&
+		(ks.mode == ModeNormal || ks.mode == ModeVisual || ks.mode == ModeVisualLine) {
+		ks.stashCount()
 		ks.regWait = true
 		return
 	}

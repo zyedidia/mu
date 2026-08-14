@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -19,13 +22,17 @@ func newTestEditor() *Editor {
 		h:       24,
 	}
 	SetupBindings(ed.ks)
+	ed.ks.activeView = func() *View {
+		return ed.ActiveView()
+	}
 	ed.initTCL()
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()
 
-	// Open an empty buffer in a tab.
+	// Open an empty buffer in a tab. Use a temp path so tests that write
+	// (e.g. :wq) don't drop files into the working directory.
 	buf := NewEmptyBuffer()
-	buf.Path = "test.txt"
+	buf.Path = filepath.Join(os.TempDir(), fmt.Sprintf("mu-test-%d.txt", os.Getpid()))
 	v := NewView(buf, 4)
 	v.Resize(80, 22)
 	ed.NewTabWithView(v)
@@ -154,10 +161,10 @@ func TestTCLEvalQuit(t *testing.T) {
 
 func TestTCLEvalCompound(t *testing.T) {
 	ed := newTestEditor()
-	// The wq alias expands to "write; quit". Since write is a TODO stub,
-	// it won't fail but quit should still execute.
+	// The wq alias expands to "write; quit": the write goes to the test
+	// buffer's temp path, then quit runs.
+	defer os.Remove(ed.ActiveView().buf.Path)
 	ed.RunCommand("wq")
-	// write shows a TODO message but doesn't error; quit runs next.
 	if ed.running {
 		t.Fatal("wq should quit the editor")
 	}

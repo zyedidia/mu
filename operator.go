@@ -11,12 +11,31 @@ import (
 func opDelete(ks *KeyState, b *Buffer, start, end int) {
 	content := make([]byte, end-start)
 	copy(content, b.Slice(start, end))
-	linewise := end > start && content[len(content)-1] == '\n'
+	content, linewise := normalizeRegContent(ks, content)
 	ks.regs.SetDefault(content, linewise, false)
 	if r := ks.Register(); r != RegDefault {
 		ks.regs.Set(r, content, linewise)
 	}
 	b.Remove(start, end)
+}
+
+// normalizeRegContent determines the linewise flag for register content.
+// When a linewise operation is forced (dd/yy/V-mode) but the range has no
+// trailing newline (last line of the file), the register copy is fixed up
+// to end with a newline so a later paste inserts it as a full line.
+func normalizeRegContent(ks *KeyState, content []byte) ([]byte, bool) {
+	linewise := len(content) > 0 && content[len(content)-1] == '\n'
+	if ks.forceLinewise && !linewise {
+		if len(content) > 0 && content[0] == '\n' {
+			// The range included the preceding newline (EOF delete):
+			// move it to the end for the register copy.
+			content = append(content[1:], '\n')
+		} else {
+			content = append(content, '\n')
+		}
+		linewise = true
+	}
+	return content, linewise
 }
 
 // opChange removes the range and switches to insert mode. For linewise
@@ -68,7 +87,7 @@ func opChange(ks *KeyState, b *Buffer, start, end int) {
 func opYank(ks *KeyState, b *Buffer, start, end int) {
 	content := make([]byte, end-start)
 	copy(content, b.Slice(start, end))
-	linewise := end > start && content[len(content)-1] == '\n'
+	content, linewise := normalizeRegContent(ks, content)
 	ks.regs.SetDefault(content, linewise, true)
 	if r := ks.Register(); r != RegDefault {
 		ks.regs.Set(r, content, linewise)
@@ -101,12 +120,12 @@ func tabSize(ks *KeyState) int {
 
 // autoClosePairs maps opening characters to their closing counterparts.
 var autoClosePairs = map[byte]byte{
-	'{': '}',
-	'(': ')',
-	'[': ']',
-	'"': '"',
+	'{':  '}',
+	'(':  ')',
+	'[':  ']',
+	'"':  '"',
 	'\'': '\'',
-	'`': '`',
+	'`':  '`',
 }
 
 // autoCloseClosers is the set of closing characters for skip-over detection.
@@ -273,19 +292,24 @@ func opDedent(ks *KeyState, b *Buffer, start, end int) {
 
 // --- Linewise operator execution (for dd, yy, cc, >>, <<) ---
 
-func execLineOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
+func execLineOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, int)) {
 	b := ks.Buf()
 	b.UndoBarrier()
 	count := ks.RawCount()
 	if count == 0 {
 		count = 1
 	}
+	ks.forceLinewise = true
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		line, _ := b.LineColAt(c.Pos)
 		start, end := lineRange(b, line, count)
+		if key == "d" {
+			start = linewiseEOFAdjust(b, start, end)
+		}
 		opFn(ks, b, start, end)
 	}
+	ks.forceLinewise = false
 	ks.ResetAction()
 }
 
@@ -299,6 +323,8 @@ func execLineChange(ks *KeyState) {
 	if count == 0 {
 		count = 1
 	}
+	ks.forceLinewise = true
+	defer func() { ks.forceLinewise = false }()
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		line, _ := b.LineColAt(c.Pos)
@@ -343,21 +369,32 @@ func execLineChange(ks *KeyState) {
 
 // --- Visual mode operator execution ---
 
-func execVisualOp(ks *KeyState, opFn func(*KeyState, *Buffer, int, int)) {
+func execVisualOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, int)) {
 	b := ks.Buf()
 	b.UndoBarrier()
+	lineMode := ks.ModeID() == ModeVisualLine
+	if lineMode {
+		ks.forceLinewise = true
+	}
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		if !c.HasSelection() {
 			continue
 		}
 		start, end := c.Sel[0], c.Sel[1]
+		if lineMode && key == "d" {
+			start = linewiseEOFAdjust(b, start, end)
+		}
 		opFn(ks, b, start, end)
 		b.cursors[i].HasSel = false
 	}
+	ks.forceLinewise = false
 	if ks.ModeID() != ModeInsert {
 		ks.SetMode(ModeNormal)
 	}
+	// Clear the register/count so a "x prefix doesn't leak into the next
+	// operation.
+	ks.ResetAction()
 }
 
 // --- Operator binding helpers ---
@@ -380,7 +417,7 @@ func registerOperator(ks *KeyState, key string, opFn func(*KeyState, *Buffer, in
 			if key == "c" {
 				execLineChange(ks)
 			} else {
-				execLineOp(ks, opFn)
+				execLineOp(ks, key, opFn)
 			}
 		}
 	}, key)
@@ -388,7 +425,7 @@ func registerOperator(ks *KeyState, key string, opFn func(*KeyState, *Buffer, in
 	// Visual modes: operate on selection.
 	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
 		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
-			execVisualOp(ks, opFn)
+			execVisualOp(ks, key, opFn)
 		}, key)
 	}
 }
@@ -479,12 +516,14 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		count := ks.Count()
+		ks.forceLinewise = true
 		for i := 0; i < b.NumCursors(); i++ {
 			c := b.cursors[i]
 			line, _ := b.LineColAt(c.Pos)
 			start, end := lineRange(b, line, count)
 			opYank(ks, b, start, end)
 		}
+		ks.forceLinewise = false
 		ks.ResetAction()
 	}, "Y")
 
@@ -511,7 +550,11 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
+		// A count of N joins N lines (N-1 joins); no count joins 2 lines.
 		count := ks.Count()
+		if count > 1 {
+			count--
+		}
 		for j := 0; j < count; j++ {
 			c := b.Cursor()
 			end := c.LineEnd(b).Pos
@@ -556,12 +599,14 @@ func RegisterOperators(ks *KeyState) {
 
 	// i: insert before cursor
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.Buf().UndoBarrier()
 		ks.SetMode(ModeInsert)
 	}, "i")
 
 	// a: insert after cursor
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
+		b.UndoBarrier()
 		c := b.Cursor()
 		r, _, sz := b.DecodeGraphemeAt(c.Pos)
 		if r != '\n' && sz > 0 {
@@ -573,6 +618,7 @@ func RegisterOperators(ks *KeyState) {
 	// I: insert at first non-blank
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
+		b.UndoBarrier()
 		c := b.Cursor()
 		*c = c.MoveTo(motionFirstNonBlank(b, *c, 0))
 		ks.SetMode(ModeInsert)
@@ -581,6 +627,7 @@ func RegisterOperators(ks *KeyState) {
 	// A: insert at end of line
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
+		b.UndoBarrier()
 		c := b.Cursor()
 		*c = c.MoveTo(c.LineEnd(b).Pos)
 		ks.SetMode(ModeInsert)
@@ -682,6 +729,7 @@ func RegisterOperators(ks *KeyState) {
 			b.cursors[i].HasSel = false
 		}
 		ks.SetMode(ModeNormal)
+		ks.ResetAction()
 	}, "v")
 	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
@@ -689,6 +737,7 @@ func RegisterOperators(ks *KeyState) {
 			b.cursors[i].HasSel = false
 		}
 		ks.SetMode(ModeNormal)
+		ks.ResetAction()
 	}, "V")
 
 	// Escape in visual modes: back to normal
@@ -699,6 +748,7 @@ func RegisterOperators(ks *KeyState) {
 				b.cursors[i].HasSel = false
 			}
 			ks.SetMode(ModeNormal)
+			ks.ResetAction()
 		}, KeyEscape)
 		ks.modes[mode].Bindings.Bind(ks.modes[mode].Bindings.root.children[KeyEscape].action, "<C-c>")
 	}
@@ -714,8 +764,10 @@ func RegisterOperators(ks *KeyState) {
 	// Escape: back to normal, move cursor left
 	ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
-		b.UndoBarrier()
+		// Clean up autoindent whitespace first so it coalesces with the
+		// insert-session undo event, then set the barrier for the next edit.
 		cleanAutoindent(b)
+		b.UndoBarrier()
 		c := b.Cursor()
 		if c.Pos > 0 {
 			_, _, sz := b.DecodeGraphemeBefore(c.Pos)
@@ -856,6 +908,18 @@ func RegisterOperators(ks *KeyState) {
 	// r<char>: replace char under cursor
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		ks.WaitForChar(func(ks *KeyState, ch string) {
+			switch ch {
+			case KeyEnter:
+				ch = "\n"
+			case KeyTab:
+				ch = "\t"
+			default:
+				if len([]rune(ch)) != 1 {
+					// Special key (<Esc>, arrows, ...): cancel.
+					ks.ResetAction()
+					return
+				}
+			}
 			b := ks.Buf()
 			b.UndoBarrier()
 			count := ks.Count()
@@ -939,21 +1003,24 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "~")
 
-	// .: repeat last edit
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		ks.Replay()
-	}, ".")
-
-	// H/M/L: screen top/middle/bottom
+	// H/M/L: screen top/middle/bottom. H and L stay inside the scroll
+	// margin so they don't force the viewport to move (vim scrolloff).
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(v.topline, 0))
+			line := v.topline
+			if v.topline > 0 {
+				line += v.effScrollMargin()
+			}
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(line, 0))
 		}
 		ks.ResetAction()
 	}, "H")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
 			mid := v.topline + v.height/2
+			if mid > v.buf.NumLines() {
+				mid = v.buf.NumLines()
+			}
 			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(mid, 0))
 		}
 		ks.ResetAction()
@@ -963,6 +1030,8 @@ func RegisterOperators(ks *KeyState) {
 			bot := v.topline + v.height - 1
 			if bot > v.buf.NumLines() {
 				bot = v.buf.NumLines()
+			} else {
+				bot -= v.effScrollMargin()
 			}
 			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(bot, 0))
 		}
@@ -985,24 +1054,46 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}, "<C-b>")
 
-	// Ctrl-E/Ctrl-Y: scroll view without moving cursor
+	// Ctrl-E/Ctrl-Y: scroll the view. The cursor stays put until it would
+	// leave the scroll margin, then it is pushed along (as in vim), so the
+	// next relocate doesn't snap the viewport back.
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			b := v.buf
 			v.topline += ks.Count()
-			if v.topline > v.buf.NumLines() {
-				v.topline = v.buf.NumLines()
+			if v.topline > b.NumLines() {
+				v.topline = b.NumLines()
+			}
+			minLine := v.topline + v.effScrollMargin()
+			if minLine > b.NumLines() {
+				minLine = b.NumLines()
+			}
+			c := b.Cursor()
+			if line, _ := b.LineColAt(c.Pos); line < minLine {
+				*c = c.MoveTo(b.VisualLoc(minLine, c.Vx))
+				ks.vertical = true
 			}
 		}
-		ks.count = 0
+		ks.ClearCounts()
 	}, "<C-e>")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			b := v.buf
 			v.topline -= ks.Count()
 			if v.topline < 0 {
 				v.topline = 0
 			}
+			maxLine := v.topline + v.height - 1 - v.effScrollMargin()
+			if maxLine < 0 {
+				maxLine = 0
+			}
+			c := b.Cursor()
+			if line, _ := b.LineColAt(c.Pos); line > maxLine {
+				*c = c.MoveTo(b.VisualLoc(maxLine, c.Vx))
+				ks.vertical = true
+			}
 		}
-		ks.count = 0
+		ks.ClearCounts()
 	}, "<C-y>")
 
 	// m<char>: set mark
@@ -1157,17 +1248,19 @@ func RegisterOperators(ks *KeyState) {
 		}, "o")
 	}
 
-	// u/U in visual mode: lowercase/uppercase selection
-	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
-		execVisualOp(ks, func(ks *KeyState, b *Buffer, start, end int) {
-			opCase(b, start, end, unicode.ToLower)
-		})
-	}, "u")
-	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
-		execVisualOp(ks, func(ks *KeyState, b *Buffer, start, end int) {
-			opCase(b, start, end, unicode.ToUpper)
-		})
-	}, "U")
+	// u/U in visual modes: lowercase/uppercase selection
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualOp(ks, "", func(ks *KeyState, b *Buffer, start, end int) {
+				opCase(b, start, end, unicode.ToLower)
+			})
+		}, "u")
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualOp(ks, "", func(ks *KeyState, b *Buffer, start, end int) {
+				opCase(b, start, end, unicode.ToUpper)
+			})
+		}, "U")
+	}
 }
 
 // paste inserts register content. If before is true, paste before cursor.
@@ -1191,7 +1284,14 @@ func paste(ks *KeyState, before bool) {
 			} else {
 				pos := c.LineEnd(b).Pos + 1
 				if pos > b.Len() {
-					b.Insert(b.Len(), append([]byte("\n"), content...))
+					// Pasting below the last line of a file with no trailing
+					// newline: prepend a newline and drop the content's
+					// trailing one to preserve the missing final newline.
+					data := append([]byte("\n"), content...)
+					if data[len(data)-1] == '\n' {
+						data = data[:len(data)-1]
+					}
+					b.Insert(b.Len(), data)
 				} else {
 					b.Insert(pos, content)
 				}
@@ -1231,6 +1331,7 @@ func visualPaste(ks *KeyState) {
 		b.cursors[i].HasSel = false
 	}
 	ks.SetMode(ModeNormal)
+	ks.ResetAction()
 }
 
 // opCase changes the case of characters in [start, end) using transform.

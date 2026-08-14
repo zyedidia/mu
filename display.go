@@ -69,9 +69,13 @@ func (v *Visualizer) Special(r rune) bool {
 // RenderTracker provides callbacks for the rendering loop. Draw is called for
 // each character to be displayed. Track is called for each byte offset to map
 // between buffer and visual positions; returning true aborts rendering.
+// FillTo extends end-of-line fills (cursorline/selection backgrounds) past
+// the render width, for views that are horizontally scrolled: the visible
+// columns are [stcol, stcol+width), so fills must reach stcol+width.
 type RenderTracker struct {
-	Draw  func(bx, by, vx, vy int, mainc rune, combc []rune, style Style)
-	Track func(off, bx, by, vx, vy int) bool
+	Draw   func(bx, by, vx, vy int, mainc rune, combc []rune, style Style)
+	Track  func(off, bx, by, vx, vy int) bool
+	FillTo int
 }
 
 // RenderForward renders the buffer starting from byte offset 'off' into a box
@@ -79,6 +83,11 @@ type RenderTracker struct {
 // rendering, and th provides syntax highlighting styles.
 func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, height, off int, softwrap, wordwrap bool, th *Theme) {
 	var vx, x, y int
+
+	fillLimit := width
+	if tracker.FillTo > width {
+		fillLimit = tracker.FillTo
+	}
 
 	// Compute syntax matches for the visible range.
 	if tracker.Draw != nil && th != nil {
@@ -159,7 +168,7 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 						break
 					}
 				}
-				if x < width && hasSel {
+				if x < fillLimit && hasSel {
 					selStyle := th.Default()
 					if th.HasStyle("selection") {
 						selStyle.Bg = th.Style("selection").Bg
@@ -172,7 +181,7 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 				}
 			}
 			// Fill to end of line (for cursorline highlighting).
-			for x < width && tracker.Draw != nil {
+			for x < fillLimit && tracker.Draw != nil {
 				tracker.Draw(bx, by, x, y, ' ', nil, th.Default())
 				x++
 				vx++

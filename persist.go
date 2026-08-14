@@ -124,14 +124,22 @@ func (b *Buffer) LoadCursorPos() {
 		return
 	}
 	if len(cursors) > 0 {
-		b.cursors = cursors
-		b.cur = 0
-		// Clamp positions to buffer size.
-		for i := range b.cursors {
-			if b.cursors[i].Pos > b.Len() {
-				b.cursors[i].Pos = b.Len()
-			}
+		// Restore only the primary cursor's position. Selections and extra
+		// cursors from the previous session would otherwise come back as
+		// phantom state (highlighted regions, edits applied at old spots).
+		c := cursors[0]
+		c.Num = 0
+		c.HasSel = false
+		c.Sel = [2]int{}
+		c.Orig = [2]int{}
+		if c.Pos > b.Len() {
+			c.Pos = b.Len()
 		}
+		if c.Pos < 0 {
+			c.Pos = 0
+		}
+		b.cursors = []Cursor{c}
+		b.cur = 0
 	}
 }
 

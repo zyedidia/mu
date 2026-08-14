@@ -139,6 +139,34 @@ func (v *View) bLoc2vLoc(bl bLoc) (vl vLoc) {
 
 // --- Scrolling ---
 
+// effScrollMargin returns the vertical scroll margin clamped so that a
+// stable viewport position always exists. With a margin larger than
+// (height-1)/2 the top and bottom conditions overlap and the viewport
+// would oscillate on every relocate.
+func (v *View) effScrollMargin() int {
+	m := v.ScrollMargin
+	if max := (v.height - 1) / 2; m > max {
+		m = max
+	}
+	if m < 0 {
+		m = 0
+	}
+	return m
+}
+
+// effHScrollMargin returns the horizontal scroll margin clamped to the
+// buffer width for the same reason.
+func (v *View) effHScrollMargin() int {
+	m := v.HScrollMargin
+	if max := (v.bufferWidth() - 1) / 2; m > max {
+		m = max
+	}
+	if m < 0 {
+		m = 0
+	}
+	return m
+}
+
 // Relocate adjusts topline/stcol so that the primary cursor is visible.
 func (v *View) Relocate() {
 	c := v.buf.Cursor()
@@ -146,11 +174,12 @@ func (v *View) Relocate() {
 	bl.line, bl.col = v.buf.LineColAt(c.Pos)
 
 	// Vertical scrolling.
-	if bl.line < v.topline+v.ScrollMargin {
-		v.topline = bl.line - v.ScrollMargin
+	margin := v.effScrollMargin()
+	if bl.line < v.topline+margin {
+		v.topline = bl.line - margin
 		v.topcol = 0
-	} else if bl.line >= v.topline+v.height-v.ScrollMargin {
-		top := bl.line - v.height + 1 + v.ScrollMargin
+	} else if bl.line >= v.topline+v.height-margin {
+		top := bl.line - v.height + 1 + margin
 		maxTop := v.buf.NumLines() - v.height + 1
 		if top > maxTop {
 			top = maxTop
@@ -164,16 +193,27 @@ func (v *View) Relocate() {
 
 	// Horizontal scrolling (only when softwrap is off).
 	if !v.SoftWrap {
+		hmargin := v.effHScrollMargin()
 		vl := v.bLoc2vLoc(bl)
-		if vl.col < v.stcol+v.HScrollMargin {
-			v.stcol = vl.col - v.HScrollMargin
+		if vl.col < v.stcol+hmargin {
+			v.stcol = vl.col - hmargin
 			if v.stcol < 0 {
 				v.stcol = 0
 			}
-		} else if vl.col >= v.stcol+v.bufferWidth()-v.HScrollMargin {
-			v.stcol = vl.col - v.bufferWidth() + 1 + v.HScrollMargin
+		} else if vl.col >= v.stcol+v.bufferWidth()-hmargin {
+			v.stcol = vl.col - v.bufferWidth() + 1 + hmargin
 		}
 	}
+}
+
+// diagGutterStyle returns the theme style for a diagnostic gutter marker:
+// gutter-error / gutter-warning when defined (all shipped themes define
+// them), falling back to the bare error / warning groups.
+func diagGutterStyle(th *Theme, t DiagnosticType) Style {
+	if name := "gutter-" + t.String(); th.HasStyle(name) {
+		return th.Style(name)
+	}
+	return th.Style(t.String())
 }
 
 // --- Rendering ---
@@ -213,8 +253,16 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 
 	var curOff int
 
+	// When horizontally scrolled, end-of-line fills must reach the right
+	// edge of the visible window (stcol+width), not just column `width`.
+	fillTo := 0
+	if !v.SoftWrap {
+		fillTo = v.stcol + v.bufferWidth()
+	}
+
 	stpos := v.buf.OffsetAt(v.topline, v.topcol)
 	v.buf.RenderForward(RenderTracker{
+		FillTo: fillTo,
 		Draw: func(bx, by, vx, vy int, mainc rune, combc []rune, style Style) {
 			sx := gutter + vx - v.stcol
 			if sx < gutter || sx >= v.width || vy >= v.height {
@@ -286,7 +334,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			style := th.Style("line-number")
 			if d, ok := v.buf.GetDiagnosticAt(l - 1); ok {
 				ch = '>'
-				style = th.Style(d.Type.String()).Add(AttrReverse)
+				style = diagGutterStyle(th, d.Type).Add(AttrReverse)
 			}
 			for x := 0; x < v.GutterWidth; x++ {
 				draw(x, i, ch, nil, style)
@@ -317,7 +365,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		}
 		if nearestAbove != nil && lines[0] > 0 {
 			if _, ok := v.buf.GetDiagnosticAt(lines[0] - 1); !ok {
-				s := th.Style(nearestAbove.Type.String()).Add(AttrReverse)
+				s := diagGutterStyle(th, nearestAbove.Type).Add(AttrReverse)
 				for x := 0; x < v.GutterWidth; x++ {
 					draw(x, 0, '^', nil, s)
 				}
@@ -325,7 +373,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		}
 		if nearestBelow != nil && botLine >= 0 {
 			if _, ok := v.buf.GetDiagnosticAt(botLine); !ok {
-				s := th.Style(nearestBelow.Type.String()).Add(AttrReverse)
+				s := diagGutterStyle(th, nearestBelow.Type).Add(AttrReverse)
 				for x := 0; x < v.GutterWidth; x++ {
 					draw(x, lastRow, 'v', nil, s)
 				}

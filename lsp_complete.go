@@ -12,11 +12,11 @@ import (
 // EditorCompletion tracks in-buffer LSP completion state.
 type EditorCompletion struct {
 	active     bool
-	candidates []string          // display labels
+	candidates []string             // display labels
 	items      []lsp.CompletionItem // full items (for insertText)
-	index      int               // -1 = none selected, 0..n-1 = selected
-	startPos   int               // byte offset where the completed word starts
-	origWord   string            // the original text before completion
+	index      int                  // -1 = none selected, 0..n-1 = selected
+	startPos   int                  // byte offset where the completed word starts
+	origWord   string               // the original text before completion
 }
 
 func (ec *EditorCompletion) reset() {
@@ -142,17 +142,21 @@ func bufferComplete(b *Buffer, prefix string) []string {
 // applyCompletion replaces the word at startPos with the current candidate.
 func (e *Editor) applyCompletion() {
 	ec := &e.completion
-	if !ec.active || ec.index < 0 || ec.index >= len(ec.items) {
+	if !ec.active || ec.index < 0 || ec.index >= len(ec.candidates) {
 		return
 	}
 
 	b := e.ActiveView().buf
-	item := ec.items[ec.index]
 
-	// Use insertText if available, otherwise label.
-	text := item.InsertText
-	if text == "" {
-		text = item.Label
+	// LSP items carry an insertText; buffer-word candidates are plain text.
+	text := ec.candidates[ec.index]
+	if ec.index < len(ec.items) {
+		item := ec.items[ec.index]
+		if item.InsertText != "" {
+			text = item.InsertText
+		} else if item.Label != "" {
+			text = item.Label
+		}
 	}
 
 	// Replace from startPos to current cursor.

@@ -30,9 +30,9 @@ type InfoBar struct {
 	completion completionState
 
 	// Command history (per prompt type: ":", "/", "?").
-	history    map[string][]string
-	histIndex  int    // -1 = editing new input, 0..n = browsing history
-	histSaved  []rune // the input being edited before browsing history
+	history   map[string][]string
+	histIndex int    // -1 = editing new input, 0..n = browsing history
+	histSaved []rune // the input being edited before browsing history
 }
 
 // NewInfoBar creates a new info bar.
@@ -110,6 +110,10 @@ func (ib *InfoBar) StartPromptIncremental(prompt string, onChange func(string), 
 	ib.callback = onDone
 	ib.onChange = onChange
 	ib.onCancel = onCancel
+	ib.completer = nil
+	ib.completion.reset()
+	ib.histIndex = -1
+	ib.histSaved = nil
 	ib.message = ""
 }
 
@@ -124,6 +128,8 @@ func (ib *InfoBar) Cancel() {
 	ib.onCancel = nil
 	ib.completer = nil
 	ib.completion.reset()
+	ib.histIndex = -1
+	ib.histSaved = nil
 	if onCancel != nil {
 		onCancel()
 	}
@@ -179,6 +185,8 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		ib.onCancel = nil
 		ib.completer = nil
 		ib.completion.reset()
+		ib.histIndex = -1
+		ib.histSaved = nil
 		if cb != nil {
 			cb(input)
 		}
@@ -291,6 +299,10 @@ func (ib *InfoBar) historyNav(dir int) {
 	}
 	ib.cursorPos = len(ib.input)
 	ib.completion.reset()
+	// Recalled input counts as an input change (incremental search).
+	if ib.onChange != nil {
+		ib.onChange(string(ib.input))
+	}
 }
 
 // tabComplete performs one step of tab completion. dir is +1 for forward

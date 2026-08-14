@@ -53,7 +53,7 @@ func applyTextObjVisual(ks *KeyState, to TextObjectDef) {
 			}
 		}
 	}
-	ks.count = 0
+	ks.ClearCounts()
 }
 
 // registerTextObject binds a text object under a prefix key (e.g. "i" or "a")
@@ -72,53 +72,135 @@ func registerTextObject(ks *KeyState, prefix string, key string, to TextObjectDe
 
 // --- Text object implementations ---
 
-func toInnerWord(b *Buffer, pos int, count int) (int, int) {
-	c := Cursor{Pos: pos}
-	start := c.WordStart(b, IsWordChar).Pos
-	end := pos
-	for i := 0; i < count; i++ {
-		ec := Cursor{Pos: end}.WordEnd(b, IsWordChar)
-		_, _, sz := b.DecodeGraphemeAt(ec.Pos)
-		end = ec.Pos + sz
+// wordClass classifies a rune for iw/aw: -1 newline (hard boundary),
+// 0 whitespace, 1 word characters, 2 other symbols. An inner-word object is
+// a maximal run of characters of one class (vim: iw on whitespace selects
+// the whitespace run; on a symbol, the symbol run).
+func wordClass(r rune) int {
+	switch {
+	case r == '\n':
+		return -1
+	case unicode.IsSpace(r):
+		return 0
+	case IsWordChar(r):
+		return 1
+	default:
+		return 2
+	}
+}
+
+// wORDClass classifies a rune for iW/aW: whitespace vs everything else.
+func wORDClass(r rune) int {
+	switch {
+	case r == '\n':
+		return -1
+	case unicode.IsSpace(r):
+		return 0
+	default:
+		return 1
+	}
+}
+
+// innerRun returns the run of same-class characters around pos. With a
+// count > 1, the range extends over the following count-1 runs.
+func innerRun(b *Buffer, pos, count int, classOf func(rune) int) (int, int) {
+	r, _, sz := b.DecodeGraphemeAt(pos)
+	if sz == 0 || r == '\n' {
+		return pos, pos
+	}
+	cls := classOf(r)
+	start := pos
+	for start > 0 {
+		pr, _, psz := b.DecodeGraphemeBefore(start)
+		if psz == 0 || classOf(pr) != cls {
+			break
+		}
+		start -= psz
+	}
+	end := pos + sz
+	for {
+		nr, _, nsz := b.DecodeGraphemeAt(end)
+		if nsz == 0 || classOf(nr) != cls {
+			break
+		}
+		end += nsz
+	}
+	for i := 1; i < count; i++ {
+		nr, _, nsz := b.DecodeGraphemeAt(end)
+		if nsz == 0 || nr == '\n' {
+			break
+		}
+		ncls := classOf(nr)
+		end += nsz
+		for {
+			r2, _, s2 := b.DecodeGraphemeAt(end)
+			if s2 == 0 || classOf(r2) != ncls {
+				break
+			}
+			end += s2
+		}
 	}
 	return start, end
+}
+
+// aroundRun is innerRun plus surrounding whitespace, following vim's aw
+// rules: on whitespace, include the following word; otherwise include
+// trailing whitespace, or leading whitespace if there is none trailing.
+func aroundRun(b *Buffer, pos, count int, classOf func(rune) int) (int, int) {
+	r, _, sz := b.DecodeGraphemeAt(pos)
+	if sz == 0 || r == '\n' {
+		return pos, pos
+	}
+	start, end := innerRun(b, pos, count, classOf)
+	if classOf(r) == 0 {
+		// On whitespace: include the following word/symbol run.
+		nr, _, _ := b.DecodeGraphemeAt(end)
+		if ncls := classOf(nr); ncls > 0 {
+			for {
+				r2, _, s2 := b.DecodeGraphemeAt(end)
+				if s2 == 0 || classOf(r2) != ncls {
+					break
+				}
+				end += s2
+			}
+		}
+		return start, end
+	}
+	trailStart := end
+	for {
+		nr, _, nsz := b.DecodeGraphemeAt(end)
+		if nsz == 0 || classOf(nr) != 0 {
+			break
+		}
+		end += nsz
+	}
+	if end == trailStart {
+		// No trailing whitespace: include leading whitespace instead.
+		for start > 0 {
+			pr, _, psz := b.DecodeGraphemeBefore(start)
+			if psz == 0 || classOf(pr) != 0 {
+				break
+			}
+			start -= psz
+		}
+	}
+	return start, end
+}
+
+func toInnerWord(b *Buffer, pos int, count int) (int, int) {
+	return innerRun(b, pos, count, wordClass)
 }
 
 func toAroundWord(b *Buffer, pos int, count int) (int, int) {
-	start, end := toInnerWord(b, pos, count)
-	// Include trailing whitespace.
-	for end < b.Len() {
-		r, _, sz := b.DecodeGraphemeAt(end)
-		if !unicode.IsSpace(r) || r == '\n' || sz == 0 {
-			break
-		}
-		end += sz
-	}
-	return start, end
+	return aroundRun(b, pos, count, wordClass)
 }
 
 func toInnerWORD(b *Buffer, pos int, count int) (int, int) {
-	c := Cursor{Pos: pos}
-	start := c.WordStart(b, IsNotSpace).Pos
-	end := pos
-	for i := 0; i < count; i++ {
-		ec := Cursor{Pos: end}.WordEnd(b, IsNotSpace)
-		_, _, sz := b.DecodeGraphemeAt(ec.Pos)
-		end = ec.Pos + sz
-	}
-	return start, end
+	return innerRun(b, pos, count, wORDClass)
 }
 
 func toAroundWORD(b *Buffer, pos int, count int) (int, int) {
-	start, end := toInnerWORD(b, pos, count)
-	for end < b.Len() {
-		r, _, sz := b.DecodeGraphemeAt(end)
-		if !unicode.IsSpace(r) || r == '\n' || sz == 0 {
-			break
-		}
-		end += sz
-	}
-	return start, end
+	return aroundRun(b, pos, count, wORDClass)
 }
 
 func makeInnerDelim(open, close rune) func(b *Buffer, pos int, count int) (int, int) {
@@ -203,46 +285,30 @@ func makeAroundDelim(open, close rune) func(b *Buffer, pos int, count int) (int,
 
 func makeInnerQuote(quote rune) func(b *Buffer, pos int, count int) (int, int) {
 	return func(b *Buffer, pos int, _ int) (int, int) {
-		// Find opening quote backward.
-		start := pos
-		found := false
-		for start > 0 {
-			r, sz := b.DecodeRuneBefore(start)
-			if r == '\n' {
+		// Vim pairs quotes from the start of the line: the 1st with the 2nd,
+		// the 3rd with the 4th, and so on. Collect quote positions on the
+		// cursor's line, then pick the pair containing (or following) pos.
+		line, _ := b.LineColAt(pos)
+		p := b.OffsetAt(line, 0)
+		var qpos []int
+		for {
+			r, _, sz := b.DecodeGraphemeAt(p)
+			if sz == 0 || r == '\n' {
 				break
 			}
-			start -= sz
 			if r == quote {
-				// start is now AT the opening quote; advance past it
-				// for the inner variant.
-				_, _, qsz := b.DecodeGraphemeAt(start)
-				start += qsz
-				found = true
-				break
+				qpos = append(qpos, p)
+			}
+			p += sz
+		}
+		for i := 0; i+1 < len(qpos); i += 2 {
+			open, close := qpos[i], qpos[i+1]
+			if pos <= close {
+				_, _, osz := b.DecodeGraphemeAt(open)
+				return open + osz, close
 			}
 		}
-		if !found {
-			return pos, pos
-		}
-		// Find closing quote forward.
-		end := pos
-		found = false
-		for end < b.Len() {
-			r, _, sz := b.DecodeGraphemeAt(end)
-			if r == '\n' {
-				break
-			}
-			if r == quote && end != start-1 {
-				// end is AT the closing quote; exclusive range, so don't advance.
-				found = true
-				break
-			}
-			end += sz
-		}
-		if !found {
-			return pos, pos
-		}
-		return start, end
+		return pos, pos
 	}
 }
 

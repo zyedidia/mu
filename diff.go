@@ -32,6 +32,18 @@ type diffPWR struct{ x, y, r int }
 // Diff returns the edits to transform 'from' into 'to'. Uses an O(ND)
 // algorithm adapted from the gonp package.
 func Diff(from, to Indexer) []DiffEdit {
+	edits, _ := DiffBounded(from, to, -1)
+	return edits
+}
+
+// DiffBounded is Diff with a budget on the search nodes explored. The
+// O(ND) algorithm allocates one node per diagonal snake, so the node count
+// grows with (delta + 2p)·p; a budget bounds both its time and memory.
+// When the budget is exhausted it returns ok=false and callers should fall
+// back to wholesale replacement. Cheap cases like large pure appends
+// (delta large, p = 0) stay within small budgets. budget < 0 means
+// unlimited.
+func DiffBounded(from, to Indexer, budget int) (edits []DiffEdit, ok bool) {
 	m, n := from.Len(), to.Len()
 
 	reverse := m >= n
@@ -71,6 +83,11 @@ func Diff(from, to Indexer) []DiffEdit {
 	}
 
 	for p := 0; ; p++ {
+		// Each round adds delta+2p+1 nodes; give up when the budget is
+		// exhausted.
+		if budget >= 0 && len(pwr)+delta+2*p+1 > budget {
+			return nil, false
+		}
 		for k := -p; k <= delta-1; k++ {
 			fp[k+offset] = snake(k, fp[k-1+offset]+1, fp[k+1+offset])
 		}
@@ -89,7 +106,7 @@ func Diff(from, to Indexer) []DiffEdit {
 		epc = append(epc, diffPoint{pwr[r].x, pwr[r].y})
 		r = pwr[r].r
 	}
-	return recordSeq(epc, reverse, from, to)
+	return recordSeq(epc, reverse, from, to), true
 }
 
 func recordSeq(epc []diffPoint, reverse bool, from, to Indexer) []DiffEdit {

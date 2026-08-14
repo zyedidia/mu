@@ -96,6 +96,11 @@ func (t *Tab) Unsplit() bool {
 	delete(t.panes, t.cur)
 	newID := node.Unsplit()
 	t.cur = newID
+	// Restore the surviving pane's own cursor: with a shared buffer it
+	// would otherwise be left wherever the closed pane was.
+	if v := t.panes[t.cur]; v != nil {
+		v.Activate()
+	}
 	t.Resize(t.w, t.h)
 	return true
 }
