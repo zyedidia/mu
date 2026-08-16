@@ -53,6 +53,10 @@ func TestExpandAlias(t *testing.T) {
 		{"w", "write"},
 		{"w foo.txt", "write foo.txt"},
 		{"wq", "write; quit"},
+		{"wa", "writeall"},
+		{"wqa", "writeall; quitall"},
+		{"wqa!", "writeall; quitall!"},
+		{"xa", "writeall; quitall"},
 		{"e foo.go", "edit foo.go"},
 		{"unknown", "unknown"},
 		{"quit", "quit"},
@@ -115,6 +119,125 @@ func TestCmdUnknown(t *testing.T) {
 	ed.RunCommand("nonexistent")
 	if !ed.infobar.msgErr {
 		t.Fatal("unknown command should show error")
+	}
+}
+
+// --- :wa / :wqa ---
+
+// setupWriteAllTest isolates config/data dirs and returns an editor whose
+// default buffer and a second tab's buffer are both modified.
+func setupWriteAllTest(t *testing.T) (*Editor, string, string) {
+	t.Helper()
+	configDirOverride = t.TempDir()
+	dataDirOverride = t.TempDir()
+	t.Cleanup(func() {
+		configDirOverride = ""
+		dataDirOverride = ""
+	})
+	ed := newTestEditor()
+	path1 := ed.ActiveView().buf.Path
+	os.Remove(path1)
+	t.Cleanup(func() { os.Remove(path1) })
+	ed.ActiveView().buf.Insert(0, []byte("one\n"))
+
+	path2 := filepath.Join(t.TempDir(), "two.txt")
+	os.WriteFile(path2, []byte("old\n"), 0644)
+	if err := ed.OpenFileInTab(path2); err != nil {
+		t.Fatal(err)
+	}
+	ed.ActiveView().buf.Insert(0, []byte("two "))
+	return ed, path1, path2
+}
+
+func TestCmdWriteAll(t *testing.T) {
+	ed, path1, path2 := setupWriteAllTest(t)
+
+	ed.RunCommand("wa")
+	if ed.infobar.msgErr {
+		t.Fatalf("wa error: %s", ed.infobar.message)
+	}
+	if data, _ := os.ReadFile(path1); string(data) != "one\n" {
+		t.Fatalf("path1 = %q, want %q", data, "one\n")
+	}
+	if data, _ := os.ReadFile(path2); string(data) != "two old\n" {
+		t.Fatalf("path2 = %q, want %q", data, "two old\n")
+	}
+	for _, tab := range ed.tabs {
+		for _, v := range tab.panes {
+			if v.buf.Modified() {
+				t.Fatalf("buffer %q still modified after wa", v.buf.Path)
+			}
+		}
+	}
+	if !ed.running {
+		t.Fatal("wa must not quit the editor")
+	}
+	if ed.infobar.message != "2 buffers written" {
+		t.Fatalf("message = %q, want %q", ed.infobar.message, "2 buffers written")
+	}
+}
+
+func TestCmdWqa(t *testing.T) {
+	ed, path1, path2 := setupWriteAllTest(t)
+
+	ed.RunCommand("wqa")
+	if ed.running {
+		t.Fatal("wqa should quit the editor")
+	}
+	if data, _ := os.ReadFile(path1); string(data) != "one\n" {
+		t.Fatalf("path1 = %q, want %q", data, "one\n")
+	}
+	if data, _ := os.ReadFile(path2); string(data) != "two old\n" {
+		t.Fatalf("path2 = %q, want %q", data, "two old\n")
+	}
+}
+
+func TestCmdXaAlias(t *testing.T) {
+	ed, _, _ := setupWriteAllTest(t)
+
+	ed.RunCommand("xa")
+	if ed.running {
+		t.Fatal("xa should quit the editor")
+	}
+}
+
+func TestCmdWqaRefusesOnUnnamed(t *testing.T) {
+	// A modified buffer without a file name can't be written: wqa writes
+	// the others, reports the error, and refuses to quit (as in vim).
+	ed, path1, _ := setupWriteAllTest(t)
+	ed.RunCommand("tabnew")
+	ed.ActiveView().buf.Insert(0, []byte("scratch"))
+
+	ed.RunCommand("wqa")
+	if ed.running == false {
+		t.Fatal("wqa must not quit while a buffer cannot be written")
+	}
+	if !ed.infobar.msgErr {
+		t.Fatal("wqa should report the unwritable buffer")
+	}
+	// The writable buffers were still saved.
+	if data, _ := os.ReadFile(path1); string(data) != "one\n" {
+		t.Fatalf("path1 = %q, want %q (written despite the error)", data, "one\n")
+	}
+}
+
+func TestCmdWriteAllSkipsUnmodified(t *testing.T) {
+	configDirOverride = t.TempDir()
+	dataDirOverride = t.TempDir()
+	t.Cleanup(func() {
+		configDirOverride = ""
+		dataDirOverride = ""
+	})
+	ed := newTestEditor()
+	path := ed.ActiveView().buf.Path
+	os.Remove(path)
+
+	ed.RunCommand("wa")
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("wa should not write unmodified buffers")
+	}
+	if ed.infobar.msgErr {
+		t.Fatalf("wa error: %s", ed.infobar.message)
 	}
 }
 

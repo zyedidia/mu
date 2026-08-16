@@ -22,6 +22,7 @@ var editorCommands = []CommandDef{
 	{"quitall", cmdQuitAll, "quitall: close all panes and tabs"},
 	{"quitall!", cmdForceQuitAll, "quitall!: close all without saving"},
 	{"write", cmdWrite, "write [filename]: save the buffer"},
+	{"writeall", cmdWriteAll, "writeall: save all modified buffers"},
 	{"edit", cmdEdit, "edit <filename>: open a file"},
 	{"set", cmdSet, "set <name> [value]: get or set an option"},
 	{"substitute", cmdSubstitute, "substitute <pattern> <replacement>: replace all matches in buffer"},
@@ -46,18 +47,23 @@ var editorCommands = []CommandDef{
 
 // vimAliases maps vim-style short commands to TCL command strings.
 var vimAliases = map[string]string{
-	"q":   "quit",
-	"q!":  "quit!",
-	"qa":  "quitall",
-	"qa!": "quitall!",
-	"w":   "write",
-	"wq":  "write; quit",
-	"x":   "write; quit",
-	"e":   "edit",
-	"s":   "substitute",
-	"vs":  "vsplit",
-	"sp":  "split",
-	"vsp": "vsplit",
+	"q":    "quit",
+	"q!":   "quit!",
+	"qa":   "quitall",
+	"qa!":  "quitall!",
+	"w":    "write",
+	"wa":   "writeall",
+	"wq":   "write; quit",
+	"x":    "write; quit",
+	"wqa":  "writeall; quitall",
+	"wqa!": "writeall; quitall!",
+	"xa":   "writeall; quitall",
+	"xa!":  "writeall; quitall!",
+	"e":    "edit",
+	"s":    "substitute",
+	"vs":   "vsplit",
+	"sp":   "split",
+	"vsp":  "vsplit",
 }
 
 // RunCommand parses and executes an ex command string. It expands vim
@@ -174,6 +180,51 @@ func cmdWrite(e *Editor, args []string) error {
 		b.SaveUndoHistory()
 	}
 	e.infobar.Message(fmt.Sprintf("\"%s\" written", b.Path))
+	return nil
+}
+
+// cmdWriteAll writes every modified buffer that has a file name (vim :wa).
+// Buffers that cannot be written (no name, read-only, I/O error) are
+// reported but don't stop the others from being written; the returned error
+// makes a compound like "writeall; quitall" (:wqa) refuse to quit.
+func cmdWriteAll(e *Editor, args []string) error {
+	saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo")
+	seen := make(map[*Buffer]bool)
+	written := 0
+	var firstErr error
+	for _, t := range e.tabs {
+		for _, v := range t.panes {
+			b := v.buf
+			if seen[b] {
+				continue
+			}
+			seen[b] = true
+			if !b.Modified() {
+				continue
+			}
+			if err := b.Save(); err != nil {
+				if firstErr == nil {
+					if b.Path != "" {
+						err = fmt.Errorf("%s: %v", b.Path, err)
+					}
+					firstErr = err
+				}
+				continue
+			}
+			if saveUndo {
+				b.SaveUndoHistory()
+			}
+			written++
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	if written == 1 {
+		e.infobar.Message("1 buffer written")
+	} else if written > 1 {
+		e.infobar.Message(fmt.Sprintf("%d buffers written", written))
+	}
 	return nil
 }
 
