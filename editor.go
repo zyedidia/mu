@@ -603,7 +603,7 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 			buf.LoadUndoHistory()
 		}
 		if b, ok := GetOptBool(e.config.opts.top, "savecursor"); !ok || b {
-			buf.LoadCursorPos()
+			v.LoadCursorPos()
 		}
 	}
 
@@ -689,7 +689,7 @@ func (e *Editor) persistState() {
 				b.SaveUndoHistory()
 			}
 			if saveCursor && !b.Modified() {
-				b.SaveCursorPos()
+				v.SaveCursorPos()
 			}
 		}
 	}

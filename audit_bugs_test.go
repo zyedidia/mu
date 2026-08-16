@@ -210,10 +210,10 @@ func TestLoadCursorPosSanitized(t *testing.T) {
 	b.cursors[0].HasSel = true
 	b.cursors[0].Sel = [2]int{2, 9}
 	b.cursors[0].Pos = 9
-	b.SaveCursorPos()
+	NewView(b, 4).SaveCursorPos()
 
 	nb, _ := NewBuffer([]byte("hi\n"), path) // shorter file
-	nb.LoadCursorPos()
+	NewView(nb, 4).LoadCursorPos()
 	if nb.NumCursors() != 1 {
 		t.Fatalf("restored %d cursors, want 1", nb.NumCursors())
 	}
