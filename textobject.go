@@ -50,6 +50,14 @@ func applyTextObjVisual(ks *KeyState, to TextObjectDef) {
 			b.cursors[i] = b.cursors[i].SelectTo(end)
 			if ks.ModeID() == ModeVisualLine {
 				adjustVisualLine(b, &b.cursors[i])
+			} else if ks.ModeID() == ModeVisualBlock {
+				// Keep the cursor on the object's last character so the
+				// block corner stays on the object's final line.
+				cc := &b.cursors[i]
+				if _, _, sz := b.DecodeGraphemeBefore(cc.Pos); sz > 0 {
+					cc.Pos -= sz
+				}
+				*cc = cc.VimClamp(b)
 			}
 		}
 	}
@@ -62,12 +70,11 @@ func registerTextObject(ks *KeyState, prefix string, key string, to TextObjectDe
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
 		execTextObjOp(ks, to)
 	}, prefix, key)
-	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
-		applyTextObjVisual(ks, to)
-	}, prefix, key)
-	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
-		applyTextObjVisual(ks, to)
-	}, prefix, key)
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			applyTextObjVisual(ks, to)
+		}, prefix, key)
+	}
 }
 
 // --- Text object implementations ---
@@ -409,5 +416,6 @@ func RegisterTextObjects(ks *KeyState) {
 func SetupBindings(ks *KeyState) {
 	RegisterMotions(ks)
 	RegisterOperators(ks)
+	RegisterVisualBlock(ks)
 	RegisterTextObjects(ks)
 }

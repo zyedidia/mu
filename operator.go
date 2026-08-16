@@ -741,7 +741,7 @@ func RegisterOperators(ks *KeyState) {
 	}, "V")
 
 	// Escape in visual modes: back to normal
-	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
 		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
 			b := ks.Buf()
 			for i := range b.cursors {
@@ -768,6 +768,12 @@ func RegisterOperators(ks *KeyState) {
 		// insert-session undo event, then set the barrier for the next edit.
 		cleanAutoindent(b)
 		b.UndoBarrier()
+		// A visual-block insert spawned one cursor per block line; collapse
+		// back to the primary cursor (the block's top line).
+		if ks.blockInsert {
+			ks.blockInsert = false
+			b.RemoveCursors()
+		}
 		c := b.Cursor()
 		if c.Pos > 0 {
 			_, _, sz := b.DecodeGraphemeBefore(c.Pos)
@@ -1212,7 +1218,8 @@ func RegisterOperators(ks *KeyState) {
 	}, "<C-u>")
 
 	// o in visual mode: swap cursor to other end of selection
-	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+	// (in visual-block mode this swaps to the diagonally opposite corner)
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
 		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
 			b := ks.Buf()
 			for i := range b.cursors {
@@ -1273,6 +1280,26 @@ func paste(ks *KeyState, before bool) {
 		return
 	}
 	count := ks.Count()
+
+	if reg.Block {
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			line, _ := b.LineColAt(c.Pos)
+			vcol := b.VisualCol(c.Pos)
+			if !before {
+				// Paste after: insert one cell past the cursor character.
+				if r, _, sz := b.DecodeGraphemeAt(c.Pos); sz > 0 && r != '\n' {
+					_, e := vcolSpan(b, c.Pos)
+					vcol = e + 1
+				}
+			}
+			pos := insertBlockAt(b, line, vcol, reg, count)
+			b.cursors[i] = b.cursors[i].MoveTo(pos).VimClamp(b)
+		}
+		ks.ResetAction()
+		return
+	}
+
 	content := bytes.Repeat(reg.Content, count)
 
 	for i := 0; i < b.NumCursors(); i++ {

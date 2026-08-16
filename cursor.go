@@ -13,6 +13,13 @@ type Cursor struct {
 	Sel    [2]int // current selection range [start, end)
 	Vx     int    // desired visual column for vertical movement
 	Num    int    // cursor index in the buffer's cursor list
+
+	// BlockSel marks the selection as a visual-block rectangle between the
+	// corners Orig[0] and Pos. Sel still holds the byte span between the
+	// corners, but rendering and operators use the rectangle instead.
+	BlockSel bool
+	// BlockEOL extends the block's right edge to the end of each line ($).
+	BlockEOL bool
 }
 
 // IsWordChar returns true for characters that are part of a "word" in vim's

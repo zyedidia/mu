@@ -98,7 +98,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
 		case ModeOperatorPending:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
-		case ModeVisual, ModeVisualLine:
+		case ModeVisual, ModeVisualLine, ModeVisualBlock:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
 		default:
 			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)

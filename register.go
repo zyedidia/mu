@@ -15,6 +15,12 @@ const (
 type Register struct {
 	Content  []byte
 	Linewise bool // if true, paste inserts on a new line
+	// Block marks blockwise-visual content: Content holds one row per
+	// block line (joined with '\n') and paste inserts them as a rectangle.
+	Block bool
+	// BlockWidth is the display width of the block, used to pad rows when
+	// pasting with a count.
+	BlockWidth int
 }
 
 // RegisterSet manages all vim registers.
@@ -54,12 +60,52 @@ func (rs *RegisterSet) Set(id RegisterID, content []byte, linewise bool) {
 		if r.Linewise && (len(r.Content) == 0 || r.Content[len(r.Content)-1] != '\n') {
 			r.Content = append(r.Content, '\n')
 		}
+		// Appending charwise/linewise content converts a block register.
+		r.Block = false
+		r.BlockWidth = 0
 		rs.regs[lower] = r
 		return
 	}
 	rs.regs[id] = Register{
 		Content:  content,
 		Linewise: linewise,
+	}
+}
+
+// SetBlock writes blockwise content to a register. Uppercase A-Z appends the
+// rows as additional block rows to the corresponding lowercase register.
+func (rs *RegisterSet) SetBlock(id RegisterID, content []byte, width int) {
+	if id == RegBlackhole {
+		return
+	}
+	if id >= 'A' && id <= 'Z' {
+		lower := RegisterID(id - 'A' + 'a')
+		r := rs.regs[lower]
+		if len(r.Content) > 0 {
+			r.Content = append(r.Content, '\n')
+		}
+		r.Content = append(r.Content, content...)
+		r.Linewise = false
+		r.Block = true
+		if width > r.BlockWidth {
+			r.BlockWidth = width
+		}
+		rs.regs[lower] = r
+		return
+	}
+	rs.regs[id] = Register{
+		Content:    content,
+		Block:      true,
+		BlockWidth: width,
+	}
+}
+
+// SetDefaultBlock writes blockwise content to the unnamed register and also
+// updates the yank register if isYank is true.
+func (rs *RegisterSet) SetDefaultBlock(content []byte, width int, isYank bool) {
+	rs.SetBlock(RegDefault, content, width)
+	if isYank {
+		rs.SetBlock(RegYank, content, width)
 	}
 }
 

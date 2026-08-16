@@ -9,6 +9,7 @@ const (
 	ModeReplace         ModeID = iota
 	ModeVisual          ModeID = iota
 	ModeVisualLine      ModeID = iota
+	ModeVisualBlock     ModeID = iota
 	ModeOperatorPending ModeID = iota
 	ModeCommand         ModeID = iota
 )
@@ -58,6 +59,12 @@ func InitModes() map[ModeID]*Mode {
 		ModeVisualLine: {
 			ID:       ModeVisualLine,
 			Name:     "V-LINE",
+			Bindings: NewBindingTrie(),
+			IsVisual: true,
+		},
+		ModeVisualBlock: {
+			ID:       ModeVisualBlock,
+			Name:     "V-BLOCK",
 			Bindings: NewBindingTrie(),
 			IsVisual: true,
 		},

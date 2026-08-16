@@ -99,6 +99,17 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		b.HighlightRange(off, end)
 	}
 
+	// Visual-block selections highlight a rectangle of visual columns
+	// rather than a byte range; precompute the rectangles.
+	var blockSels []blockRect
+	if tracker.Draw != nil {
+		for _, cur := range b.cursors {
+			if cur.HasSelection() && cur.BlockSel {
+				blockSels = append(blockSels, blockRectFor(b, cur))
+			}
+		}
+	}
+
 	newline := func() bool {
 		x = 0
 		y++
@@ -114,13 +125,29 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 				}
 			}
 			// Selection overlay.
+			selected := false
 			for _, cur := range b.cursors {
-				if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {
-					if th.HasStyle("selection") {
-						style.Bg = th.Style("selection").Bg
-					} else {
-						style = th.Default().Add(AttrReverse)
+				if cur.HasSelection() && !cur.BlockSel && off >= cur.Sel[0] && off < cur.Sel[1] {
+					selected = true
+					break
+				}
+			}
+			if !selected {
+				// Block selections cover cells whose visual columns
+				// intersect the rectangle.
+				for _, bs := range blockSels {
+					if by >= bs.top && by <= bs.bot &&
+						vx+rwidth-1 >= bs.left && (bs.toEOL || vx <= bs.right) {
+						selected = true
+						break
 					}
+				}
+			}
+			if selected {
+				if th.HasStyle("selection") {
+					style.Bg = th.Style("selection").Bg
+				} else {
+					style = th.Default().Add(AttrReverse)
 				}
 			}
 			tracker.Draw(bx, by, x, y, c, combc, style)
@@ -163,7 +190,7 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 			if tracker.Draw != nil {
 				hasSel := false
 				for _, cur := range b.cursors {
-					if cur.HasSelection() && off >= cur.Sel[0] && off < cur.Sel[1] {
+					if cur.HasSelection() && !cur.BlockSel && off >= cur.Sel[0] && off < cur.Sel[1] {
 						hasSel = true
 						break
 					}

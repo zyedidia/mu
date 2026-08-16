@@ -39,9 +39,23 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 		}
 		newPos = clamp(newPos, 0, b.Len())
 		if selecting {
-			// In charwise visual mode the cursor cannot rest on a line's
-			// newline (vim: v$ selects up to the last character).
-			if ks.ModeID() == ModeVisual {
+			blockEOL := false
+			if ks.ModeID() == ModeVisualBlock {
+				// $ pins the block's right edge to the end of each line;
+				// any other horizontal motion unpins it.
+				blockEOL = c.BlockEOL
+				if m.Name == "$" {
+					blockEOL = true
+				} else if !m.Vertical {
+					blockEOL = false
+				}
+				if blockEOL && m.Vertical {
+					newPos = (Cursor{Pos: newPos}).LineEnd(b).Pos
+				}
+			}
+			// In charwise and block visual mode the cursor cannot rest on a
+			// line's newline (vim: v$ selects up to the last character).
+			if ks.ModeID() == ModeVisual || ks.ModeID() == ModeVisualBlock {
 				newPos = (Cursor{Pos: newPos}).VimClamp(b).Pos
 			}
 			b.cursors[i] = c.SelectTo(newPos)
@@ -49,6 +63,10 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 				adjustVisualChar(b, &b.cursors[i])
 			} else if ks.ModeID() == ModeVisualLine {
 				adjustVisualLine(b, &b.cursors[i])
+			} else if ks.ModeID() == ModeVisualBlock {
+				adjustVisualChar(b, &b.cursors[i])
+				b.cursors[i].BlockSel = true
+				b.cursors[i].BlockEOL = blockEOL
 			}
 		} else {
 			b.cursors[i] = c.MoveTo(newPos)
@@ -195,18 +213,17 @@ func lineRange(b *Buffer, line, count int) (int, int) {
 
 // --- Registration helpers ---
 
-// registerMotion binds a motion in normal, visual, visual-line, and
-// operator-pending modes.
+// registerMotion binds a motion in normal, visual, visual-line, visual-block,
+// and operator-pending modes.
 func registerMotion(ks *KeyState, keys []string, m MotionDef) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		applyMotion(ks, m, false)
 	}, keys...)
-	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
-		applyMotion(ks, m, true)
-	}, keys...)
-	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
-		applyMotion(ks, m, true)
-	}, keys...)
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			applyMotion(ks, m, true)
+		}, keys...)
+	}
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
 		execMotionOp(ks, m)
 	}, keys...)
@@ -235,14 +252,14 @@ func registerCharMotion(ks *KeyState, key string, fn func(b *Buffer, c Cursor, c
 			}
 			if ks.Pending() != nil {
 				execMotionOp(ks, m)
-			} else if ks.ModeID() == ModeVisual || ks.ModeID() == ModeVisualLine {
+			} else if ks.Mode().IsVisual {
 				applyMotion(ks, m, true)
 			} else {
 				applyMotion(ks, m, false)
 			}
 		})
 	}
-	for _, mode := range []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeOperatorPending} {
+	for _, mode := range []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeVisualBlock, ModeOperatorPending} {
 		ks.modes[mode].Bindings.Bind(handler, key)
 	}
 }
@@ -581,8 +598,8 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionFirstNonBlank})
 	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{KeyHome}, MotionDef{Fn: motionBOL})
-	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL})
-	registerMotion(ks, []string{KeyEnd}, MotionDef{Fn: motionEOL})
+	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL, Name: "$"})
+	registerMotion(ks, []string{KeyEnd}, MotionDef{Fn: motionEOL, Name: "$"})
 
 	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop, Flags: Linewise})
 	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom, Flags: Linewise})

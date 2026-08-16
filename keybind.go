@@ -133,6 +133,11 @@ type KeyState struct {
 	// the affected range has no trailing newline (last line of the file).
 	forceLinewise bool
 
+	// blockInsert is set while a visual-block insert (I/A/c) is active: one
+	// cursor was spawned per block line, and leaving insert mode collapses
+	// them back to the primary cursor.
+	blockInsert bool
+
 	// charWait is set when an action needs the next keystroke as an argument
 	// (e.g. f, t, r). The function is called with the next key.
 	charWait func(ks *KeyState, ch string)
@@ -349,7 +354,7 @@ func (ks *KeyState) HandleKey(key string) {
 
 	// Try register prefix (in normal and visual modes, before any trie keys).
 	if len(ks.keys) == 0 && key == "\"" && ks.register == 0 &&
-		(ks.mode == ModeNormal || ks.mode == ModeVisual || ks.mode == ModeVisualLine) {
+		(ks.mode == ModeNormal || ks.modes[ks.mode].IsVisual) {
 		ks.stashCount()
 		ks.regWait = true
 		return
