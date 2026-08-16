@@ -314,6 +314,12 @@ func (e *Editor) CloseTab() {
 		return
 	}
 	closed := e.tabs[e.curtab]
+	// Sync the focused pane's cursor into its view before discarding, so
+	// the state saved by releaseViewBuffer is current. Inactive panes
+	// already keep theirs in savedCursor.
+	if av := closed.ActiveView(); av != nil {
+		av.Deactivate()
+	}
 	e.tabs = append(e.tabs[:e.curtab], e.tabs[e.curtab+1:]...)
 	if e.curtab >= len(e.tabs) {
 		e.curtab = len(e.tabs) - 1
@@ -356,6 +362,12 @@ func (e *Editor) ClosePane() {
 		return
 	}
 	removed := t.ActiveView()
+	if removed != nil {
+		// Sync the cursor into the view before Unsplit hands the buffer's
+		// cursor to the surviving pane, so releaseViewBuffer saves the
+		// closed pane's own position.
+		removed.Deactivate()
+	}
 	if !t.Unsplit() {
 		e.CloseTab()
 		return
@@ -475,19 +487,42 @@ func (e *Editor) showView(v *View) {
 	}
 	t := e.ActiveTab()
 	old := t.panes[t.cur]
+	if old != nil {
+		// The replaced view was the focused pane: sync its cursor so
+		// releaseViewBuffer saves its state.
+		old.Deactivate()
+	}
 	t.panes[t.cur] = v
 	t.Resize(t.w, t.h)
 	e.syncActiveBuffer()
 	e.releaseViewBuffer(old)
 }
 
-// releaseViewBuffer stops per-buffer background state (file watcher, LSP
-// document) for a view's buffer once no pane shows it anymore. Call after
-// the view has been removed from all tabs.
+// saveViewState persists a discarded view's state (undo history and
+// cursor/viewport), as persistState does at exit, so closing a pane or tab
+// mid-session doesn't lose its position. The view's own cursor is read from
+// savedCursor; close sites Deactivate a focused view before discarding it.
+func (e *Editor) saveViewState(v *View) {
+	if v == nil || v.buf.Path == "" {
+		return
+	}
+	if saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo"); saveUndo {
+		v.buf.SaveUndoHistory()
+	}
+	if saveCursor, _ := GetOptBool(e.config.opts.top, "savecursor"); saveCursor && !v.buf.Modified() {
+		v.SaveInactiveCursorPos()
+	}
+}
+
+// releaseViewBuffer persists a discarded view's state, then stops
+// per-buffer background state (file watcher, LSP document) for its buffer
+// once no pane shows it anymore. Call after the view has been removed from
+// all tabs.
 func (e *Editor) releaseViewBuffer(v *View) {
 	if v == nil {
 		return
 	}
+	e.saveViewState(v)
 	b := v.buf
 	for _, t := range e.tabs {
 		for _, p := range t.panes {
@@ -689,7 +724,13 @@ func (e *Editor) persistState() {
 				b.SaveUndoHistory()
 			}
 			if saveCursor && !b.Modified() {
-				v.SaveCursorPos()
+				// A tab's focused pane owns the buffer's live cursor;
+				// other panes keep theirs in savedCursor.
+				if v == t.ActiveView() {
+					v.SaveCursorPos()
+				} else {
+					v.SaveInactiveCursorPos()
+				}
 			}
 		}
 	}

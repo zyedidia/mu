@@ -164,6 +164,161 @@ func TestPersistViewportRelocateStable(t *testing.T) {
 	}
 }
 
+// --- Save-on-close ---
+
+// setupCloseTest isolates config and data dirs and returns a test editor
+// plus a second file on disk.
+func setupCloseTest(t *testing.T, content string) (*Editor, string) {
+	t.Helper()
+	configDirOverride = t.TempDir()
+	dataDirOverride = t.TempDir()
+	t.Cleanup(func() {
+		configDirOverride = ""
+		dataDirOverride = ""
+	})
+	ed := newTestEditor()
+	path := filepath.Join(t.TempDir(), "two.txt")
+	os.WriteFile(path, []byte(content), 0644)
+	return ed, path
+}
+
+// loadSaved reads the persisted state for path into a fresh buffer/view.
+func loadSaved(t *testing.T, path, content string) (*Buffer, *View) {
+	t.Helper()
+	b, err := NewBuffer([]byte(content), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := NewView(b, 4)
+	v.LoadCursorPos()
+	return b, v
+}
+
+func cursorFileExists(path string) bool {
+	_, err := os.Stat(filepath.Join(dataDir(), escapePath(path)+".cursor"))
+	return err == nil
+}
+
+func TestSaveOnClosePane(t *testing.T) {
+	content := "aaaa\nbbbb\ncccc\ndddd\n"
+	ed, path := setupCloseTest(t, content)
+
+	ed.VSplit([]string{path})
+	v := ed.ActiveView()
+	if v.buf.Path != path {
+		t.Fatalf("active view path = %q, want %q", v.buf.Path, path)
+	}
+	*v.buf.Cursor() = v.buf.Cursor().MoveTo(10)
+	v.topline = 1
+
+	ed.ClosePane()
+	if !cursorFileExists(path) {
+		t.Fatal("closing the pane did not persist its state")
+	}
+	b2, v2 := loadSaved(t, path, content)
+	if b2.Cursor().Pos != 10 {
+		t.Fatalf("restored cursor = %d, want 10", b2.Cursor().Pos)
+	}
+	if v2.topline != 1 {
+		t.Fatalf("restored topline = %d, want 1", v2.topline)
+	}
+}
+
+func TestSaveOnCloseTab(t *testing.T) {
+	content := "aaaa\nbbbb\ncccc\n"
+	ed, path := setupCloseTest(t, content)
+
+	if err := ed.OpenFileInTab(path); err != nil {
+		t.Fatal(err)
+	}
+	v := ed.ActiveView()
+	*v.buf.Cursor() = v.buf.Cursor().MoveTo(7)
+	v.topline = 1
+
+	ed.CloseTab()
+	if !cursorFileExists(path) {
+		t.Fatal("closing the tab did not persist its state")
+	}
+	b2, v2 := loadSaved(t, path, content)
+	if b2.Cursor().Pos != 7 || v2.topline != 1 {
+		t.Fatalf("restored (pos,topline) = (%d,%d), want (7,1)", b2.Cursor().Pos, v2.topline)
+	}
+}
+
+func TestSaveOnEditReplace(t *testing.T) {
+	ed, path2 := setupCloseTest(t, "other\n")
+
+	// Give the initial buffer content and a position, unmodified.
+	v := ed.ActiveView()
+	b := v.buf
+	path1 := b.Path
+	b.text.Insert(0, []byte("aaaa\nbbbb\ncccc\n"))
+	b.markUnmodified()
+	*b.Cursor() = b.Cursor().MoveTo(7)
+	v.topline = 1
+
+	// :e replaces the pane's view; the old file's state is saved.
+	if err := ed.OpenFile(path2); err != nil {
+		t.Fatal(err)
+	}
+	if !cursorFileExists(path1) {
+		t.Fatal(":e did not persist the replaced buffer's state")
+	}
+	b2, v2 := loadSaved(t, path1, "aaaa\nbbbb\ncccc\n")
+	if b2.Cursor().Pos != 7 || v2.topline != 1 {
+		t.Fatalf("restored (pos,topline) = (%d,%d), want (7,1)", b2.Cursor().Pos, v2.topline)
+	}
+}
+
+func TestSaveOnCloseSharedBuffer(t *testing.T) {
+	// Closing one of two panes showing the same buffer saves the CLOSED
+	// pane's cursor, even though Unsplit hands the buffer's cursor back to
+	// the survivor.
+	ed, _ := setupCloseTest(t, "")
+	v := ed.ActiveView()
+	b := v.buf
+	path := b.Path
+	b.text.Insert(0, []byte("aaaa\nbbbb\ncccc\n"))
+	b.markUnmodified()
+	*b.Cursor() = b.Cursor().MoveTo(5) // pane A's cursor
+
+	ed.VSplit(nil) // pane B, same buffer, now focused
+	*b.Cursor() = b.Cursor().MoveTo(10)
+
+	ed.ClosePane() // closes pane B
+	if b.Cursor().Pos != 5 {
+		t.Fatalf("survivor cursor = %d, want 5 (its own)", b.Cursor().Pos)
+	}
+	b2, _ := loadSaved(t, path, "aaaa\nbbbb\ncccc\n")
+	if b2.Cursor().Pos != 10 {
+		t.Fatalf("saved cursor = %d, want 10 (the closed pane's)", b2.Cursor().Pos)
+	}
+}
+
+func TestSaveOnCloseModifiedSkipped(t *testing.T) {
+	ed, path := setupCloseTest(t, "hello\n")
+
+	ed.VSplit([]string{path})
+	v := ed.ActiveView()
+	v.buf.Insert(0, []byte("edit")) // modified buffer
+
+	ed.ClosePane()
+	if cursorFileExists(path) {
+		t.Fatal("modified buffer's cursor state should not be saved")
+	}
+}
+
+func TestSaveOnCloseDisabled(t *testing.T) {
+	ed, path := setupCloseTest(t, "hello\n")
+	ed.config.opts.top["savecursor"] = false
+
+	ed.VSplit([]string{path})
+	ed.ClosePane()
+	if cursorFileExists(path) {
+		t.Fatal("savecursor=false must disable save-on-close")
+	}
+}
+
 func TestPersistHistory(t *testing.T) {
 	dataDirOverride = t.TempDir()
 	defer func() { dataDirOverride = "" }()

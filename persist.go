@@ -98,8 +98,21 @@ type SavedView struct {
 	StCol   int // horizontal scroll column (no softwrap)
 }
 
-// SaveCursorPos serializes the view's cursor positions and viewport to disk.
+// SaveCursorPos serializes the view's cursor positions and viewport to
+// disk, using the buffer's live cursors (correct for the view that is its
+// tab's active pane).
 func (v *View) SaveCursorPos() {
+	v.saveCursorPos(v.buf.cursors)
+}
+
+// SaveInactiveCursorPos is SaveCursorPos for a view that is not its tab's
+// active pane (or has just been detached): such a view's cursor lives in
+// savedCursor, not in the buffer.
+func (v *View) SaveInactiveCursorPos() {
+	v.saveCursorPos([]Cursor{v.savedCursor})
+}
+
+func (v *View) saveCursorPos(cursors []Cursor) {
 	b := v.buf
 	if b.Path == "" {
 		return
@@ -112,7 +125,7 @@ func (v *View) SaveCursorPos() {
 	}
 	defer f.Close()
 	sv := SavedView{
-		Cursors: b.cursors,
+		Cursors: cursors,
 		TopLine: v.topline,
 		TopCol:  v.topcol,
 		StCol:   v.stcol,
