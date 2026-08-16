@@ -58,6 +58,10 @@ func main() {
 	// Create editor.
 	ed := NewEditor(screen, cfg, th)
 
+	// Run the startup script (init.tcl) so mappings and options apply
+	// before any file is opened.
+	ed.RunInitScript()
+
 	// Open files from arguments (the first in the current pane, the rest in
 	// their own tabs), or an empty buffer.
 	args := os.Args[1:]

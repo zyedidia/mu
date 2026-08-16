@@ -86,6 +86,35 @@ func (bt *BindingTrie) Lookup(keys []string) (KeyAction, TrieResult) {
 	return nil, TrieNone
 }
 
+// Unbind removes the action for a key sequence, pruning empty trie nodes so
+// abandoned prefixes stop shadowing other lookups. Returns whether a binding
+// was removed.
+func (bt *BindingTrie) Unbind(keys ...string) bool {
+	path := make([]*trieNode, 0, len(keys))
+	node := bt.root
+	for _, k := range keys {
+		path = append(path, node)
+		child, ok := node.children[k]
+		if !ok {
+			return false
+		}
+		node = child
+	}
+	if !node.hasAction {
+		return false
+	}
+	node.action = nil
+	node.hasAction = false
+	for i := len(keys) - 1; i >= 0; i-- {
+		if node.hasAction || len(node.children) > 0 {
+			break
+		}
+		delete(path[i].children, keys[i])
+		node = path[i]
+	}
+	return true
+}
+
 // HasPrefix returns true if the key sequence is a prefix of any binding.
 func (bt *BindingTrie) HasPrefix(keys []string) bool {
 	node := bt.root
@@ -148,6 +177,10 @@ type KeyState struct {
 	recording []string
 	// replaying is true while . is replaying keys to prevent re-recording.
 	replaying bool
+	// remapping is true while a user mapping's expansion is replaying: the
+	// expansion bypasses the remap layer (noremap semantics) and is not
+	// recorded for dot repeat (the mapping's source keys already were).
+	remapping bool
 
 	// activeView returns the active view. Set by the editor so that
 	// scroll commands (Ctrl-D/Ctrl-U) can adjust the viewport directly.
@@ -316,7 +349,7 @@ func (ks *KeyState) HandleKey(key string) {
 	// Dot repeat recording: start a fresh recording on the first key of a
 	// normal-mode action (no pending state yet). Once started, keep
 	// appending until the action completes.
-	if !ks.replaying {
+	if !ks.replaying && !ks.remapping {
 		if ks.mode == ModeNormal && ks.recording == nil && ks.pendingOp == nil && len(ks.keys) == 0 && !ks.regWait {
 			ks.recording = []string{}
 		}
@@ -363,7 +396,7 @@ func (ks *KeyState) HandleKey(key string) {
 	// Accumulate key for trie lookup.
 	ks.keys = append(ks.keys, key)
 
-	action, result := mode.Bindings.Lookup(ks.keys)
+	action, result := ks.lookupSeq(mode, ks.keys)
 
 	switch result {
 	case TrieMatch:
@@ -379,7 +412,13 @@ func (ks *KeyState) HandleKey(key string) {
 	case TriePrefix:
 		// Wait for more keys.
 	case TrieNone:
+		keys := make([]string, len(ks.keys))
+		copy(keys, ks.keys)
 		ks.keys = ks.keys[:0]
+		if len(keys) > 1 {
+			ks.dispatchDead(mode, keys)
+			return
+		}
 		// Call mode's default key handler.
 		if mode.OnKey != nil {
 			mode.OnKey(ks, key)
@@ -388,6 +427,86 @@ func (ks *KeyState) HandleKey(key string) {
 			ks.ResetAction()
 		}
 	}
+}
+
+// lookupSeq resolves a key sequence: user remaps take priority over default
+// bindings, and a partial remap waits for more keys even when a default
+// binding already matches (the dead-sequence fallback in dispatchDead runs
+// the default if the remap never completes). While a mapping's expansion is
+// replaying, the remap layer is skipped so expansions keep their default
+// meaning.
+func (ks *KeyState) lookupSeq(mode *Mode, keys []string) (KeyAction, TrieResult) {
+	if !ks.remapping && mode.Remaps != nil {
+		if action, res := mode.Remaps.Lookup(keys); res != TrieNone {
+			return action, res
+		}
+	}
+	return mode.Bindings.Lookup(keys)
+}
+
+// matchSeq resolves a key sequence to an exact match only: a user remap
+// match wins, else a default binding match. Unlike lookupSeq, a remap prefix
+// does not block the default binding — used once a sequence is known dead,
+// where waiting on the remap is pointless.
+func (ks *KeyState) matchSeq(mode *Mode, keys []string) (KeyAction, bool) {
+	if !ks.remapping && mode.Remaps != nil {
+		if action, res := mode.Remaps.Lookup(keys); res == TrieMatch {
+			return action, true
+		}
+	}
+	if action, res := mode.Bindings.Lookup(keys); res == TrieMatch {
+		return action, true
+	}
+	return nil, false
+}
+
+// dispatchDead resolves a multi-key sequence that matched no binding: the
+// longest matching prefix runs and the remaining keys are dispatched again
+// (possibly in a new mode the prefix switched to). Without this, a user
+// mapping that shadows a shorter default binding (e.g. mapping "dx" while
+// "d" is an operator) would swallow the default. If no prefix matches, the
+// first key goes to the mode's fallback handler and the rest are
+// re-dispatched.
+func (ks *KeyState) dispatchDead(mode *Mode, keys []string) {
+	n := len(keys) - 1
+	for ; n >= 1; n-- {
+		if action, ok := ks.matchSeq(mode, keys[:n]); ok {
+			action(ks)
+			break
+		}
+	}
+	if n < 1 {
+		n = 1
+		if mode.OnKey != nil {
+			mode.OnKey(ks, keys[0])
+		} else {
+			ks.ResetAction()
+		}
+	}
+	// Re-dispatch the tail. Pop it from the dot-repeat recording first,
+	// since HandleKey will record those keys again.
+	rest := keys[n:]
+	if ks.recording != nil && !ks.replaying && !ks.remapping {
+		if cut := len(ks.recording) - len(rest); cut >= 0 {
+			ks.recording = ks.recording[:cut]
+		}
+	}
+	for _, k := range rest {
+		ks.HandleKey(k)
+	}
+}
+
+// replayKeys feeds a mapping's expansion through the dispatcher. Remapping
+// is disabled during the replay so the expansion has its default meaning
+// (vim noremap semantics), which also makes mutual mappings ("map 0 ^",
+// "map ^ 0") safe.
+func (ks *KeyState) replayKeys(keys []string) {
+	saved := ks.remapping
+	ks.remapping = true
+	for _, k := range keys {
+		ks.HandleKey(k)
+	}
+	ks.remapping = saved
 }
 
 // StopRecording saves the accumulated keys as the last action for dot repeat.

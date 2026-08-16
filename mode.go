@@ -20,6 +20,11 @@ type Mode struct {
 	Name     string
 	Bindings *BindingTrie
 
+	// Remaps holds user key mappings (:map and friends), consulted before
+	// Bindings. A mapping's action replays its expansion with remapping
+	// disabled, so expansions always have their default meaning.
+	Remaps *BindingTrie
+
 	// OnEnter is called when entering this mode.
 	OnEnter func(ks *KeyState)
 	// OnLeave is called when leaving this mode.
@@ -34,6 +39,14 @@ type Mode struct {
 // InitModes creates all vim modes with empty binding tries. The caller is
 // responsible for populating bindings and setting callbacks.
 func InitModes() map[ModeID]*Mode {
+	modes := initModes()
+	for _, m := range modes {
+		m.Remaps = NewBindingTrie()
+	}
+	return modes
+}
+
+func initModes() map[ModeID]*Mode {
 	return map[ModeID]*Mode{
 		ModeNormal: {
 			ID:       ModeNormal,

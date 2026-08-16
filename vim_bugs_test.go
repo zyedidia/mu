@@ -9,22 +9,24 @@ import (
 
 // --- Motion bugs ---
 
-// 0 and ^ are deliberately swapped from vim in this editor: 0 moves to the
-// first non-blank, ^ to column 0.
-func TestVimZeroCaretSwapped(t *testing.T) {
+// The built-in bindings follow vim: 0 moves to column 0 and ^ to the first
+// non-blank. (The default init.tcl swaps them via mappings; that behavior is
+// tested at the editor level in keymap_test.go.)
+func TestVimZeroCaretDefaults(t *testing.T) {
 	ks := newVimState("  hello\n")
 
 	feedKeys(ks, "$")
-	feedKeys(ks, "0")
-	if cursorPos(ks) != 2 {
-		t.Fatalf("0: pos=%d, want 2 (first non-blank)", cursorPos(ks))
-	}
 	feedKeys(ks, "^")
+	if cursorPos(ks) != 2 {
+		t.Fatalf("^: pos=%d, want 2 (first non-blank)", cursorPos(ks))
+	}
+	feedKeys(ks, "$")
+	feedKeys(ks, "0")
 	if cursorPos(ks) != 0 {
-		t.Fatalf("^: pos=%d, want 0 (column 0)", cursorPos(ks))
+		t.Fatalf("0: pos=%d, want 0 (column 0)", cursorPos(ks))
 	}
 	// A count containing 0 is unaffected by the binding: 10l is still a
-	// 10-column move, not a move plus first-non-blank.
+	// 10-column move, not a move plus beginning-of-line.
 	feedKeys(ks, "10l")
 	if cursorPos(ks) != 6 {
 		t.Fatalf("10l: pos=%d, want 6 (clamped to last char)", cursorPos(ks))

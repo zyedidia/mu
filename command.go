@@ -32,6 +32,16 @@ var editorCommands = []CommandDef{
 	{"tabnext", cmdTabNext, "tabnext: switch to next tab"},
 	{"tabprev", cmdTabPrev, "tabprev: switch to previous tab"},
 	{"goto", cmdGoto, "goto <line>: go to line number"},
+	{"map", makeMapCmd(mapModeSets["map"]), "map <keys> <expansion>: map keys in normal/visual/pending modes (non-recursive)"},
+	{"nmap", makeMapCmd(mapModeSets["nmap"]), "nmap <keys> <expansion>: map keys in normal mode"},
+	{"vmap", makeMapCmd(mapModeSets["vmap"]), "vmap <keys> <expansion>: map keys in visual modes"},
+	{"imap", makeMapCmd(mapModeSets["imap"]), "imap <keys> <expansion>: map keys in insert mode"},
+	{"omap", makeMapCmd(mapModeSets["omap"]), "omap <keys> <expansion>: map keys in operator-pending mode"},
+	{"unmap", makeUnmapCmd(mapModeSets["map"]), "unmap <keys>: remove a normal/visual/pending mode mapping"},
+	{"nunmap", makeUnmapCmd(mapModeSets["nmap"]), "nunmap <keys>: remove a normal mode mapping"},
+	{"vunmap", makeUnmapCmd(mapModeSets["vmap"]), "vunmap <keys>: remove a visual mode mapping"},
+	{"iunmap", makeUnmapCmd(mapModeSets["imap"]), "iunmap <keys>: remove an insert mode mapping"},
+	{"ounmap", makeUnmapCmd(mapModeSets["omap"]), "ounmap <keys>: remove an operator-pending mode mapping"},
 }
 
 // vimAliases maps vim-style short commands to TCL command strings.

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/zyedidia/gotcl"
 )
 
@@ -28,4 +31,17 @@ func (e *Editor) initTCL() {
 func (e *Editor) EvalTCL(s string) error {
 	_, err := e.interp.EvalString(s)
 	return err
+}
+
+// RunInitScript evaluates the startup script (init.tcl). A user init.tcl in
+// the config directory replaces the embedded default entirely.
+func (e *Editor) RunInitScript() {
+	data, err := e.config.ReadFile("init.tcl")
+	if err != nil {
+		return // no init script
+	}
+	if err := e.EvalTCL(string(data)); err != nil {
+		log.Printf("init.tcl: %v", err)
+		e.infobar.Error(fmt.Sprintf("init.tcl: %v", err))
+	}
 }

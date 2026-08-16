@@ -592,11 +592,12 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"k"}, MotionDef{Fn: motionUp, Vertical: true, Flags: Linewise})
 	registerMotion(ks, []string{KeyUp}, MotionDef{Fn: motionUp, Vertical: true, Flags: Linewise})
 
-	// Deliberately swapped from vim: 0 goes to the first non-blank and
-	// ^ to column 0. (0 while a count is pending is still a count digit;
-	// see tryCount.)
-	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionFirstNonBlank})
-	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionBOL})
+	// 0 goes to column 0 and ^ to the first non-blank, as in vim. The
+	// default init.tcl swaps them (see embed/init.tcl); users can override
+	// that with their own init.tcl. (0 while a count is pending is still a
+	// count digit; see tryCount.)
+	registerMotion(ks, []string{"0"}, MotionDef{Fn: motionBOL})
+	registerMotion(ks, []string{"^"}, MotionDef{Fn: motionFirstNonBlank})
 	registerMotion(ks, []string{KeyHome}, MotionDef{Fn: motionBOL})
 	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL, Name: "$"})
 	registerMotion(ks, []string{KeyEnd}, MotionDef{Fn: motionEOL, Name: "$"})
