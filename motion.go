@@ -549,32 +549,12 @@ func motionDisplayDown(v *View, pos, wantX, count int) int {
 	if count == 0 {
 		count = 1
 	}
-	b := v.buf
-	line, _ := b.LineColAt(pos)
-	row, _ := v.displayLoc(pos)
-	rows := v.displayRows(line)
-	if row >= rows {
-		row = rows - 1
-	}
-	last := b.NumLines()
-	if line >= last && row == rows-1 {
+	line, row := v.displayRowOf(pos)
+	nl, nr := v.stepRows(line, row, count)
+	if nl == line && nr == row {
 		return -1
 	}
-	for count > 0 {
-		if row+count < rows {
-			row += count
-			break
-		}
-		if line >= last {
-			row = rows - 1
-			break
-		}
-		count -= rows - row
-		line++
-		row = 0
-		rows = v.displayRows(line)
-	}
-	return v.displayPos(line, row, wantX)
+	return v.displayPos(nl, nr, wantX)
 }
 
 // motionDisplayUp moves count visual rows up from pos, seeking column wantX
@@ -583,71 +563,63 @@ func motionDisplayUp(v *View, pos, wantX, count int) int {
 	if count == 0 {
 		count = 1
 	}
-	b := v.buf
-	line, _ := b.LineColAt(pos)
-	row, _ := v.displayLoc(pos)
-	if r := v.displayRows(line); row >= r {
-		row = r - 1
-	}
-	if line <= 0 && row <= 0 {
+	line, row := v.displayRowOf(pos)
+	nl, nr := v.stepRows(line, row, -count)
+	if nl == line && nr == row {
 		return -1
 	}
-	for count > 0 {
-		if row >= count {
-			row -= count
-			break
-		}
-		if line <= 0 {
-			row = 0
-			break
-		}
-		count -= row + 1
-		line--
-		row = v.displayRows(line) - 1
+	return v.displayPos(nl, nr, wantX)
+}
+
+// applyDisplayMotion moves the cursor n visual rows down (or up), keeping a
+// sticky display column across a chain of such motions. It falls back to
+// buffer-line movement when softwrap is off. Shared by gj/gk and the paging
+// commands (Ctrl-F/Ctrl-B).
+func applyDisplayMotion(ks *KeyState, down bool, n int) {
+	if n <= 0 {
+		n = 1
 	}
-	return v.displayPos(line, row, wantX)
+	selecting := ks.Mode().IsVisual
+	v := ks.ActiveView()
+	if v == nil || !v.SoftWrap {
+		lineFn := motionDown
+		if !down {
+			lineFn = motionUp
+		}
+		applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, _ int) int {
+			return lineFn(b, c, n)
+		}, Vertical: true, Flags: Linewise}, selecting)
+		return
+	}
+	// Seed the sticky display column from the cursor positions when
+	// starting a chain; consecutive display motions keep it (Vertical
+	// prevents the Vx recalculation).
+	b := ks.Buf()
+	if !ks.displayVx {
+		for i := range b.cursors {
+			_, x := v.displayLoc(b.cursors[i].Pos)
+			b.cursors[i].Vx = x
+		}
+		ks.displayVx = true
+	}
+	fn := motionDisplayDown
+	if !down {
+		fn = motionDisplayUp
+	}
+	applyMotion(ks, MotionDef{
+		Fn: func(b *Buffer, c Cursor, _ int) int {
+			return fn(v, c.Pos, c.Vx, n)
+		},
+		Vertical: true,
+		Display:  true,
+	}, selecting)
 }
 
 // registerDisplayMotion binds a display-line motion (gj/gk). When softwrap
 // is off (or there is no view), it degrades to the buffer-line motion.
 func registerDisplayMotion(ks *KeyState, keys []string, down bool) {
-	displayFn := func(v *View) func(pos, wantX, count int) int {
-		if down {
-			return func(pos, wantX, count int) int { return motionDisplayDown(v, pos, wantX, count) }
-		}
-		return func(pos, wantX, count int) int { return motionDisplayUp(v, pos, wantX, count) }
-	}
-	lineFn := motionDown
-	if !down {
-		lineFn = motionUp
-	}
-
 	handler := func(ks *KeyState) {
-		selecting := ks.Mode().IsVisual
-		v := ks.ActiveView()
-		if v == nil || !v.SoftWrap {
-			applyMotion(ks, MotionDef{Fn: lineFn, Vertical: true, Flags: Linewise}, selecting)
-			return
-		}
-		// Seed the sticky display column from the cursor positions when
-		// starting a chain; consecutive gj/gk presses keep it (Vertical
-		// prevents the Vx recalculation).
-		b := ks.Buf()
-		if !ks.displayVx {
-			for i := range b.cursors {
-				_, x := v.displayLoc(b.cursors[i].Pos)
-				b.cursors[i].Vx = x
-			}
-			ks.displayVx = true
-		}
-		fn := displayFn(v)
-		applyMotion(ks, MotionDef{
-			Fn: func(b *Buffer, c Cursor, count int) int {
-				return fn(c.Pos, c.Vx, count)
-			},
-			Vertical: true,
-			Display:  true,
-		}, selecting)
+		applyDisplayMotion(ks, down, ks.RawCount())
 	}
 	for _, mode := range []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeVisualBlock} {
 		ks.modes[mode].Bindings.Bind(handler, keys...)
@@ -655,16 +627,23 @@ func registerDisplayMotion(ks *KeyState, keys []string, down bool) {
 
 	// Operator-pending: a charwise motion to the display-line target, from
 	// the cursor's own display column (no sticky state).
+	lineFn := motionDown
+	if !down {
+		lineFn = motionUp
+	}
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
 		v := ks.ActiveView()
 		if v == nil || !v.SoftWrap {
 			execMotionOp(ks, MotionDef{Fn: lineFn})
 			return
 		}
-		fn := displayFn(v)
+		fn := motionDisplayDown
+		if !down {
+			fn = motionDisplayUp
+		}
 		execMotionOp(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
 			_, x := v.displayLoc(c.Pos)
-			return fn(c.Pos, x, count)
+			return fn(v, c.Pos, x, count)
 		}})
 	}, keys...)
 }
@@ -757,8 +736,8 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"}"}, MotionDef{Fn: motionParaDown})
 
 	// Ctrl-D / Ctrl-U: half-page scroll. Scrolls the view and moves the
-	// cursor by the same amount so the cursor stays at the same screen row.
-	// At file boundaries the cursor moves to stay visible.
+	// cursor by the same number of visual rows so the cursor stays at the
+	// same screen row. At file boundaries the cursor moves to stay visible.
 	scrollHalfPage := func(ks *KeyState, dir int) {
 		v := ks.activeView()
 		if v == nil {
@@ -774,30 +753,20 @@ func RegisterMotions(ks *KeyState) {
 		scroll := halfPage * count * dir
 
 		// Scroll the view.
-		newTop := v.topline + scroll
-		if newTop < 0 {
-			newTop = 0
+		tl, tr := v.topRow()
+		tl, tr = v.stepRows(tl, tr, scroll)
+		if scroll > 0 {
+			if ml, mr := v.maxTopRow(); tl > ml || (tl == ml && tr > mr) {
+				tl, tr = ml, mr
+			}
 		}
-		maxTop := b.NumLines() - v.height + 1
-		if maxTop < 0 {
-			maxTop = 0
-		}
-		if newTop > maxTop {
-			newTop = maxTop
-		}
-		v.topline = newTop
+		v.setTopRow(tl, tr)
 
-		// Move cursor by the same amount.
+		// Move cursor by the same number of rows.
 		c := b.Cursor()
-		line, _ := b.LineColAt(c.Pos)
-		newLine := line + scroll
-		if newLine < 0 {
-			newLine = 0
-		}
-		if newLine > b.NumLines() {
-			newLine = b.NumLines()
-		}
-		*c = c.MoveTo(b.VisualLoc(newLine, c.Vx))
+		cl, cr := v.displayRowOf(c.Pos)
+		nl, nr := v.stepRows(cl, cr, scroll)
+		*c = c.MoveTo(v.displayPos(nl, nr, c.Vx)).VimClamp(b)
 		ks.vertical = true
 		ks.ClearCounts()
 	}

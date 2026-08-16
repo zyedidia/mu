@@ -163,6 +163,9 @@ func (v *View) displayLoc(pos int) (row, col int) {
 // trailing row holding only the line's newline (a line exactly filling its
 // last row) is not counted.
 func (v *View) displayRows(line int) int {
+	if !v.SoftWrap {
+		return 1
+	}
 	b := v.buf
 	start := b.OffsetAt(line, 0)
 	nl := start + b.LineLen(line)
@@ -177,6 +180,43 @@ func (v *View) displayRows(line int) int {
 		},
 	}, &v.vis, v.bufferWidth(), v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
 	return rows
+}
+
+// displayRowOf returns the buffer line of pos and its visual row within that
+// line, clamped to the line's content rows.
+func (v *View) displayRowOf(pos int) (int, int) {
+	line, _ := v.buf.LineColAt(pos)
+	if !v.SoftWrap {
+		return line, 0
+	}
+	row, _ := v.displayLoc(pos)
+	if r := v.displayRows(line); row >= r {
+		row = r - 1
+	}
+	return line, row
+}
+
+// rowStartCol returns the byte column where the given visual row of a line
+// starts (0 for the first row).
+func (v *View) rowStartCol(line, row int) int {
+	if !v.SoftWrap || row <= 0 {
+		return 0
+	}
+	b := v.buf
+	col := 0
+	b.RenderForward(RenderTracker{
+		Track: func(off, bx, by, tx, ty int) bool {
+			if by > line || ty > row {
+				return true
+			}
+			if ty == row {
+				col = bx
+				return true
+			}
+			return false
+		},
+	}, &v.vis, v.bufferWidth(), v.height, b.OffsetAt(line, 0), v.SoftWrap, v.WordWrap, DefaultTheme)
+	return col
 }
 
 // displayPos returns the byte offset on the given visual row of a line whose
@@ -235,7 +275,107 @@ func (v *View) effHScrollMargin() int {
 	return m
 }
 
-// Relocate adjusts topline/stcol so that the primary cursor is visible.
+// --- Visual-row viewport ---
+//
+// The viewport starts at a visual row: topline is a buffer line and topcol
+// the byte column of one of its wrap-row starts (0 unless a softwrapped
+// line is partially scrolled off the top). Because the renderer resets the
+// column at every wrap, rendering from a row boundary produces exactly the
+// same rows as rendering the whole line, so a tall wrapped line can be
+// entered gradually.
+
+// topRow returns the viewport start as a (line, visual row) pair, snapping
+// stale state (edits, resizes) to a sane position.
+func (v *View) topRow() (int, int) {
+	if v.topline < 0 {
+		return 0, 0
+	}
+	if v.topline > v.buf.NumLines() {
+		return v.buf.NumLines(), 0
+	}
+	if !v.SoftWrap || v.topcol <= 0 || v.topcol >= v.buf.LineLen(v.topline) {
+		return v.topline, 0
+	}
+	row, _ := v.displayLoc(v.buf.OffsetAt(v.topline, v.topcol))
+	return v.topline, row
+}
+
+// setTopRow sets the viewport start to the given (line, visual row).
+func (v *View) setTopRow(line, row int) {
+	if line < 0 {
+		line, row = 0, 0
+	}
+	v.topline = line
+	v.topcol = v.rowStartCol(line, row)
+}
+
+// stepRows advances a (line, visual row) position by n rows (n may be
+// negative), clamping at the buffer's first and last visual rows.
+func (v *View) stepRows(line, row, n int) (int, int) {
+	for n > 0 {
+		rows := v.displayRows(line)
+		if row+n < rows {
+			return line, row + n
+		}
+		if line >= v.buf.NumLines() {
+			return line, rows - 1
+		}
+		n -= rows - row
+		line++
+		row = 0
+	}
+	for n < 0 {
+		if row+n >= 0 {
+			return line, row + n
+		}
+		if line <= 0 {
+			return line, 0
+		}
+		n += row + 1
+		line--
+		row = v.displayRows(line) - 1
+	}
+	return line, row
+}
+
+// rowsBetween returns the number of visual rows from one display position
+// down to another (negative if the target is above), with the magnitude
+// capped at limit.
+func (v *View) rowsBetween(fromLine, fromRow, toLine, toRow, limit int) int {
+	if fromLine == toLine {
+		return clamp(toRow-fromRow, -limit, limit)
+	}
+	if toLine > fromLine {
+		n := v.displayRows(fromLine) - fromRow
+		for l := fromLine + 1; l < toLine && n < limit; l++ {
+			n += v.displayRows(l)
+		}
+		n += toRow
+		if n > limit {
+			n = limit
+		}
+		return n
+	}
+	n := fromRow
+	for l := fromLine - 1; l > toLine && n < limit; l-- {
+		n += v.displayRows(l)
+	}
+	n += v.displayRows(toLine) - toRow
+	if n > limit {
+		n = limit
+	}
+	return -n
+}
+
+// maxTopRow returns the lowest viewport start that keeps the window full:
+// the buffer's last visual row sits on the bottom screen row.
+func (v *View) maxTopRow() (int, int) {
+	last := v.buf.NumLines()
+	return v.stepRows(last, v.displayRows(last)-1, -(v.height - 1))
+}
+
+// Relocate adjusts the viewport so that the primary cursor is visible,
+// scrolling by visual rows so softwrapped lines are handled correctly.
 func (v *View) Relocate() {
 	c := v.buf.Cursor()
 	bl := bLoc{}
@@ -243,20 +383,22 @@ func (v *View) Relocate() {
 
 	// Vertical scrolling.
 	margin := v.effScrollMargin()
-	if bl.line < v.topline+margin {
-		v.topline = bl.line - margin
-		v.topcol = 0
-	} else if bl.line >= v.topline+v.height-margin {
-		top := bl.line - v.height + 1 + margin
-		maxTop := v.buf.NumLines() - v.height + 1
-		if top > maxTop {
-			top = maxTop
+	curLine, curRow := v.displayRowOf(c.Pos)
+	topLine, topRow := v.topRow()
+
+	dist := v.rowsBetween(topLine, topRow, curLine, curRow, v.height+1)
+	if dist < margin {
+		v.setTopRow(v.stepRows(curLine, curRow, -margin))
+	} else if dist >= v.height-margin {
+		l, r := v.stepRows(curLine, curRow, -(v.height - 1 - margin))
+		if ml, mr := v.maxTopRow(); l > ml || (l == ml && r > mr) {
+			l, r = ml, mr
 		}
-		v.topline = top
-		v.topcol = 0
-	}
-	if v.topline < 0 {
-		v.topline = 0
+		v.setTopRow(l, r)
+	} else if v.topcol != 0 || v.topline != topLine {
+		// No scroll needed, but re-anchor topcol on a valid row boundary
+		// (it can drift after edits or resizes).
+		v.setTopRow(topLine, topRow)
 	}
 
 	// Horizontal scrolling (only when softwrap is off).
@@ -352,8 +494,15 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			lines[vy] = by + 1
 			sx := gutter + vx - v.stcol
 			for i, c := range v.buf.Cursors() {
-				if c.Pos == off && sx >= gutter && sx < v.width {
-					showCursor(sx, vy, i == 0)
+				if c.Pos == off && sx >= gutter {
+					s := sx
+					// A cursor one past an exactly-full row (insert mode
+					// at end of line) is pinned to the last cell rather
+					// than left stale off-screen.
+					if s >= v.width {
+						s = v.width - 1
+					}
+					showCursor(s, vy, i == 0)
 				}
 			}
 			return false

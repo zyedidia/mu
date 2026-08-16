@@ -110,13 +110,12 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		}
 	}
 
-	newline := func() bool {
+	newline := func() {
 		x = 0
 		y++
-		return false
 	}
 
-	drawRune := func(off int, c rune, combc []rune, rwidth, bx, by int, style Style) (done bool) {
+	drawRune := func(off int, c rune, combc []rune, rwidth, bx, by int, style Style) {
 		if tracker.Draw != nil {
 			// Syntax highlighting: override default style with syntax group.
 			if th != nil && style == th.Default() {
@@ -154,11 +153,6 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		}
 		x += rwidth
 		vx += rwidth
-
-		if x >= width && softwrap {
-			return newline()
-		}
-		return false
 	}
 
 	for {
@@ -169,6 +163,9 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 				by, bx = b.LineColAt(blen - 1)
 				bx++
 			}
+			if softwrap && x >= width {
+				newline()
+			}
 			if tracker.Track != nil && tracker.Track(blen, bx, by, x, y) {
 				return
 			}
@@ -177,6 +174,13 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 
 		r, combc, size, gwidth := b.DecodeGraphemeWidthAt(off)
 		by, bx := b.LineColAt(off)
+		// Lazy wrap: break the row only when another character must be
+		// placed on it, so a line exactly filling the width keeps its
+		// newline on the same row instead of adding a blank continuation
+		// row.
+		if softwrap && x >= width && r != '\n' {
+			newline()
+		}
 		if tracker.Track != nil && tracker.Track(off, bx, by, x, y) {
 			return
 		}
@@ -213,22 +217,15 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 				x++
 				vx++
 			}
-			end := newline()
+			newline()
 			vx = 0
-			if end {
-				return
-			}
 		} else if vis.Special(r) {
 			dr, style := vis.String(r, x, th)
 			for _, c := range dr {
-				if drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style) {
-					return
-				}
+				drawRune(off, c, nil, runewidth.RuneWidth(c), bx, by, style)
 			}
 		} else {
-			if drawRune(off, r, combc, gwidth, bx, by, th.Default()) {
-				return
-			}
+			drawRune(off, r, combc, gwidth, bx, by, th.Default())
 		}
 
 		off += size

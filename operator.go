@@ -1009,75 +1009,72 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "~")
 
-	// H/M/L: screen top/middle/bottom. H and L stay inside the scroll
-	// margin so they don't force the viewport to move (vim scrolloff).
+	// H/M/L: screen top/middle/bottom (by visual rows). H and L stay inside
+	// the scroll margin so they don't force the viewport to move (vim
+	// scrolloff).
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			line := v.topline
-			if v.topline > 0 {
-				line += v.effScrollMargin()
+			tl, tr := v.topRow()
+			n := 0
+			if tl > 0 || tr > 0 {
+				n = v.effScrollMargin()
 			}
-			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(line, 0))
+			l, r := v.stepRows(tl, tr, n)
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.displayPos(l, r, 0)).VimClamp(v.buf)
 		}
 		ks.ResetAction()
 	}, "H")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			mid := v.topline + v.height/2
-			if mid > v.buf.NumLines() {
-				mid = v.buf.NumLines()
-			}
-			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(mid, 0))
+			tl, tr := v.topRow()
+			l, r := v.stepRows(tl, tr, v.height/2)
+			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.displayPos(l, r, 0)).VimClamp(v.buf)
 		}
 		ks.ResetAction()
 	}, "M")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			bot := v.topline + v.height - 1
-			if bot > v.buf.NumLines() {
-				bot = v.buf.NumLines()
+			b := v.buf
+			tl, tr := v.topRow()
+			ll, lr := b.NumLines(), v.displayRows(b.NumLines())-1
+			var l, r int
+			if v.rowsBetween(tl, tr, ll, lr, v.height) <= v.height-1 {
+				// The buffer end is on screen: L goes to the last row.
+				l, r = ll, lr
 			} else {
-				bot -= v.effScrollMargin()
+				l, r = v.stepRows(tl, tr, v.height-1-v.effScrollMargin())
 			}
-			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.buf.OffsetAt(bot, 0))
+			*b.Cursor() = b.Cursor().MoveTo(v.displayPos(l, r, 0)).VimClamp(b)
 		}
 		ks.ResetAction()
 	}, "L")
 
-	// Ctrl-F/Ctrl-B: full page down/up
+	// Ctrl-F/Ctrl-B: full page down/up (by visual rows under softwrap)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, _ int) int {
-				return motionDown(b, c, v.height*ks.Count())
-			}}, false)
+			applyDisplayMotion(ks, true, v.height*ks.Count())
 		}
 	}, "<C-f>")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			applyMotion(ks, MotionDef{Fn: func(b *Buffer, c Cursor, _ int) int {
-				return motionUp(b, c, v.height*ks.Count())
-			}}, false)
+			applyDisplayMotion(ks, false, v.height*ks.Count())
 		}
 	}, "<C-b>")
 
-	// Ctrl-E/Ctrl-Y: scroll the view. The cursor stays put until it would
-	// leave the scroll margin, then it is pushed along (as in vim), so the
-	// next relocate doesn't snap the viewport back.
+	// Ctrl-E/Ctrl-Y: scroll the view by visual rows. The cursor stays put
+	// until it would leave the scroll margin, then it is pushed along (as
+	// in vim), so the next relocate doesn't snap the viewport back.
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
 			ks.ensureLineVx()
 			b := v.buf
-			v.topline += ks.Count()
-			if v.topline > b.NumLines() {
-				v.topline = b.NumLines()
-			}
-			minLine := v.topline + v.effScrollMargin()
-			if minLine > b.NumLines() {
-				minLine = b.NumLines()
-			}
+			tl, tr := v.topRow()
+			tl, tr = v.stepRows(tl, tr, ks.Count())
+			v.setTopRow(tl, tr)
+			ml, mr := v.stepRows(tl, tr, v.effScrollMargin())
 			c := b.Cursor()
-			if line, _ := b.LineColAt(c.Pos); line < minLine {
-				*c = c.MoveTo(b.VisualLoc(minLine, c.Vx))
+			if cl, cr := v.displayRowOf(c.Pos); cl < ml || (cl == ml && cr < mr) {
+				*c = c.MoveTo(v.displayPos(ml, mr, c.Vx)).VimClamp(b)
 				ks.vertical = true
 			}
 		}
@@ -1087,17 +1084,13 @@ func RegisterOperators(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
 			ks.ensureLineVx()
 			b := v.buf
-			v.topline -= ks.Count()
-			if v.topline < 0 {
-				v.topline = 0
-			}
-			maxLine := v.topline + v.height - 1 - v.effScrollMargin()
-			if maxLine < 0 {
-				maxLine = 0
-			}
+			tl, tr := v.topRow()
+			tl, tr = v.stepRows(tl, tr, -ks.Count())
+			v.setTopRow(tl, tr)
+			ml, mr := v.stepRows(tl, tr, v.height-1-v.effScrollMargin())
 			c := b.Cursor()
-			if line, _ := b.LineColAt(c.Pos); line > maxLine {
-				*c = c.MoveTo(b.VisualLoc(maxLine, c.Vx))
+			if cl, cr := v.displayRowOf(c.Pos); cl > ml || (cl == ml && cr > mr) {
+				*c = c.MoveTo(v.displayPos(ml, mr, c.Vx)).VimClamp(b)
 				ks.vertical = true
 			}
 		}
@@ -1166,31 +1159,24 @@ func RegisterOperators(ks *KeyState) {
 		})
 	}, "g", "U")
 
-	// zz/zt/zb: scroll view to center/top/bottom cursor
+	// zz/zt/zb: scroll view to center/top/bottom the cursor's visual row
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
-			v.topline = line - v.height/2
-			if v.topline < 0 {
-				v.topline = 0
-			}
+			l, r := v.displayRowOf(v.buf.Cursor().Pos)
+			v.setTopRow(v.stepRows(l, r, -(v.height / 2)))
 		}
 		ks.ResetAction()
 	}, "z", "z")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
-			v.topline = line
+			v.setTopRow(v.displayRowOf(v.buf.Cursor().Pos))
 		}
 		ks.ResetAction()
 	}, "z", "t")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
-			line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
-			v.topline = line - v.height + 1
-			if v.topline < 0 {
-				v.topline = 0
-			}
+			l, r := v.displayRowOf(v.buf.Cursor().Pos)
+			v.setTopRow(v.stepRows(l, r, -(v.height - 1)))
 		}
 		ks.ResetAction()
 	}, "z", "b")
