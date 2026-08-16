@@ -137,6 +137,74 @@ func (v *View) bLoc2vLoc(bl bLoc) (vl vLoc) {
 	return vl
 }
 
+// --- Display (wrapped) line geometry ---
+//
+// With softwrap on, a buffer line occupies one or more visual rows. These
+// helpers map between byte offsets and (row, row-local column) positions
+// using the same render walk as the display, so they agree exactly with
+// what is on screen (including per-row tab expansion).
+
+// displayLoc returns the visual row of pos within its buffer line and the
+// row-local visual column.
+func (v *View) displayLoc(pos int) (row, col int) {
+	b := v.buf
+	line, _ := b.LineColAt(pos)
+	start := b.OffsetAt(line, 0)
+	b.RenderForward(RenderTracker{
+		Track: func(off, bx, by, tx, ty int) bool {
+			row, col = ty, tx
+			return off >= pos
+		},
+	}, &v.vis, v.bufferWidth(), v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
+	return row, col
+}
+
+// displayRows returns how many visual rows the line's content occupies. A
+// trailing row holding only the line's newline (a line exactly filling its
+// last row) is not counted.
+func (v *View) displayRows(line int) int {
+	b := v.buf
+	start := b.OffsetAt(line, 0)
+	nl := start + b.LineLen(line)
+	rows := 1
+	b.RenderForward(RenderTracker{
+		Track: func(off, bx, by, tx, ty int) bool {
+			if by > line || off >= nl {
+				return true
+			}
+			rows = ty + 1
+			return false
+		},
+	}, &v.vis, v.bufferWidth(), v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
+	return rows
+}
+
+// displayPos returns the byte offset on the given visual row of a line whose
+// column is closest to wantX without exceeding it, clamped to the row's last
+// position (which may be the line's newline; callers VimClamp as needed).
+func (v *View) displayPos(line, row, wantX int) int {
+	b := v.buf
+	if line > b.NumLines() {
+		line = b.NumLines()
+	}
+	pos := b.OffsetAt(line, 0)
+	b.RenderForward(RenderTracker{
+		Track: func(off, bx, by, tx, ty int) bool {
+			if by > line || ty > row {
+				return true
+			}
+			if ty == row {
+				if tx > wantX {
+					return true
+				}
+				pos = off
+			}
+			return false
+		},
+	}, &v.vis, v.bufferWidth(), v.height, b.OffsetAt(line, 0), v.SoftWrap, v.WordWrap, DefaultTheme)
+	return pos
+}
+
 // --- Scrolling ---
 
 // effScrollMargin returns the vertical scroll margin clamped so that a

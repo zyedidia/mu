@@ -1065,6 +1065,7 @@ func RegisterOperators(ks *KeyState) {
 	// next relocate doesn't snap the viewport back.
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			ks.ensureLineVx()
 			b := v.buf
 			v.topline += ks.Count()
 			if v.topline > b.NumLines() {
@@ -1084,6 +1085,7 @@ func RegisterOperators(ks *KeyState) {
 	}, "<C-e>")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			ks.ensureLineVx()
 			b := v.buf
 			v.topline -= ks.Count()
 			if v.topline < 0 {

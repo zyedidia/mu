@@ -190,6 +190,11 @@ type KeyState struct {
 	// should not be recalculated this cycle.
 	vertical bool
 
+	// displayVx is set while cursors' Vx hold row-local display columns
+	// from a display-line motion (gj/gk) instead of line-wide visual
+	// columns. It is cleared whenever Vx is recalculated.
+	displayVx bool
+
 	// marks stores named mark positions (m<char> / '<char> / `<char>).
 	marks map[byte]int
 
@@ -566,4 +571,18 @@ func (ks *KeyState) ActiveView() *View {
 		return ks.activeView()
 	}
 	return nil
+}
+
+// ensureLineVx converts cursors' Vx back to line-wide visual columns after a
+// display-line motion chain (gj/gk store row-local columns there). Call
+// before any code that reads Vx as a line-wide column.
+func (ks *KeyState) ensureLineVx() {
+	if !ks.displayVx {
+		return
+	}
+	b := ks.Buf()
+	for i := range b.cursors {
+		b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
+	}
+	ks.displayVx = false
 }

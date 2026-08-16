@@ -752,13 +752,16 @@ func (e *Editor) Display() {
 	defStyle := e.theme.Default().TCellStyle()
 	e.screen.Fill(' ', defStyle)
 
-	// Recalculate Vx for all cursors unless the last action was a
-	// purely vertical motion (j/k/Ctrl-D/Ctrl-U).
-	if !e.ks.vertical {
+	// Recalculate Vx for all cursors unless the last action was a purely
+	// vertical motion (j/k/gj/gk/Ctrl-D/Ctrl-U) or a key sequence is still
+	// pending (the g of gj: the cursor hasn't moved, and recalculating
+	// would drop a display-column chain).
+	if !e.ks.vertical && len(e.ks.keys) == 0 {
 		b := e.ks.Buf()
 		for i := 0; i < b.NumCursors(); i++ {
 			b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
 		}
+		e.ks.displayVx = false
 	}
 	e.ks.vertical = false
 

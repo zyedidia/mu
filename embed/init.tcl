@@ -20,3 +20,12 @@
 # ^ moves to column 0.
 map 0 ^
 map ^ 0
+
+# Move by display lines: with softwrap on, j/k go up and down one visual
+# line (gj/gk are the unmapped originals). Mapped only in normal and visual
+# modes so that operators keep buffer-line semantics (dj still deletes two
+# whole lines).
+nmap j gj
+nmap k gk
+vmap j gj
+vmap k gk

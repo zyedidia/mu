@@ -23,6 +23,9 @@ type MotionDef struct {
 	Flags    MotionFlags
 	Name     string
 	Vertical bool // true for j/k: preserve Vx instead of recalculating
+	// Display marks a display-line motion (gj/gk): Vx holds a row-local
+	// display column instead of a line-wide visual column.
+	Display bool
 }
 
 // --- Motion application helpers ---
@@ -31,6 +34,11 @@ type MotionDef struct {
 func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	b := ks.Buf()
 	count := ks.RawCount()
+	// After a display-line motion chain, cursors' Vx hold row-local display
+	// columns; any other motion expects line-wide visual columns.
+	if !m.Display {
+		ks.ensureLineVx()
+	}
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		newPos := m.Fn(b, c, count)
@@ -533,6 +541,134 @@ func motionParaDown(b *Buffer, c Cursor, count int) int {
 	return b.OffsetAt(line, 0)
 }
 
+// --- Display (visual) line motions ---
+
+// motionDisplayDown moves count visual rows down from pos, seeking column
+// wantX on the target row. Returns -1 when already on the last visual row.
+func motionDisplayDown(v *View, pos, wantX, count int) int {
+	if count == 0 {
+		count = 1
+	}
+	b := v.buf
+	line, _ := b.LineColAt(pos)
+	row, _ := v.displayLoc(pos)
+	rows := v.displayRows(line)
+	if row >= rows {
+		row = rows - 1
+	}
+	last := b.NumLines()
+	if line >= last && row == rows-1 {
+		return -1
+	}
+	for count > 0 {
+		if row+count < rows {
+			row += count
+			break
+		}
+		if line >= last {
+			row = rows - 1
+			break
+		}
+		count -= rows - row
+		line++
+		row = 0
+		rows = v.displayRows(line)
+	}
+	return v.displayPos(line, row, wantX)
+}
+
+// motionDisplayUp moves count visual rows up from pos, seeking column wantX
+// on the target row. Returns -1 when already on the first visual row.
+func motionDisplayUp(v *View, pos, wantX, count int) int {
+	if count == 0 {
+		count = 1
+	}
+	b := v.buf
+	line, _ := b.LineColAt(pos)
+	row, _ := v.displayLoc(pos)
+	if r := v.displayRows(line); row >= r {
+		row = r - 1
+	}
+	if line <= 0 && row <= 0 {
+		return -1
+	}
+	for count > 0 {
+		if row >= count {
+			row -= count
+			break
+		}
+		if line <= 0 {
+			row = 0
+			break
+		}
+		count -= row + 1
+		line--
+		row = v.displayRows(line) - 1
+	}
+	return v.displayPos(line, row, wantX)
+}
+
+// registerDisplayMotion binds a display-line motion (gj/gk). When softwrap
+// is off (or there is no view), it degrades to the buffer-line motion.
+func registerDisplayMotion(ks *KeyState, keys []string, down bool) {
+	displayFn := func(v *View) func(pos, wantX, count int) int {
+		if down {
+			return func(pos, wantX, count int) int { return motionDisplayDown(v, pos, wantX, count) }
+		}
+		return func(pos, wantX, count int) int { return motionDisplayUp(v, pos, wantX, count) }
+	}
+	lineFn := motionDown
+	if !down {
+		lineFn = motionUp
+	}
+
+	handler := func(ks *KeyState) {
+		selecting := ks.Mode().IsVisual
+		v := ks.ActiveView()
+		if v == nil || !v.SoftWrap {
+			applyMotion(ks, MotionDef{Fn: lineFn, Vertical: true, Flags: Linewise}, selecting)
+			return
+		}
+		// Seed the sticky display column from the cursor positions when
+		// starting a chain; consecutive gj/gk presses keep it (Vertical
+		// prevents the Vx recalculation).
+		b := ks.Buf()
+		if !ks.displayVx {
+			for i := range b.cursors {
+				_, x := v.displayLoc(b.cursors[i].Pos)
+				b.cursors[i].Vx = x
+			}
+			ks.displayVx = true
+		}
+		fn := displayFn(v)
+		applyMotion(ks, MotionDef{
+			Fn: func(b *Buffer, c Cursor, count int) int {
+				return fn(c.Pos, c.Vx, count)
+			},
+			Vertical: true,
+			Display:  true,
+		}, selecting)
+	}
+	for _, mode := range []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeVisualBlock} {
+		ks.modes[mode].Bindings.Bind(handler, keys...)
+	}
+
+	// Operator-pending: a charwise motion to the display-line target, from
+	// the cursor's own display column (no sticky state).
+	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
+		v := ks.ActiveView()
+		if v == nil || !v.SoftWrap {
+			execMotionOp(ks, MotionDef{Fn: lineFn})
+			return
+		}
+		fn := displayFn(v)
+		execMotionOp(ks, MotionDef{Fn: func(b *Buffer, c Cursor, count int) int {
+			_, x := v.displayLoc(c.Pos)
+			return fn(c.Pos, x, count)
+		}})
+	}, keys...)
+}
+
 func motionMatchBracket(b *Buffer, c Cursor, _ int) int {
 	open := map[rune]rune{'(': ')', '{': '}', '[': ']'}
 	close := map[rune]rune{')': '(', '}': '{', ']': '['}
@@ -605,6 +741,11 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop, Flags: Linewise})
 	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom, Flags: Linewise})
 
+	// gj/gk: move by display (visual) lines when softwrap is on. The
+	// default init.tcl remaps j/k to these in normal and visual modes.
+	registerDisplayMotion(ks, []string{"g", "j"}, true)
+	registerDisplayMotion(ks, []string{"g", "k"}, false)
+
 	registerMotion(ks, []string{"w"}, MotionDef{Fn: motionWordRight, Name: "w"})
 	registerMotion(ks, []string{"b"}, MotionDef{Fn: motionWordLeft, Name: "b"})
 	registerMotion(ks, []string{"e"}, MotionDef{Fn: motionWordEnd, Flags: Inclusive, Name: "e"})
@@ -623,6 +764,7 @@ func RegisterMotions(ks *KeyState) {
 		if v == nil {
 			return
 		}
+		ks.ensureLineVx()
 		b := ks.Buf()
 		halfPage := v.height / 2
 		count := ks.RawCount()

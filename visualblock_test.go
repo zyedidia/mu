@@ -11,11 +11,12 @@ func feedDisplay(ks *KeyState, keys ...string) {
 	for _, k := range keys {
 		for _, ch := range splitKeys(k) {
 			ks.HandleKey(ch)
-			if !ks.vertical {
+			if !ks.vertical && len(ks.keys) == 0 {
 				b := ks.Buf()
 				for i := 0; i < b.NumCursors(); i++ {
 					b.cursors[i].Vx = b.VisualCol(b.cursors[i].Pos)
 				}
+				ks.displayVx = false
 			}
 			ks.vertical = false
 		}
