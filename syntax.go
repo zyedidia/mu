@@ -185,6 +185,17 @@ func (b *Buffer) startBackgroundHighlight() {
 		ss.hisem.Acquire(context.Background(), 1)
 		defer ss.hisem.Release(1)
 
+		// Superseded while queued (the window was re-positioned again):
+		// skip the parse entirely, so rapid window jumps cost one full
+		// parse instead of queueing one per jump — the pass for the live
+		// window would otherwise wait behind every stale one.
+		ss.mu.Lock()
+		stale := ss.gen != gen
+		ss.mu.Unlock()
+		if stale {
+			return
+		}
+
 		tbl := memo.NewTreeTable(512)
 		ss.highlighter.HighlightFunc(bytes.NewReader(data), tbl, nil, &vm.Interval{Low: 0, High: 0})
 
@@ -305,10 +316,20 @@ func (b *Buffer) SyntaxCheckWindow(cursorPos int) {
 	if ss == nil || b.Len() <= syntaxWindowSize {
 		return
 	}
+	// The cursor can sit on the phantom line at b.Len(), while a window
+	// reaching the end of the buffer has coreEnd == b.Len(): probing with
+	// the raw position would count as outside on every frame, resetting
+	// the window and spawning a fresh background parse each time — an
+	// endless flashing loop, self-sustained by the redraw each completed
+	// parse triggers.
+	probe := cursorPos
+	if probe >= b.Len() {
+		probe = b.Len() - 1
+	}
 	ss.mu.Lock()
-	outside := cursorPos < ss.coreStart || cursorPos >= ss.coreEnd
+	outside := probe < ss.coreStart || probe >= ss.coreEnd
 	if outside {
-		ss.setWindow(cursorPos, b.Len())
+		ss.setWindow(probe, b.Len())
 		ss.syntbl = memo.NewTreeTable(512)
 		ss.matches = nil
 		ss.minvalid = true
