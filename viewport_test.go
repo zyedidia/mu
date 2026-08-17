@@ -342,3 +342,63 @@ func TestScrollNoSoftwrapUnchanged(t *testing.T) {
 		t.Fatalf("cursor line after C-d = %d, want 3", line)
 	}
 }
+
+func TestRelocateClampsUnderfullViewport(t *testing.T) {
+	// A restored viewport can start below maxTopRow (saved from a smaller
+	// pane, or the file shrank since), leaving the window under-full:
+	// blank rows past EOF with the cursor sitting mid-screen. The margin
+	// logic alone keeps any viewport that already shows the cursor, so
+	// Relocate must clamp first.
+	ks, v := newScrollState(strings.Repeat("x\n", 100), 20, 10, 4)
+	v.SoftWrap = false
+	b := ks.Buf()
+
+	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(98, 0))
+	v.topline = 93 // only 8 rows of file remain for a 10-row window
+
+	if row := cursorScreenRow(v); row != 7 {
+		t.Fatalf("cursor screen row = %d, want 7", row)
+	}
+	if v.topline != 91 {
+		t.Fatalf("topline = %d, want 91 (last line on the bottom row)", v.topline)
+	}
+}
+
+func TestRelocateShortFileKeepsTopZero(t *testing.T) {
+	// When the whole file fits in the window, blank rows below are
+	// correct and the viewport clamps to the very top.
+	ks, v := newScrollState("a\nb\nc\n", 20, 10, 4)
+	v.SoftWrap = false
+	b := ks.Buf()
+	*b.Cursor() = b.Cursor().MoveTo(0)
+	v.topline = 2 // stale
+
+	v.Relocate()
+	if v.topline != 0 {
+		t.Fatalf("topline = %d, want 0", v.topline)
+	}
+}
+
+func TestRelocateWrappedUnderfullClamp(t *testing.T) {
+	// With softwrap the line-count pre-check is conservative: wrapped
+	// lines can fill the window even when few lines remain. A top that
+	// yields exactly height rows is kept; one row lower is pulled back.
+	ks, v := newScrollState(fourWrapped, 5, 4, 0)
+	b := ks.Buf()
+
+	// Top at line 2 row 0: rows 5 of 4 needed below - full, kept.
+	*b.Cursor() = b.Cursor().MoveTo(22) // line 2
+	v.topline = 2
+	v.Relocate()
+	if v.topline != 2 || v.topcol != 0 {
+		t.Fatalf("full wrapped window moved: top = (%d,%d), want (2,0)", v.topline, v.topcol)
+	}
+
+	// Top at line 3: only 3 rows remain - clamped to (line 2, row 1).
+	*b.Cursor() = b.Cursor().MoveTo(33) // line 3
+	v.topline = 3
+	v.Relocate()
+	if v.topline != 2 || v.topcol != 5 {
+		t.Fatalf("underfull wrapped window: top = (%d,%d), want (2,5)", v.topline, v.topcol)
+	}
+}

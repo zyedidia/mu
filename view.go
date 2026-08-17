@@ -420,6 +420,23 @@ func (v *View) Relocate() {
 	curLine, curRow := v.displayRowOf(c.Pos)
 	topLine, topRow := v.topRow()
 
+	// A stale viewport start can sit below maxTopRow — a session restored
+	// from a smaller pane, a window that grew, a file that shrank — which
+	// would leave the window under-full, showing blank rows past the end
+	// of the buffer. Vim keeps the window full whenever the buffer allows,
+	// so clamp before the margin logic (which otherwise keeps any viewport
+	// that already shows the cursor). Every line fills at least one row,
+	// so the window can only be under-full when fewer than height lines
+	// remain below the top; the cheap line-count check skips the precise
+	// (row-walking) maxTopRow computation whenever the window is
+	// obviously full.
+	if topLine > v.buf.NumLines()-v.height {
+		if ml, mr := v.maxTopRow(); topLine > ml || (topLine == ml && topRow > mr) {
+			topLine, topRow = ml, mr
+			v.setTopRow(ml, mr)
+		}
+	}
+
 	dist := v.rowsBetween(topLine, topRow, curLine, curRow, v.height+1)
 	if dist < margin {
 		v.setTopRow(v.stepRows(curLine, curRow, -margin))
