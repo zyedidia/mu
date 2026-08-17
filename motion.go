@@ -26,6 +26,8 @@ type MotionDef struct {
 	// Display marks a display-line motion (gj/gk): Vx holds a row-local
 	// display column instead of a line-wide visual column.
 	Display bool
+	// IsJump marks motions that update the jump list (G, gg, {, }, %).
+	IsJump bool
 }
 
 // --- Motion application helpers ---
@@ -34,6 +36,9 @@ type MotionDef struct {
 func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	b := ks.Buf()
 	count := ks.RawCount()
+	if m.IsJump {
+		ks.RecordJump()
+	}
 	// After a display-line motion chain, cursors' Vx hold row-local display
 	// columns; any other motion expects line-wide visual columns.
 	if !m.Display {
@@ -720,8 +725,8 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"$"}, MotionDef{Fn: motionEOL, Name: "$"})
 	registerMotion(ks, []string{KeyEnd}, MotionDef{Fn: motionEOL, Name: "$"})
 
-	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop, Flags: Linewise})
-	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom, Flags: Linewise})
+	registerMotion(ks, []string{"g", "g"}, MotionDef{Fn: motionFileTop, Flags: Linewise, IsJump: true})
+	registerMotion(ks, []string{"G"}, MotionDef{Fn: motionFileBottom, Flags: Linewise, IsJump: true})
 
 	// gj/gk: move by display (visual) lines when softwrap is on. The
 	// default init.tcl remaps j/k to these in normal and visual modes.
@@ -735,8 +740,8 @@ func RegisterMotions(ks *KeyState) {
 	registerMotion(ks, []string{"B"}, MotionDef{Fn: motionWORDLeft, Name: "B"})
 	registerMotion(ks, []string{"E"}, MotionDef{Fn: motionWORDEnd, Flags: Inclusive, Name: "E"})
 
-	registerMotion(ks, []string{"{"}, MotionDef{Fn: motionParaUp})
-	registerMotion(ks, []string{"}"}, MotionDef{Fn: motionParaDown})
+	registerMotion(ks, []string{"{"}, MotionDef{Fn: motionParaUp, IsJump: true})
+	registerMotion(ks, []string{"}"}, MotionDef{Fn: motionParaDown, IsJump: true})
 
 	// Ctrl-D / Ctrl-U: half-page scroll. Scrolls the view and moves the
 	// cursor by the same number of visual rows so the cursor stays at the
@@ -786,7 +791,7 @@ func RegisterMotions(ks *KeyState) {
 	registerCharMotion(ks, "T", motionTillCharBack, motionTillChar, Charwise)
 
 	// %: matching bracket (inclusive: d% deletes both brackets)
-	registerMotion(ks, []string{"%"}, MotionDef{Fn: motionMatchBracket, Flags: Inclusive})
+	registerMotion(ks, []string{"%"}, MotionDef{Fn: motionMatchBracket, Flags: Inclusive, IsJump: true})
 
 	// ;: repeat last f/t/F/T
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {

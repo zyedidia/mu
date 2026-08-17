@@ -38,6 +38,7 @@ var editorCommands = []CommandDef{
 	{"bnext", cmdBNext, "bnext: next buffer"},
 	{"bprev", cmdBPrev, "bprev: previous buffer"},
 	{"bdelete", cmdBDelete, "bdelete [n|name]: remove a buffer from the buffer list"},
+	{"jumps", cmdJumps, "jumps: list the jump list"},
 	{"map", makeMapCmd(mapModeSets["map"]), "map <keys> <expansion>: map keys in normal/visual/pending modes (non-recursive)"},
 	{"nmap", makeMapCmd(mapModeSets["nmap"]), "nmap <keys> <expansion>: map keys in normal mode"},
 	{"vmap", makeMapCmd(mapModeSets["vmap"]), "vmap <keys> <expansion>: map keys in visual modes"},
@@ -269,6 +270,7 @@ func cmdEdit(e *Editor, args []string) error {
 		e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", v.buf.Path))
 		return nil
 	}
+	e.pushJump()
 	return e.OpenFile(args[0])
 }
 
@@ -471,6 +473,7 @@ func cmdBuffer(e *Editor, args []string) error {
 	if err != nil {
 		return err
 	}
+	e.pushJump()
 	e.showBuffer(b)
 	return nil
 }
@@ -492,6 +495,7 @@ func (e *Editor) cycleBuffer(dir int) error {
 		idx = 0
 	}
 	n := len(e.buffers)
+	e.pushJump()
 	e.showBuffer(e.buffers[((idx+dir)%n+n)%n])
 	return nil
 }
@@ -536,6 +540,7 @@ func cmdGoto(e *Editor, args []string) error {
 	if v == nil {
 		return fmt.Errorf("no buffer")
 	}
+	e.pushJump()
 	b := v.buf
 	line := n - 1
 	if line < 0 {

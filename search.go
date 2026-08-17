@@ -325,6 +325,7 @@ func (e *Editor) searchForward(pattern string) {
 		return
 	}
 	e.search = SearchState{pattern: pattern, direction: 1, re: re}
+	e.pushJump()
 	e.findNext(1)
 }
 
@@ -338,6 +339,7 @@ func (e *Editor) searchBackward(pattern string) {
 		return
 	}
 	e.search = SearchState{pattern: pattern, direction: -1, re: re}
+	e.pushJump()
 	e.findNext(-1)
 }
 
@@ -346,6 +348,7 @@ func (e *Editor) searchNext() {
 		e.infobar.Error("No previous search")
 		return
 	}
+	e.pushJump()
 	e.findNext(e.search.direction)
 }
 
@@ -354,6 +357,7 @@ func (e *Editor) searchPrev() {
 		e.infobar.Error("No previous search")
 		return
 	}
+	e.pushJump()
 	e.findNext(-e.search.direction)
 }
 
@@ -517,7 +521,15 @@ func (e *Editor) registerSearchBindings() {
 			origView := v.Viewport()
 			e.infobar.StartPromptIncremental("/",
 				func(input string) { e.incrementalSearch(input, origPos, origView, 1) },
-				func(input string) { e.clearSearchHighlight(); e.finalizeSearch(input, 1) },
+				func(input string) {
+					e.clearSearchHighlight()
+					// The accepted search is a jump from the original
+					// position (the cursor already moved incrementally).
+					if b.Cursor().Pos != origPos {
+						e.pushJumpAt(b, origPos)
+					}
+					e.finalizeSearch(input, 1)
+				},
 				func() {
 					// Cancel: put both the cursor and the viewport back
 					// exactly where they were.
@@ -542,7 +554,13 @@ func (e *Editor) registerSearchBindings() {
 			origView := v.Viewport()
 			e.infobar.StartPromptIncremental("?",
 				func(input string) { e.incrementalSearch(input, origPos, origView, -1) },
-				func(input string) { e.clearSearchHighlight(); e.finalizeSearch(input, -1) },
+				func(input string) {
+					e.clearSearchHighlight()
+					if b.Cursor().Pos != origPos {
+						e.pushJumpAt(b, origPos)
+					}
+					e.finalizeSearch(input, -1)
+				},
 				func() {
 					e.clearSearchHighlight()
 					*b.Cursor() = b.Cursor().MoveTo(origPos)

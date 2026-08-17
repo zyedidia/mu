@@ -125,6 +125,9 @@ func (e *Editor) lspGotoDefinition() {
 	targetPath := loc.URI.Filename()
 	targetAbsPath, _ := filepath.Abs(b.Path)
 
+	// gd is a jump: <C-o> returns here, across files too.
+	e.pushJump()
+
 	if targetPath == targetAbsPath {
 		// Same file: jump to position.
 		target := b.FromLspPosition(loc.Range.Start)

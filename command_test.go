@@ -27,6 +27,7 @@ func newTestEditor() *Editor {
 		return ed.ActiveView()
 	}
 	ed.ks.dispatch = ed.dispatchKey
+	ed.ks.recordJump = ed.pushJump
 	ed.comments = cfg.LoadComments()
 	ed.ks.commentPrefix = func(b *Buffer) string {
 		return ed.comments[b.Filetype]

@@ -184,6 +184,10 @@ type KeyState struct {
 	macroDepth int        // >0 while replaying a macro (nested @)
 	lastMacro  RegisterID // register of the last @<reg> for @@
 
+	// recordJump saves the current position in the editor's jump list;
+	// called before jump commands (G, gg, searches, ...) move away.
+	recordJump func()
+
 	// dispatch routes a key the way a real keystroke would be routed
 	// (through the editor's infobar/completion checks). Set by the editor;
 	// macro replay uses it so recorded ':' and '/' interactions work. When
@@ -371,6 +375,14 @@ func (ks *KeyState) ResetAction() {
 			b.cursors[i] = b.cursors[i].VimClamp(b)
 		}
 		b.MergeCursors()
+	}
+}
+
+// RecordJump saves the current position in the editor's jump list, when
+// one is wired up.
+func (ks *KeyState) RecordJump() {
+	if ks.recordJump != nil {
+		ks.recordJump()
 	}
 }
 

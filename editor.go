@@ -38,6 +38,9 @@ type Editor struct {
 	bufnum  int     // last assigned buffer number
 	altBuf  *Buffer // alternate buffer (:b #): previously shown buffer
 
+	// jumps is the jump list (<C-o>/<C-i>).
+	jumps JumpList
+
 	// mainq holds actions posted from background goroutines (LSP receive
 	// loop, file watchers) to run on the main event-loop goroutine.
 	mainq chan func()
@@ -99,6 +102,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		return ed.ActiveView()
 	}
 	ks.dispatch = ed.dispatchKey
+	ks.recordJump = ed.pushJump
 
 	// Comment prefix lookup for gc (comment toggle) and gq (formatting).
 	// A missing entry is not an error: gq formats plain text in any
@@ -262,6 +266,21 @@ func (e *Editor) registerEditorBindings() {
 		ks.ResetAction()
 	})
 
+	// Ctrl-O / Ctrl-I (Tab): jump list navigation. Terminals deliver
+	// Ctrl-I as Tab, so Tab is the forward binding, as in vim.
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		for i := 0; i < ks.Count(); i++ {
+			e.jumpBack()
+		}
+		ks.ResetAction()
+	}, "<C-o>")
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		for i := 0; i < ks.Count(); i++ {
+			e.jumpForward()
+		}
+		ks.ResetAction()
+	}, KeyTab)
+
 	// gt: next tab
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.NextTab()
@@ -375,6 +394,7 @@ func (e *Editor) deleteBuffer(b *Buffer) {
 	if e.altBuf == b {
 		e.altBuf = nil
 	}
+	e.jumps.prune(e.bufferListed)
 
 	for _, t := range e.tabs {
 		for id, v := range t.panes {

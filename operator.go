@@ -1143,6 +1143,7 @@ func RegisterOperators(ks *KeyState) {
 	// scrolloff).
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			ks.RecordJump()
 			tl, tr := v.topRow()
 			n := 0
 			if tl > 0 || tr > 0 {
@@ -1155,6 +1156,7 @@ func RegisterOperators(ks *KeyState) {
 	}, "H")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			ks.RecordJump()
 			tl, tr := v.topRow()
 			l, r := v.stepRows(tl, tr, v.height/2)
 			*v.buf.Cursor() = v.buf.Cursor().MoveTo(v.displayPos(l, r, 0)).VimClamp(v.buf)
@@ -1163,6 +1165,7 @@ func RegisterOperators(ks *KeyState) {
 	}, "M")
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := ks.ActiveView(); v != nil {
+			ks.RecordJump()
 			b := v.buf
 			tl, tr := v.topRow()
 			ll, lr := b.NumLines(), v.displayRows(b.NumLines())-1
@@ -1243,6 +1246,7 @@ func RegisterOperators(ks *KeyState) {
 		ks.WaitForChar(func(ks *KeyState, ch string) {
 			if len(ch) == 1 {
 				if pos, ok := ks.marks[ch[0]]; ok {
+					ks.RecordJump()
 					b := ks.Buf()
 					if pos > b.Len() {
 						pos = b.Len()
@@ -1259,6 +1263,7 @@ func RegisterOperators(ks *KeyState) {
 		ks.WaitForChar(func(ks *KeyState, ch string) {
 			if len(ch) == 1 {
 				if pos, ok := ks.marks[ch[0]]; ok {
+					ks.RecordJump()
 					b := ks.Buf()
 					if pos > b.Len() {
 						pos = b.Len()
