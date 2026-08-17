@@ -40,6 +40,20 @@ func (e *Editor) initLsp() {
 				}
 			})
 		},
+		onApplyEdit: func(edit lspWorkspaceEdit) lsp.ApplyWorkspaceEditResponse {
+			// workspace/applyEdit is a request, so the server needs a reply.
+			// Marshal the mutation to the editor goroutine and wait for that
+			// bounded piece of local work to finish.
+			done := make(chan lsp.ApplyWorkspaceEditResponse, 1)
+			e.postToMain(func() {
+				if err := e.applyWorkspaceEdit(edit); err != nil {
+					done <- lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: err.Error()}
+				} else {
+					done <- lsp.ApplyWorkspaceEditResponse{Applied: true}
+				}
+			})
+			return <-done
+		},
 	})
 }
 
@@ -74,6 +88,7 @@ func (e *Editor) handleDiagnostics(params lsp.PublishDiagnosticsParams) {
 			absPath, _ := filepath.Abs(v.buf.Path)
 			if absPath == path {
 				v.buf.ClearDiagnostics()
+				v.buf.lspDiagnostics = append(v.buf.lspDiagnostics, params.Diagnostics...)
 				for _, d := range params.Diagnostics {
 					_, col8 := v.buf.Utf8Loc(int(d.Range.Start.Line), int(d.Range.Start.Character))
 					dtype := DiagWarning
@@ -272,6 +287,7 @@ func init() {
 		CommandDef{"lsp-hover", cmdLspHover, "lsp-hover: show hover info"},
 		CommandDef{"lsp-def", cmdLspDef, "lsp-def: go to definition"},
 		CommandDef{"lsp-format", cmdLspFormat, "lsp-format: format document"},
+		CommandDef{"lsp-actions", cmdLspActions, "lsp-actions: show code actions"},
 	)
 }
 
@@ -282,6 +298,11 @@ func cmdLspHover(e *Editor, args []string) error {
 
 func cmdLspDef(e *Editor, args []string) error {
 	e.lspGotoDefinition()
+	return nil
+}
+
+func cmdLspActions(e *Editor, args []string) error {
+	e.lspCodeActions()
 	return nil
 }
 

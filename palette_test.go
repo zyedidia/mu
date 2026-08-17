@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestFuzzyScore(t *testing.T) {
@@ -82,5 +83,35 @@ func TestPaletteCommand(t *testing.T) {
 	ed.RunCommand("palette nope")
 	if !ed.infobar.msgErr {
 		t.Fatal("unknown palette mode should report an error")
+	}
+}
+
+func TestPaletteLspCodeActions(t *testing.T) {
+	fake := &fakeLspServer{}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.Path = "/tmp/x.go"
+	b.text.Insert(0, []byte("hi\n"))
+	b.lspServer = s
+
+	start := time.Now()
+	if err := ed.startPalette("actions"); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > 50*time.Millisecond {
+		t.Fatal("code-action palette blocked on the LSP request")
+	}
+	drainUntil(t, ed, "code-action palette", func() bool {
+		return ed.palette.active && len(ed.palette.items) == 1
+	})
+	if got := ed.palette.items[0].label; got != "Make greeting" {
+		t.Fatalf("action label = %q", got)
+	}
+	ed.dispatchKey(KeyEnter)
+	if got := string(b.Slice(0, b.Len())); got != "hello\n" {
+		t.Fatalf("applied action = %q, want %q", got, "hello\n")
 	}
 }

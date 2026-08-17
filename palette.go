@@ -27,7 +27,7 @@ type Palette struct {
 func init() {
 	editorCommands = append(editorCommands, CommandDef{
 		"palette", cmdPalette,
-		"palette [files|text|buffers|commands]: open the searchable palette",
+		"palette [files|text|buffers|commands|actions]: open the searchable palette",
 	})
 }
 
@@ -60,6 +60,9 @@ func (e *Editor) startPalette(mode string) error {
 		prompt = "Text> "
 		files := paletteFiles(".")
 		filter = func(query string) []paletteItem { return e.textItems(".", files, query) }
+	case "actions", "action", "code-actions":
+		e.lspCodeActions()
+		return nil
 	default:
 		return fmt.Errorf("palette: unknown mode %q", mode)
 	}
@@ -72,12 +75,21 @@ func (e *Editor) startPalette(mode string) error {
 	return nil
 }
 
+func (e *Editor) startPaletteItems(prompt string, items []paletteItem) {
+	e.palette = Palette{active: true, filter: filterPaletteItems(items)}
+	e.infobar.StartPromptIncremental(prompt, e.updatePalette, nil, func() {
+		e.palette = Palette{}
+	})
+	e.updatePalette("")
+}
+
 func (e *Editor) paletteModes(query string) []paletteItem {
 	modes := []struct{ name, mode string }{
 		{"Files — search file names", "files"},
 		{"Text — search file contents", "text"},
 		{"Buffers — search open buffers", "buffers"},
 		{"Commands — run an editor command", "commands"},
+		{"Code Actions — apply an LSP code action", "actions"},
 	}
 	items := make([]paletteItem, 0, len(modes))
 	for _, m := range modes {

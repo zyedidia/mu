@@ -39,7 +39,10 @@ type Buffer struct {
 	modTime     time.Time // mtime when last loaded/saved
 	savedHash   []byte    // md5 of contents at last save/load (nil if too large)
 	diagnostics []Diagnostic
-	syntax      *SyntaxState
+	// Keep the original protocol diagnostics as well as the display-friendly
+	// projection above; code-action requests must echo relevant diagnostics.
+	lspDiagnostics []lsp.Diagnostic
+	syntax         *SyntaxState
 
 	lspServer  *LspServer
 	lspVersion int32

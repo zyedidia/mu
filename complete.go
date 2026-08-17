@@ -104,7 +104,7 @@ func completeCommandArg(e *Editor, cmd, argStr string) []string {
 		}
 	case "palette":
 		if argIndex == 0 {
-			return filterPrefix([]string{"buffers", "commands", "files", "text"}, lastArg)
+			return filterPrefix([]string{"actions", "buffers", "commands", "files", "text"}, lastArg)
 		}
 	}
 
