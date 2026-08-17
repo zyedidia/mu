@@ -398,6 +398,97 @@ func execVisualOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, i
 	ks.ResetAction()
 }
 
+// joinLineAt joins line with the following line, replacing the newline and
+// the next line's leading whitespace with a single space (vim J). Returns
+// the position of the inserted space, or -1 when there is no next line.
+func joinLineAt(b *Buffer, line int) int {
+	end := b.OffsetAt(line, 0) + b.LineLen(line)
+	if end >= b.Len() {
+		return -1
+	}
+	nlEnd := end + 1 // past the \n
+	for nlEnd < b.Len() {
+		r, _, sz := b.DecodeGraphemeAt(nlEnd)
+		if !unicode.IsSpace(r) || r == '\n' {
+			break
+		}
+		nlEnd += sz
+	}
+	b.Remove(end, nlEnd)
+	b.Insert(end, []byte(" "))
+	return end
+}
+
+// execVisualJoin joins the lines covered by the selection (vim v_J). A
+// selection within one line joins it with the next, like normal-mode J.
+// The cursor is left on the last inserted space.
+func execVisualJoin(ks *KeyState) {
+	b := ks.Buf()
+	b.UndoBarrier()
+	for i := 0; i < b.NumCursors(); i++ {
+		c := b.cursors[i]
+		if !c.HasSelection() {
+			continue
+		}
+		sl, _ := b.LineColAt(c.Sel[0])
+		el, _ := b.LineColAt(c.Sel[1])
+		if el > sl && b.OffsetAt(el, 0) == c.Sel[1] {
+			el--
+		}
+		joins := el - sl
+		if joins < 1 {
+			joins = 1
+		}
+		pos := -1
+		for j := 0; j < joins; j++ {
+			p := joinLineAt(b, sl)
+			if p < 0 {
+				break
+			}
+			pos = p
+		}
+		if pos >= 0 {
+			b.cursors[i] = b.cursors[i].MoveTo(pos).VimClamp(b)
+		} else {
+			b.cursors[i].HasSel = false
+		}
+	}
+	ks.SetMode(ModeNormal)
+	ks.ResetAction()
+}
+
+// execVisualReplace replaces every character in the selection with ch,
+// keeping newlines (vim v_r). The cursor is left at the selection start.
+func execVisualReplace(ks *KeyState, ch string) {
+	b := ks.Buf()
+	b.UndoBarrier()
+	for i := 0; i < b.NumCursors(); i++ {
+		c := b.cursors[i]
+		if !c.HasSelection() {
+			continue
+		}
+		start, end := c.Sel[0], c.Sel[1]
+		var out []byte
+		for pos := start; pos < end; {
+			r, _, sz := b.DecodeGraphemeAt(pos)
+			if sz == 0 {
+				break
+			}
+			if r == '\n' {
+				out = append(out, '\n')
+			} else {
+				out = append(out, ch...)
+			}
+			pos += sz
+		}
+		b.Remove(start, end)
+		b.Insert(start, out)
+		b.cursors[i] = b.cursors[i].MoveTo(start).VimClamp(b)
+	}
+	ks.SetMode(ModeNormal)
+	ks.ResetAction()
+}
+
 // --- Operator binding helpers ---
 
 // execDoubledOp runs the pending operator linewise if the pressed key
@@ -569,24 +660,20 @@ func RegisterOperators(ks *KeyState) {
 			count--
 		}
 		for j := 0; j < count; j++ {
-			c := b.Cursor()
-			end := c.LineEnd(b).Pos
-			if end < b.Len() {
-				// Remove newline and leading whitespace on next line.
-				nlEnd := end + 1 // past the \n
-				for nlEnd < b.Len() {
-					r, _, sz := b.DecodeGraphemeAt(nlEnd)
-					if !unicode.IsSpace(r) || r == '\n' {
-						break
-					}
-					nlEnd += sz
-				}
-				b.Remove(end, nlEnd)
-				b.Insert(end, []byte(" "))
+			line, _ := b.LineColAt(b.Cursor().Pos)
+			if joinLineAt(b, line) < 0 {
+				break
 			}
 		}
 		ks.ResetAction()
 	}, "J")
+
+	// J in visual modes: join the selected lines (vim v_J).
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualJoin(ks)
+		}, "J")
+	}
 
 	// u: undo (not repeatable; takes a count as in vim)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
@@ -1293,6 +1380,34 @@ func RegisterOperators(ks *KeyState) {
 				opCase(b, start, end, unicode.ToUpper)
 			})
 		}, "U")
+	}
+
+	// x/s in visual modes: delete/change the selection (vim v_x, v_s).
+	// ~ toggles case, and r<char> fills the selection with a character.
+	// (Visual-block mode has its own rectangle versions.)
+	for _, mode := range []ModeID{ModeVisual, ModeVisualLine} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualOp(ks, "d", opDelete)
+		}, "x")
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualOp(ks, "c", opChange)
+		}, "s")
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			execVisualOp(ks, "", func(ks *KeyState, b *Buffer, start, end int) {
+				opCase(b, start, end, toggleRuneCase)
+			})
+		}, "~")
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			ks.WaitForChar(func(ks *KeyState, ch string) {
+				if ch == KeyTab {
+					ch = "\t"
+				} else if len([]rune(ch)) != 1 {
+					ks.ResetAction()
+					return
+				}
+				execVisualReplace(ks, ch)
+			})
+		}, "r")
 	}
 }
 
