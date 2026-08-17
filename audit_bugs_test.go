@@ -448,8 +448,14 @@ func TestReplacedBufferWatcherStopped(t *testing.T) {
 	if err := ed.OpenFile(c); err != nil {
 		t.Fatal(err)
 	}
+	// The replaced buffer is hidden, not dropped: its watcher keeps the
+	// content fresh until the buffer is deleted from the buffer list.
+	if old.watchDone == nil {
+		t.Fatal("hidden buffer's watcher should keep running")
+	}
+	ed.deleteBuffer(old)
 	if old.watchDone != nil {
-		t.Fatal("dropped buffer's watcher still running")
+		t.Fatal("deleted buffer's watcher still running")
 	}
 }
 

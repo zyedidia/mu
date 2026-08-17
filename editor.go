@@ -32,6 +32,12 @@ type Editor struct {
 	// comments maps filetype → line-comment prefix (from comments.toml).
 	comments map[string]string
 
+	// buffers is the buffer list: every buffer opened this session, in
+	// creation order, including hidden ones (not shown in any pane).
+	buffers []*Buffer
+	bufnum  int     // last assigned buffer number
+	altBuf  *Buffer // alternate buffer (:b #): previously shown buffer
+
 	// mainq holds actions posted from background goroutines (LSP receive
 	// loop, file watchers) to run on the main event-loop goroutine.
 	mainq chan func()
@@ -152,13 +158,18 @@ func (e *Editor) registerEditorBindings() {
 		e.running = false
 	}, "Z", "Q")
 
-	// ZZ: save and quit
+	// ZZ: save and quit (refusing if another buffer has unsaved changes,
+	// as vim does on the last window)
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		if v := e.ActiveView(); v != nil && v.buf.Path != "" {
 			if err := v.buf.Save(); err != nil {
 				e.infobar.Error(err.Error())
 				return
 			}
+		}
+		if mb := e.anyModifiedBuffer(); mb != nil {
+			e.infobar.Error(fmt.Sprintf("No write since last change for %s", bufDisplayName(mb)))
+			return
 		}
 		e.running = false
 	}, "Z", "Z")
@@ -290,8 +301,107 @@ func (e *Editor) syncActiveBuffer() {
 	}
 }
 
+// --- Buffer list ---
+
+// registerBuffer adds a buffer to the buffer list, assigning it a stable
+// number. Idempotent.
+func (e *Editor) registerBuffer(b *Buffer) {
+	for _, ob := range e.buffers {
+		if ob == b {
+			return
+		}
+	}
+	e.bufnum++
+	b.bufnum = e.bufnum
+	e.buffers = append(e.buffers, b)
+}
+
+// bufDisplayName returns a buffer's name for messages and :ls.
+func bufDisplayName(b *Buffer) string {
+	if b.Path == "" {
+		return "[No Name]"
+	}
+	return b.Path
+}
+
+// anyModifiedBuffer returns a buffer with unsaved changes, or nil. Hidden
+// buffers count: quitting must not silently drop their edits.
+func (e *Editor) anyModifiedBuffer() *Buffer {
+	for _, b := range e.buffers {
+		if b.Modified() {
+			return b
+		}
+	}
+	return nil
+}
+
+// lastPane reports whether only one pane remains (closing it exits).
+func (e *Editor) lastPane() bool {
+	return len(e.tabs) == 1 && e.tabs[0].NumPanes() == 1
+}
+
+// showBuffer displays b in the active pane. The pane's previous buffer
+// stays in the buffer list and becomes the alternate buffer.
+func (e *Editor) showBuffer(b *Buffer) {
+	if cur := e.ActiveView(); cur != nil && cur.buf == b {
+		return
+	}
+	v := e.newViewWithOptions(b)
+	v.savedCursor = *b.Cursor()
+	e.showView(v)
+}
+
+// deleteBuffer removes b from the buffer list, replaces it in any pane
+// showing it (with the alternate buffer, another listed buffer, or a new
+// empty one), and releases its background resources.
+func (e *Editor) deleteBuffer(b *Buffer) {
+	var repl *Buffer
+	if e.altBuf != nil && e.altBuf != b {
+		repl = e.altBuf
+	} else {
+		for _, ob := range e.buffers {
+			if ob != b {
+				repl = ob
+				break
+			}
+		}
+	}
+	for i, ob := range e.buffers {
+		if ob == b {
+			e.buffers = append(e.buffers[:i], e.buffers[i+1:]...)
+			break
+		}
+	}
+	if e.altBuf == b {
+		e.altBuf = nil
+	}
+
+	for _, t := range e.tabs {
+		for id, v := range t.panes {
+			if v.buf != b {
+				continue
+			}
+			e.saveViewState(v)
+			if repl == nil {
+				nb := NewEmptyBuffer()
+				repl = e.configureView(nb, "").buf
+				e.registerBuffer(repl)
+			}
+			nv := e.newViewWithOptions(repl)
+			nv.savedCursor = *repl.Cursor()
+			t.panes[id] = nv
+		}
+		t.Resize(t.w, t.h)
+	}
+	e.syncActiveBuffer()
+
+	b.StopWatcher()
+	b.LspClose()
+}
+
 // NewTabWithView creates a new tab containing the given view.
 func (e *Editor) NewTabWithView(v *View) {
+	e.registerBuffer(v.buf)
 	t := NewTab(v, e.w, e.h-1-e.tabBarHeight())
 	e.tabs = append(e.tabs, t)
 	e.curtab = len(e.tabs) - 1
@@ -356,6 +466,7 @@ func (e *Editor) VSplit(args []string) {
 	if v == nil {
 		return
 	}
+	e.registerBuffer(v.buf)
 	e.ActiveTab().VSplit(v)
 	e.syncActiveBuffer()
 }
@@ -366,6 +477,7 @@ func (e *Editor) HSplit(args []string) {
 	if v == nil {
 		return
 	}
+	e.registerBuffer(v.buf)
 	e.ActiveTab().HSplit(v)
 	e.syncActiveBuffer()
 }
@@ -392,25 +504,17 @@ func (e *Editor) ClosePane() {
 	e.releaseViewBuffer(removed)
 }
 
-// makeNewView creates a view for a split. Opens the file from args[0] or
-// creates a view of the current buffer.
+// makeNewView creates a view for a split. Opens the file from args[0] (or
+// shares its buffer if already open); with no args, views the current
+// buffer.
 func (e *Editor) makeNewView(args []string) *View {
 	if len(args) > 0 && args[0] != "" {
-		data, err := os.ReadFile(args[0])
-		if err != nil {
-			if os.IsNotExist(err) {
-				data = []byte{}
-			} else {
-				e.infobar.Error(fmt.Sprintf("open: %v", err))
-				return nil
-			}
-		}
-		buf, err := NewBuffer(data, args[0])
+		v, err := e.viewForFile(args[0])
 		if err != nil {
 			e.infobar.Error(fmt.Sprintf("open: %v", err))
 			return nil
 		}
-		return e.configureView(buf, args[0])
+		return v
 	}
 	// Duplicate current buffer in a new view (no re-init of syntax/LSP/watcher).
 	cur := e.ActiveView()
@@ -425,22 +529,58 @@ func (e *Editor) makeNewView(args []string) *View {
 
 // --- Opening files ---
 
-// OpenFile opens a file in a new view. If no tabs exist, creates one.
-// Otherwise adds to the current tab.
-func (e *Editor) OpenFile(path string) error {
+// samePath reports whether two paths refer to the same file, compared
+// absolutely.
+func samePath(a, b string) bool {
+	aa, err1 := filepath.Abs(a)
+	bb, err2 := filepath.Abs(b)
+	return err1 == nil && err2 == nil && aa == bb
+}
+
+// findBuffer returns the listed buffer for path (hidden ones included), or
+// nil. Keeping one buffer per file means shared content, a single LSP
+// document/version counter, and a single file watcher, however many panes
+// show it — and reopening a hidden file's path resurfaces its buffer.
+func (e *Editor) findBuffer(path string) *Buffer {
+	for _, b := range e.buffers {
+		if b.Path != "" && samePath(b.Path, path) {
+			return b
+		}
+	}
+	return nil
+}
+
+// viewForFile returns a view for path: a new view of the already-open
+// buffer when the file is open somewhere, otherwise a freshly configured
+// buffer read from disk.
+func (e *Editor) viewForFile(path string) (*View, error) {
+	if b := e.findBuffer(path); b != nil {
+		v := e.newViewWithOptions(b)
+		v.savedCursor = *b.Cursor()
+		return v, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			data = []byte{}
 		} else {
-			return err
+			return nil, err
 		}
 	}
 	buf, err := NewBuffer(data, path)
 	if err != nil {
+		return nil, err
+	}
+	return e.configureView(buf, path), nil
+}
+
+// OpenFile opens a file in a new view. If no tabs exist, creates one.
+// Otherwise adds to the current tab.
+func (e *Editor) OpenFile(path string) error {
+	v, err := e.viewForFile(path)
+	if err != nil {
 		return err
 	}
-	v := e.configureView(buf, path)
 	e.showView(v)
 	return nil
 }
@@ -469,19 +609,10 @@ func (e *Editor) OpenFiles(paths []string) error {
 
 // OpenFileInTab opens a file in a new tab.
 func (e *Editor) OpenFileInTab(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			data = []byte{}
-		} else {
-			return err
-		}
-	}
-	buf, err := NewBuffer(data, path)
+	v, err := e.viewForFile(path)
 	if err != nil {
 		return err
 	}
-	v := e.configureView(buf, path)
 	e.NewTabWithView(v)
 	return nil
 }
@@ -497,6 +628,7 @@ func (e *Editor) OpenEmpty() {
 // exists, otherwise replacing the active pane. The replaced view's buffer
 // is released if no other pane shows it.
 func (e *Editor) showView(v *View) {
+	e.registerBuffer(v.buf)
 	if len(e.tabs) == 0 {
 		e.NewTabWithView(v)
 		return
@@ -507,6 +639,9 @@ func (e *Editor) showView(v *View) {
 		// The replaced view was the focused pane: sync its cursor so
 		// releaseViewBuffer saves its state.
 		old.Deactivate()
+		if old.buf != v.buf {
+			e.altBuf = old.buf
+		}
 	}
 	t.panes[t.cur] = v
 	t.Resize(t.w, t.h)
@@ -530,42 +665,14 @@ func (e *Editor) saveViewState(v *View) {
 	}
 }
 
-// releaseViewBuffer persists a discarded view's state, then stops
-// per-buffer background state (file watcher, LSP document) for its buffer
-// once no pane shows it anymore. Call after the view has been removed from
-// all tabs.
+// releaseViewBuffer persists a discarded view's state. The buffer itself
+// stays alive in the buffer list (hidden), keeping its watcher and LSP
+// document; deleteBuffer releases those.
 func (e *Editor) releaseViewBuffer(v *View) {
 	if v == nil {
 		return
 	}
 	e.saveViewState(v)
-	b := v.buf
-	for _, t := range e.tabs {
-		for _, p := range t.panes {
-			if p.buf == b {
-				return // still visible somewhere
-			}
-		}
-	}
-	b.StopWatcher()
-	if b.lspServer != nil {
-		// LSP documents are keyed by URI, not by buffer: if another buffer
-		// of the same file is still open (e.g. :vs foo.go opened it twice),
-		// a didClose here would kill the surviving buffer's document.
-		abs, _ := filepath.Abs(b.Path)
-		for _, t := range e.tabs {
-			for _, p := range t.panes {
-				if p.buf.lspServer == nil {
-					continue
-				}
-				if pabs, _ := filepath.Abs(p.buf.Path); pabs == abs {
-					b.lspServer = nil // drop our handle without closing
-					return
-				}
-			}
-		}
-		b.LspClose()
-	}
 }
 
 // newViewWithOptions creates a View for a buffer and applies display options

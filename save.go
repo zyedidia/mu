@@ -20,8 +20,9 @@ func (b *Buffer) Save() error {
 	return b.SaveAs(b.Path)
 }
 
-// SaveAs writes the buffer to the given path.
-func (b *Buffer) SaveAs(path string) error {
+// SaveTo writes the buffer's contents to path without adopting it: the
+// buffer keeps its own file name and modified state (vim's ":w file").
+func (b *Buffer) SaveTo(path string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
@@ -45,8 +46,13 @@ func (b *Buffer) SaveAs(path string) error {
 		return fmt.Errorf("save: mkdir: %w", err)
 	}
 
-	// Write to file.
-	if err := b.writeToFile(absPath); err != nil {
+	return b.writeToFile(absPath)
+}
+
+// SaveAs writes the buffer to the given path and adopts it as the buffer's
+// file name.
+func (b *Buffer) SaveAs(path string) error {
+	if err := b.SaveTo(path); err != nil {
 		return err
 	}
 

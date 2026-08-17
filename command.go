@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -33,6 +32,12 @@ var editorCommands = []CommandDef{
 	{"tabnext", cmdTabNext, "tabnext: switch to next tab"},
 	{"tabprev", cmdTabPrev, "tabprev: switch to previous tab"},
 	{"goto", cmdGoto, "goto <line>: go to line number"},
+	{"ls", cmdLs, "ls: list buffers"},
+	{"buffers", cmdLs, "buffers: list buffers"},
+	{"buffer", cmdBuffer, "buffer <n|name|#>: show a buffer in this pane"},
+	{"bnext", cmdBNext, "bnext: next buffer"},
+	{"bprev", cmdBPrev, "bprev: previous buffer"},
+	{"bdelete", cmdBDelete, "bdelete [n|name]: remove a buffer from the buffer list"},
 	{"map", makeMapCmd(mapModeSets["map"]), "map <keys> <expansion>: map keys in normal/visual/pending modes (non-recursive)"},
 	{"nmap", makeMapCmd(mapModeSets["nmap"]), "nmap <keys> <expansion>: map keys in normal mode"},
 	{"vmap", makeMapCmd(mapModeSets["vmap"]), "vmap <keys> <expansion>: map keys in visual modes"},
@@ -64,6 +69,10 @@ var vimAliases = map[string]string{
 	"vs":   "vsplit",
 	"sp":   "split",
 	"vsp":  "vsplit",
+	"b":    "buffer",
+	"bn":   "bnext",
+	"bp":   "bprev",
+	"bd":   "bdelete",
 }
 
 // RunCommand parses and executes an ex command string. It expands vim
@@ -112,8 +121,13 @@ func expandAlias(input string) string {
 // --- Command implementations ---
 
 func cmdQuit(e *Editor, args []string) error {
-	if e.ActiveView() != nil && e.ActiveView().buf.Modified() {
-		return fmt.Errorf("No write since last change (use :q! to override)")
+	// Mid-session, closing a pane just hides its buffer (which keeps any
+	// unsaved changes in the buffer list). Closing the last pane exits, so
+	// no buffer anywhere may have unsaved changes.
+	if e.lastPane() {
+		if mb := e.anyModifiedBuffer(); mb != nil {
+			return fmt.Errorf("No write since last change for %s (use :q! to override)", bufDisplayName(mb))
+		}
 	}
 	e.ClosePane()
 	return nil
@@ -125,13 +139,9 @@ func cmdForceQuit(e *Editor, args []string) error {
 }
 
 func cmdQuitAll(e *Editor, args []string) error {
-	// Check all buffers for unsaved changes.
-	for _, t := range e.tabs {
-		for _, v := range t.panes {
-			if v.buf.Modified() {
-				return fmt.Errorf("No write since last change (use :qa! to override)")
-			}
-		}
+	// Check every listed buffer (hidden ones included) for unsaved changes.
+	if mb := e.anyModifiedBuffer(); mb != nil {
+		return fmt.Errorf("No write since last change for %s (use :qa! to override)", bufDisplayName(mb))
 	}
 	e.running = false
 	return nil
@@ -148,6 +158,24 @@ func cmdWrite(e *Editor, args []string) error {
 		return fmt.Errorf("no buffer")
 	}
 	b := v.buf
+
+	// :w <path> naming a different file writes a copy there; the buffer
+	// keeps its own name and modified state (vim). Only an unnamed buffer
+	// adopts the argument as its file name — and never one already open
+	// in another buffer, which would leave two buffers claiming one file.
+	if len(args) > 0 && b.Path != "" && !samePath(args[0], b.Path) {
+		if err := b.SaveTo(args[0]); err != nil {
+			return err
+		}
+		e.infobar.Message(fmt.Sprintf("\"%s\" written", args[0]))
+		return nil
+	}
+	if len(args) > 0 && b.Path == "" {
+		if ob := e.findBuffer(args[0]); ob != nil {
+			return fmt.Errorf("%s is open in another buffer", args[0])
+		}
+	}
+
 	path := b.Path
 	if len(args) > 0 {
 		path = args[0]
@@ -189,33 +217,25 @@ func cmdWrite(e *Editor, args []string) error {
 // makes a compound like "writeall; quitall" (:wqa) refuse to quit.
 func cmdWriteAll(e *Editor, args []string) error {
 	saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo")
-	seen := make(map[*Buffer]bool)
 	written := 0
 	var firstErr error
-	for _, t := range e.tabs {
-		for _, v := range t.panes {
-			b := v.buf
-			if seen[b] {
-				continue
-			}
-			seen[b] = true
-			if !b.Modified() {
-				continue
-			}
-			if err := b.Save(); err != nil {
-				if firstErr == nil {
-					if b.Path != "" {
-						err = fmt.Errorf("%s: %v", b.Path, err)
-					}
-					firstErr = err
-				}
-				continue
-			}
-			if saveUndo {
-				b.SaveUndoHistory()
-			}
-			written++
+	for _, b := range e.buffers {
+		if !b.Modified() {
+			continue
 		}
+		if err := b.Save(); err != nil {
+			if firstErr == nil {
+				if b.Path != "" {
+					err = fmt.Errorf("%s: %v", b.Path, err)
+				}
+				firstErr = err
+			}
+			continue
+		}
+		if saveUndo {
+			b.SaveUndoHistory()
+		}
+		written++
 	}
 	if firstErr != nil {
 		return firstErr
@@ -229,8 +249,25 @@ func cmdWriteAll(e *Editor, args []string) error {
 }
 
 func cmdEdit(e *Editor, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("edit: missing filename")
+	v := e.ActiveView()
+	// :e with no filename, or naming the file already shown in this pane,
+	// reloads it from disk (vim), refusing to drop unsaved changes.
+	reload := len(args) == 0
+	if !reload && v != nil && v.buf.Path != "" && samePath(v.buf.Path, args[0]) {
+		reload = true
+	}
+	if reload {
+		if v == nil || v.buf.Path == "" {
+			return fmt.Errorf("edit: no file name")
+		}
+		if v.buf.Modified() {
+			return fmt.Errorf("No write since last change (buffer modified)")
+		}
+		if err := v.buf.Reload(); err != nil {
+			return err
+		}
+		e.infobar.Message(fmt.Sprintf("\"%s\" reloaded", v.buf.Path))
+		return nil
 	}
 	return e.OpenFile(args[0])
 }
@@ -350,26 +387,11 @@ func cmdHSplit(e *Editor, args []string) error {
 }
 
 func cmdTabNew(e *Editor, args []string) error {
-	var v *View
 	if len(args) > 0 {
-		data, err := os.ReadFile(args[0])
-		if err != nil {
-			if os.IsNotExist(err) {
-				data = []byte{}
-			} else {
-				return err
-			}
-		}
-		buf, err := NewBuffer(data, args[0])
-		if err != nil {
-			return err
-		}
-		v = e.configureView(buf, args[0])
-	} else {
-		buf := NewEmptyBuffer()
-		v = e.configureView(buf, "")
+		return e.OpenFileInTab(args[0])
 	}
-	e.NewTabWithView(v)
+	buf := NewEmptyBuffer()
+	e.NewTabWithView(e.configureView(buf, ""))
 	return nil
 }
 
@@ -380,6 +402,125 @@ func cmdTabNext(e *Editor, args []string) error {
 
 func cmdTabPrev(e *Editor, args []string) error {
 	e.PrevTab()
+	return nil
+}
+
+// --- Buffer list commands ---
+
+// resolveBuffer maps a :buffer/:bdelete argument to a listed buffer:
+// a buffer number, "#" for the alternate buffer, or a unique substring of
+// a buffer's path.
+func (e *Editor) resolveBuffer(arg string) (*Buffer, error) {
+	if arg == "#" {
+		if e.altBuf == nil {
+			return nil, fmt.Errorf("no alternate buffer")
+		}
+		return e.altBuf, nil
+	}
+	if n, err := strconv.Atoi(arg); err == nil {
+		for _, b := range e.buffers {
+			if b.bufnum == n {
+				return b, nil
+			}
+		}
+		return nil, fmt.Errorf("buffer %d does not exist", n)
+	}
+	var matches []*Buffer
+	for _, b := range e.buffers {
+		if b.Path != "" && strings.Contains(b.Path, arg) {
+			matches = append(matches, b)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return nil, fmt.Errorf("no matching buffer for %q", arg)
+	default:
+		return nil, fmt.Errorf("more than one match for %q", arg)
+	}
+}
+
+func cmdLs(e *Editor, args []string) error {
+	var cur *Buffer
+	if v := e.ActiveView(); v != nil {
+		cur = v.buf
+	}
+	var parts []string
+	for _, b := range e.buffers {
+		marks := ""
+		if b == cur {
+			marks += "%"
+		} else if b == e.altBuf {
+			marks += "#"
+		}
+		if b.Modified() {
+			marks += "+"
+		}
+		parts = append(parts, fmt.Sprintf("%d%s %s", b.bufnum, marks, bufDisplayName(b)))
+	}
+	e.infobar.Message(strings.Join(parts, "  "))
+	return nil
+}
+
+func cmdBuffer(e *Editor, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("buffer: usage: buffer <n|name|#>")
+	}
+	b, err := e.resolveBuffer(args[0])
+	if err != nil {
+		return err
+	}
+	e.showBuffer(b)
+	return nil
+}
+
+// cycleBuffer shows the listed buffer dir steps away from the current one.
+func (e *Editor) cycleBuffer(dir int) error {
+	v := e.ActiveView()
+	if v == nil || len(e.buffers) == 0 {
+		return fmt.Errorf("no buffers")
+	}
+	idx := -1
+	for i, b := range e.buffers {
+		if b == v.buf {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	n := len(e.buffers)
+	e.showBuffer(e.buffers[((idx+dir)%n+n)%n])
+	return nil
+}
+
+func cmdBNext(e *Editor, args []string) error {
+	return e.cycleBuffer(1)
+}
+
+func cmdBPrev(e *Editor, args []string) error {
+	return e.cycleBuffer(-1)
+}
+
+func cmdBDelete(e *Editor, args []string) error {
+	var b *Buffer
+	if len(args) > 0 {
+		var err error
+		if b, err = e.resolveBuffer(args[0]); err != nil {
+			return err
+		}
+	} else if v := e.ActiveView(); v != nil {
+		b = v.buf
+	}
+	if b == nil {
+		return fmt.Errorf("no buffer")
+	}
+	if b.Modified() {
+		return fmt.Errorf("No write since last change for %s", bufDisplayName(b))
+	}
+	e.deleteBuffer(b)
 	return nil
 }
 

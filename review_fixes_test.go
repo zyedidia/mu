@@ -219,7 +219,10 @@ func TestLspDeadServerFailsFast(t *testing.T) {
 
 // Closing one of two buffers showing the same file must not send didClose
 // for the URI the surviving buffer still uses.
-func TestReleaseKeepsSharedLspDocumentOpen(t *testing.T) {
+// Closing a pane hides its buffer in the buffer list: the LSP document
+// stays open (only :bdelete closes it), so a URI shared with another
+// buffer can never be killed by a pane close.
+func TestPaneCloseKeepsLspDocumentOpen(t *testing.T) {
 	ed := newTestEditor()
 	path := "/tmp/mu-shared-test.go"
 
@@ -240,11 +243,11 @@ func TestReleaseKeepsSharedLspDocumentOpen(t *testing.T) {
 
 	ed.ClosePane() // closes the pane showing b2
 
-	if b2.lspServer != nil {
-		t.Fatal("released buffer kept its server handle")
+	if b2.lspServer == nil {
+		t.Fatal("hidden buffer lost its server handle")
 	}
 	if len(s.sendq) != 0 {
-		t.Fatalf("didClose was sent for a URI still open elsewhere (%d queued messages)", len(s.sendq))
+		t.Fatalf("didClose was sent on pane close (%d queued messages)", len(s.sendq))
 	}
 }
 

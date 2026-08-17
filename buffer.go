@@ -29,6 +29,9 @@ type Buffer struct {
 	// edits coalesce into one undo event (used for macro replay).
 	undoGroup int
 
+	// bufnum is the stable buffer-list number assigned by the editor.
+	bufnum int
+
 	modified    bool
 	readonly    bool
 	Path        string
