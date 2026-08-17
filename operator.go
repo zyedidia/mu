@@ -931,13 +931,34 @@ func RegisterOperators(ks *KeyState) {
 			count := ks.Count()
 			for i := 0; i < b.NumCursors(); i++ {
 				c := b.cursors[i]
+				// Measure count characters from the cursor; as in vim, the
+				// command fails without changing anything if the line is
+				// too short.
+				end := c.Pos
+				ok := true
 				for j := 0; j < count; j++ {
-					r, _, sz := b.DecodeGraphemeAt(c.Pos)
+					r, _, sz := b.DecodeGraphemeAt(end)
 					if sz == 0 || r == '\n' {
+						ok = false
 						break
 					}
-					b.Remove(c.Pos, c.Pos+sz)
-					b.Insert(c.Pos, []byte(ch))
+					end += sz
+				}
+				if !ok {
+					continue
+				}
+				if ch == "\n" {
+					// {count}r<CR>: the replaced characters become a single
+					// line break, cursor at the start of the new line.
+					b.Remove(c.Pos, end)
+					b.Insert(c.Pos, []byte("\n"))
+					b.cursors[i] = b.cursors[i].MoveTo(c.Pos + 1).VimClamp(b)
+				} else {
+					repl := bytes.Repeat([]byte(ch), count)
+					b.Remove(c.Pos, end)
+					b.Insert(c.Pos, repl)
+					// Cursor on the last replaced character, as in vim.
+					b.cursors[i] = b.cursors[i].MoveTo(c.Pos + len(repl) - len(ch))
 				}
 			}
 			ks.ResetAction()

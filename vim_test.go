@@ -418,3 +418,86 @@ func TestVisualPasteCursor(t *testing.T) {
 		t.Fatal("should be back in normal mode")
 	}
 }
+
+// --- r (replace char) vim semantics ---
+
+func TestReplaceCharCursorStays(t *testing.T) {
+	ks := newVimState("abcd\n")
+
+	feedKeys(ks, "rx")
+	if bufText(ks) != "xbcd\n" {
+		t.Fatalf("rx: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 0 {
+		t.Fatalf("rx cursor: got %d, want 0 (stays on replaced char)", cursorPos(ks))
+	}
+}
+
+func TestReplaceCharCount(t *testing.T) {
+	ks := newVimState("abcd\n")
+
+	feedKeys(ks, "3rx")
+	if bufText(ks) != "xxxd\n" {
+		t.Fatalf("3rx: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 2 {
+		t.Fatalf("3rx cursor: got %d, want 2 (last replaced char)", cursorPos(ks))
+	}
+}
+
+func TestReplaceCharCountTooLong(t *testing.T) {
+	// vim: the command fails without changes if fewer than count chars
+	// remain on the line.
+	ks := newVimState("ab\ncd\n")
+
+	feedKeys(ks, "3rx")
+	if bufText(ks) != "ab\ncd\n" {
+		t.Fatalf("3rx on short line: got %q, want unchanged", bufText(ks))
+	}
+	if cursorPos(ks) != 0 {
+		t.Fatalf("cursor: got %d, want 0", cursorPos(ks))
+	}
+}
+
+func TestReplaceCharEnterCursor(t *testing.T) {
+	ks := newVimState("abcd\n")
+
+	feedKeys(ks, "lr")
+	feedSpecial(ks, KeyEnter)
+	if bufText(ks) != "a\ncd\n" {
+		t.Fatalf("r<CR>: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 2 {
+		t.Fatalf("r<CR> cursor: got %d, want 2 (start of new line)", cursorPos(ks))
+	}
+}
+
+func TestReplaceCharCountEnter(t *testing.T) {
+	// {count}r<CR> replaces count characters with a single line break.
+	ks := newVimState("abcde\n")
+
+	feedKeys(ks, "3r")
+	feedSpecial(ks, KeyEnter)
+	if bufText(ks) != "\nde\n" {
+		t.Fatalf("3r<CR>: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 1 {
+		t.Fatalf("3r<CR> cursor: got %d, want 1", cursorPos(ks))
+	}
+}
+
+func TestReplaceCharDotRepeat(t *testing.T) {
+	ks := newVimState("ab\n")
+
+	feedKeys(ks, "rx")
+	if bufText(ks) != "xb\n" || cursorPos(ks) != 0 {
+		t.Fatalf("rx: got %q pos %d", bufText(ks), cursorPos(ks))
+	}
+	feedKeys(ks, "l.")
+	if bufText(ks) != "xx\n" {
+		t.Fatalf("l. after rx: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 1 {
+		t.Fatalf("cursor after repeat: got %d, want 1", cursorPos(ks))
+	}
+}
