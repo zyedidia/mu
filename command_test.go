@@ -11,11 +11,12 @@ import (
 // testing commands and TCL integration.
 func newTestEditor() *Editor {
 	cfg, _ := LoadConfig()
+	regs := NewRegisterSet()
 	ed := &Editor{
 		config:  cfg,
 		theme:   DefaultTheme,
-		ks:      NewKeyState(nil, NewRegisterSet()),
-		regs:    NewRegisterSet(),
+		ks:      NewKeyState(nil, regs),
+		regs:    regs,
 		infobar: NewInfoBar(),
 		running: true,
 		w:       80,

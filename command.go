@@ -294,6 +294,12 @@ func cmdSet(e *Editor, args []string) error {
 		} else if err := e.config.SetGlobalOpt(name, coerced); err != nil {
 			return err
 		}
+		// Reconnect the clipboard registers when the mode changes.
+		if name == "clipboard" {
+			if err := e.initClipboard(); err != nil {
+				return err
+			}
+		}
 	} else {
 		// Buffer-scoped option: update the top-level default and re-apply
 		// options to all open views.

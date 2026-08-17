@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -126,6 +127,9 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		}
 	}
 
+	if err := ed.initClipboard(); err != nil {
+		log.Print(err)
+	}
 	ed.initLsp()
 	ed.initTCL()
 	ed.registerEditorBindings()
@@ -791,6 +795,10 @@ func (e *Editor) Run() {
 		case *tcell.EventResize:
 			w, h := ev.Size()
 			e.Resize(w, h)
+		case *tcell.EventClipboard:
+			// A terminal answered an OSC 52 clipboard read: refresh the
+			// '+' register with the received content.
+			e.regs.storeClipboard(ev.Data())
 		case *tcell.EventInterrupt:
 			e.drainMain()
 		}
