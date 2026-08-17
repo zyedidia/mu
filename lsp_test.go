@@ -19,10 +19,13 @@ type fakeLspServer struct {
 	in  *bufio.Reader // client → server
 	out io.Writer     // server → client
 
-	initDelay time.Duration
+	initDelay  time.Duration
+	hoverDelay time.Duration
+	complDelay time.Duration
 
 	mu       sync.Mutex
-	received []string // method order as received
+	received []string                // method order as received
+	replies  map[int]json.RawMessage // client replies to server requests, by id
 }
 
 func (f *fakeLspServer) methods() []string {
@@ -31,6 +34,29 @@ func (f *fakeLspServer) methods() []string {
 	out := make([]string, len(f.received))
 	copy(out, f.received)
 	return out
+}
+
+// reply returns the client's reply to the server-initiated request id, if
+// one has arrived.
+func (f *fakeLspServer) reply(id int) (json.RawMessage, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.replies[id]
+	return r, ok
+}
+
+// waitReply polls for the client's reply to request id.
+func (f *fakeLspServer) waitReply(t *testing.T, id int) json.RawMessage {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if r, ok := f.reply(id); ok {
+			return r
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("no reply to server request %d", id)
+	return nil
 }
 
 func (f *fakeLspServer) write(m any) {
@@ -68,6 +94,16 @@ func (f *fakeLspServer) run() {
 			Method string `json:"method"`
 		}
 		json.Unmarshal(buf, &msg)
+		if msg.Method == "" && msg.ID != nil {
+			// A client reply to one of our server → client requests.
+			f.mu.Lock()
+			if f.replies == nil {
+				f.replies = make(map[int]json.RawMessage)
+			}
+			f.replies[*msg.ID] = json.RawMessage(buf)
+			f.mu.Unlock()
+			continue
+		}
 		f.mu.Lock()
 		f.received = append(f.received, msg.Method)
 		f.mu.Unlock()
@@ -80,15 +116,24 @@ func (f *fakeLspServer) run() {
 				"id":      *msg.ID,
 				"result": map[string]any{
 					"capabilities": map[string]any{
-						"hoverProvider": true,
+						"hoverProvider":      true,
+						"completionProvider": map[string]any{},
 					},
 				},
 			})
 		case "textDocument/hover":
+			time.Sleep(f.hoverDelay)
 			f.write(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      *msg.ID,
 				"result":  map[string]any{"contents": map[string]any{"kind": "plaintext", "value": "hi"}},
+			})
+		case "textDocument/completion":
+			time.Sleep(f.complDelay)
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result":  []map[string]any{{"label": "foobar"}},
 			})
 		case "shutdown":
 			f.write(map[string]any{"jsonrpc": "2.0", "id": *msg.ID, "result": nil})
@@ -96,18 +141,53 @@ func (f *fakeLspServer) run() {
 	}
 }
 
-// startFakeLsp wires an LspServer to an in-process fake server.
-func startFakeLsp(initDelay time.Duration, onDiag func(lsp.PublishDiagnosticsParams)) (*LspServer, *fakeLspServer) {
+// startFakeLspServer wires an LspServer to the given in-process fake.
+// configure (optional) runs before Initialize, e.g. to set settings.
+func startFakeLspServer(fake *fakeLspServer, cb lspCallbacks, configure func(*LspServer)) *LspServer {
 	c2sR, c2sW := io.Pipe() // client writes → server reads
 	s2cR, s2cW := io.Pipe() // server writes → client reads
 
-	fake := &fakeLspServer{in: bufio.NewReader(c2sR), out: c2sW, initDelay: initDelay}
+	fake.in = bufio.NewReader(c2sR)
 	fake.out = s2cW
 	go fake.run()
 
 	s := newLspServerIO(c2sW, s2cR)
-	s.Initialize("/tmp", nil, onDiag)
+	if configure != nil {
+		configure(s)
+	}
+	s.Initialize("/tmp", cb)
+	return s
+}
+
+// startFakeLsp wires an LspServer to an in-process fake server.
+func startFakeLsp(initDelay time.Duration, onDiag func(lsp.PublishDiagnosticsParams)) (*LspServer, *fakeLspServer) {
+	fake := &fakeLspServer{initDelay: initDelay}
+	s := startFakeLspServer(fake, lspCallbacks{onDiag: onDiag}, nil)
 	return s, fake
+}
+
+// waitReady fails the test if the handshake doesn't finish.
+func waitReady(t *testing.T, s *LspServer) {
+	t.Helper()
+	select {
+	case <-s.ready:
+	case <-time.After(3 * time.Second):
+		t.Fatal("initialize did not complete")
+	}
+}
+
+// drainUntil pumps the editor's main queue until cond holds.
+func drainUntil(t *testing.T, ed *Editor, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		ed.drainMain()
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("%s never happened", what)
 }
 
 // Notifications must not block the caller while the server is still
@@ -236,4 +316,315 @@ func TestApplyTextEditsUnsorted(t *testing.T) {
 	if got := string(b.Slice(0, b.Len())); got != "ZZZZZ BBB\n" {
 		t.Fatalf("unsorted edits: got %q, want %q", got, "ZZZZZ BBB\n")
 	}
+}
+
+// Hover must not block the event loop: the request runs in the background
+// and the result arrives via the main queue.
+func TestLspAsyncHoverNonBlocking(t *testing.T) {
+	fake := &fakeLspServer{hoverDelay: 150 * time.Millisecond}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.lspServer = s
+
+	start := time.Now()
+	ed.lspHover()
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("lspHover blocked for %v", elapsed)
+	}
+	drainUntil(t, ed, "hover result", func() bool {
+		return ed.infobar.message == "hi"
+	})
+}
+
+// Async completion opens once the server answers, if nothing changed
+// meanwhile.
+func TestCompletionAsyncOpens(t *testing.T) {
+	fake := &fakeLspServer{}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.lspServer = s
+	b.text.Insert(0, []byte("fo"))
+	*b.Cursor() = b.Cursor().MoveTo(2)
+	ed.ks.SetMode(ModeInsert)
+
+	ed.triggerCompletion()
+	if ed.hasCompletion() {
+		t.Fatal("completion opened synchronously")
+	}
+	drainUntil(t, ed, "completion", func() bool { return ed.hasCompletion() })
+	if got := string(b.Slice(0, b.Len())); got != "foobar" {
+		t.Fatalf("completion applied: got %q, want %q", got, "foobar")
+	}
+}
+
+// A completion answer that arrives after the buffer changed is dropped.
+func TestCompletionStaleDropped(t *testing.T) {
+	fake := &fakeLspServer{complDelay: 100 * time.Millisecond}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.lspServer = s
+	b.text.Insert(0, []byte("fo"))
+	*b.Cursor() = b.Cursor().MoveTo(2)
+	ed.ks.SetMode(ModeInsert)
+
+	ed.triggerCompletion()
+	b.lspVersion++ // the user typed while the request was in flight
+
+	deadline := time.Now().Add(400 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		ed.drainMain()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ed.hasCompletion() {
+		t.Fatal("stale completion answer was not dropped")
+	}
+	if got := string(b.Slice(0, b.Len())); got != "fo" {
+		t.Fatalf("stale completion modified the buffer: %q", got)
+	}
+}
+
+// A server textEdit range overrides the client-side word scan, including
+// text after the cursor; cancelling restores it.
+func TestCompletionTextEditRange(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("foXXX"))
+	*b.Cursor() = b.Cursor().MoveTo(2)
+
+	items := []lsp.CompletionItem{{
+		Label: "foobar",
+		TextEdit: &lsp.TextEdit{
+			Range: lsp.Range{
+				Start: lsp.Position{Line: 0, Character: 0},
+				End:   lsp.Position{Line: 0, Character: 5},
+			},
+			NewText: "foobar",
+		},
+	}}
+	ed.finishCompletion(b, items, 0, "fo", 2)
+	if got := string(b.Slice(0, b.Len())); got != "foobar" {
+		t.Fatalf("textEdit range: got %q, want %q", got, "foobar")
+	}
+	ed.cancelCompletion()
+	if got := string(b.Slice(0, b.Len())); got != "foXXX" {
+		t.Fatalf("cancel after textEdit: got %q, want %q", got, "foXXX")
+	}
+}
+
+// A textEdit starting before the scanned word start (e.g. completing past a
+// '.') replaces from the server's start.
+func TestCompletionTextEditStart(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("a.fo"))
+	*b.Cursor() = b.Cursor().MoveTo(4)
+
+	items := []lsp.CompletionItem{{
+		Label: "Z.fooZ",
+		TextEdit: &lsp.TextEdit{
+			Range: lsp.Range{
+				Start: lsp.Position{Line: 0, Character: 0},
+				End:   lsp.Position{Line: 0, Character: 4},
+			},
+			NewText: "Z.fooZ",
+		},
+	}}
+	// The word scan found startPos 2 ("fo"); the server range wins.
+	ed.finishCompletion(b, items, 2, "fo", 4)
+	if got := string(b.Slice(0, b.Len())); got != "Z.fooZ" {
+		t.Fatalf("textEdit start: got %q, want %q", got, "Z.fooZ")
+	}
+}
+
+// Server → client traffic: progress display, workDoneProgress/create,
+// applyEdit refusal, and workspace/configuration answered from settings.
+func TestLspServerToClientRequests(t *testing.T) {
+	progress := make(chan string, 16)
+	fake := &fakeLspServer{}
+	s := startFakeLspServer(fake, lspCallbacks{
+		onProgress: func(m string) { progress <- m },
+	}, func(s *LspServer) {
+		s.settings = map[string]any{"gopls": map[string]any{"usePlaceholders": true}}
+	})
+	waitReady(t, s)
+
+	// Configured settings are pushed after the handshake.
+	deadline := time.Now().Add(3 * time.Second)
+	pushed := false
+	for time.Now().Before(deadline) && !pushed {
+		for _, m := range fake.methods() {
+			if m == "workspace/didChangeConfiguration" {
+				pushed = true
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !pushed {
+		t.Fatalf("didChangeConfiguration never sent: %v", fake.methods())
+	}
+
+	expectProgress := func(want string) {
+		t.Helper()
+		select {
+		case got := <-progress:
+			if got != want {
+				t.Fatalf("progress: got %q, want %q", got, want)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("progress %q never arrived", want)
+		}
+	}
+
+	// Progress: create (a request we must answer) + begin/report/end.
+	fake.write(map[string]any{"jsonrpc": "2.0", "id": 50,
+		"method": "window/workDoneProgress/create", "params": map[string]any{"token": "t1"}})
+	fake.waitReply(t, 50)
+
+	fake.write(map[string]any{"jsonrpc": "2.0", "method": "$/progress",
+		"params": map[string]any{"token": "t1", "value": map[string]any{"kind": "begin", "title": "Indexing"}}})
+	expectProgress("Indexing")
+	fake.write(map[string]any{"jsonrpc": "2.0", "method": "$/progress",
+		"params": map[string]any{"token": "t1", "value": map[string]any{"kind": "report", "message": "3/5", "percentage": 60}}})
+	expectProgress("Indexing: 3/5 (60%)")
+	fake.write(map[string]any{"jsonrpc": "2.0", "method": "$/progress",
+		"params": map[string]any{"token": "t1", "value": map[string]any{"kind": "end"}}})
+	expectProgress("Indexing: done")
+
+	// workspace/applyEdit is refused per spec, not answered with null.
+	fake.write(map[string]any{"jsonrpc": "2.0", "id": 51,
+		"method": "workspace/applyEdit", "params": map[string]any{"edit": map[string]any{}}})
+	var applyResp struct {
+		Result struct {
+			Applied *bool `json:"applied"`
+		} `json:"result"`
+	}
+	json.Unmarshal(fake.waitReply(t, 51), &applyResp)
+	if applyResp.Result.Applied == nil || *applyResp.Result.Applied {
+		t.Fatalf("applyEdit not refused: %s", string(mustReply(t, fake, 51)))
+	}
+
+	// workspace/configuration answers each item from settings.
+	fake.write(map[string]any{"jsonrpc": "2.0", "id": 52,
+		"method": "workspace/configuration",
+		"params": map[string]any{"items": []map[string]any{{"section": "gopls"}, {"section": "nope"}}}})
+	var confResp struct {
+		Result []any `json:"result"`
+	}
+	json.Unmarshal(fake.waitReply(t, 52), &confResp)
+	if len(confResp.Result) != 2 {
+		t.Fatalf("configuration reply: %v", confResp.Result)
+	}
+	gopls, ok := confResp.Result[0].(map[string]any)
+	if !ok || gopls["usePlaceholders"] != true {
+		t.Fatalf("gopls section = %v, want usePlaceholders=true", confResp.Result[0])
+	}
+	if confResp.Result[1] != nil {
+		t.Fatalf("unknown section = %v, want null", confResp.Result[1])
+	}
+}
+
+func mustReply(t *testing.T, fake *fakeLspServer, id int) json.RawMessage {
+	t.Helper()
+	r, _ := fake.reply(id)
+	return r
+}
+
+func TestLookupSettings(t *testing.T) {
+	settings := map[string]any{
+		"gopls": map[string]any{
+			"analyses": map[string]any{"unusedparams": true},
+		},
+	}
+	if got := lookupSettings(settings, "gopls.analyses.unusedparams"); got != true {
+		t.Fatalf("dotted lookup = %v, want true", got)
+	}
+	if got := lookupSettings(settings, "missing"); got != nil {
+		t.Fatalf("missing section = %v, want nil", got)
+	}
+	if got := lookupSettings(nil, "gopls"); got != nil {
+		t.Fatalf("nil settings = %v, want nil", got)
+	}
+	if got := lookupSettings(settings, ""); got == nil {
+		t.Fatal("empty section should return the whole map")
+	}
+}
+
+// A hung server that ignores the shutdown handshake and EOF must be killed
+// at exit, within a bounded time.
+func TestLspShutdownKillsHungServer(t *testing.T) {
+	s, err := startLspServer(LspLanguage{Command: "sleep", Args: []string{"30"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	s.Shutdown()
+	elapsed := time.Since(start)
+	if elapsed > 4*time.Second {
+		t.Fatalf("Shutdown stalled for %v", elapsed)
+	}
+
+	select {
+	case <-s.exited:
+	default:
+		t.Fatal("server process still running after Shutdown")
+	}
+}
+
+// A server that exits on stdin EOF is not killed: the EOF cue suffices.
+func TestLspShutdownEOFExit(t *testing.T) {
+	s, err := startLspServer(LspLanguage{Command: "cat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.Shutdown()
+	select {
+	case <-s.exited:
+	default:
+		t.Fatal("server process still running after Shutdown")
+	}
+	if st := s.cmd.ProcessState; st == nil || !st.Exited() || st.ExitCode() != 0 {
+		t.Fatalf("expected clean EOF exit, got %v", s.cmd.ProcessState)
+	}
+}
+
+// An initialized, responsive server gets the polite shutdown + exit
+// handshake and Shutdown returns promptly.
+func TestLspShutdownPolite(t *testing.T) {
+	s, fake := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	start := time.Now()
+	s.Shutdown()
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("polite shutdown took %v", elapsed)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		var sawShutdown, sawExit bool
+		for _, m := range fake.methods() {
+			switch m {
+			case "shutdown":
+				sawShutdown = true
+			case "exit":
+				sawExit = true
+			}
+		}
+		if sawShutdown && sawExit {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("shutdown/exit never sent: %v", fake.methods())
 }

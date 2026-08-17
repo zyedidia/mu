@@ -4,6 +4,7 @@ import (
 	"log"
 	"path/filepath"
 	"sort"
+	"strings"
 	"unicode"
 
 	lsp "go.lsp.dev/protocol"
@@ -28,8 +29,10 @@ func (ec *EditorCompletion) reset() {
 	ec.origWord = ""
 }
 
-// triggerCompletion requests LSP completion at the cursor. If no LSP is
-// available or returns nothing, falls back to buffer word completion.
+// triggerCompletion requests LSP completion at the cursor. The request runs
+// asynchronously; when the answer arrives (and the buffer is unchanged) the
+// completion opens. If no LSP is available or returns nothing, falls back to
+// buffer word completion.
 func (e *Editor) triggerCompletion() {
 	v := e.ActiveView()
 	if v == nil {
@@ -48,34 +51,90 @@ func (e *Editor) triggerCompletion() {
 	}
 	origWord := string(b.Slice(startPos, b.Cursor().Pos))
 
-	var candidates []string
-	var items []lsp.CompletionItem
+	// No LSP for this buffer: the buffer-word fallback is local and cheap,
+	// so it stays synchronous.
+	if b.lspServer == nil || b.lspServer.caps().CompletionProvider == nil {
+		e.finishCompletion(b, nil, startPos, origWord, b.Cursor().Pos)
+		return
+	}
 
-	// Try LSP first.
-	if b.lspServer != nil {
-		line, col := b.LineColAt(b.Cursor().Pos)
-		pos := b.LspPosition(line, col)
-		absPath, _ := filepath.Abs(b.Path)
+	s := b.lspServer
+	line, col := b.LineColAt(b.Cursor().Pos)
+	pos := b.LspPosition(line, col)
+	absPath, _ := filepath.Abs(b.Path)
+	reqPos := b.Cursor().Pos
+	version := b.lspVersion
+	e.completionGen++
+	gen := e.completionGen
 
-		lspItems, err := b.lspServer.Completion(absPath, pos)
-		if err == nil && len(lspItems) > 0 {
-			sort.Slice(lspItems, func(i, j int) bool {
-				si, sj := lspItems[i].SortText, lspItems[j].SortText
-				if si == "" {
-					si = lspItems[i].Label
-				}
-				if sj == "" {
-					sj = lspItems[j].Label
-				}
-				return si < sj
-			})
-			items = lspItems
-			candidates = make([]string, len(items))
-			for i, item := range items {
-				candidates[i] = item.Label
-			}
-		} else if err != nil && err != ErrLspNotSupported {
+	lspAsync(e, func() ([]lsp.CompletionItem, error) {
+		return s.Completion(absPath, pos)
+	}, func(items []lsp.CompletionItem, err error) {
+		if err != nil && err != ErrLspNotSupported {
 			log.Printf("[lsp] completion: %v", err)
+			items = nil
+		}
+		// Drop stale answers: a newer trigger superseded this one, or the
+		// user typed, moved, or left insert mode while waiting.
+		if e.completionGen != gen || e.ks.ModeID() != ModeInsert {
+			return
+		}
+		if av := e.ActiveView(); av == nil || av.buf != b ||
+			b.lspVersion != version || b.Cursor().Pos != reqPos {
+			return
+		}
+		e.finishCompletion(b, items, startPos, origWord, reqPos)
+	})
+}
+
+// finishCompletion builds the completion state from LSP items (nil or empty
+// falls back to buffer words) and applies the first candidate. reqPos is the
+// cursor position the items were computed for.
+func (e *Editor) finishCompletion(b *Buffer, items []lsp.CompletionItem, startPos int, origWord string, reqPos int) {
+	var candidates []string
+	if len(items) > 0 {
+		sort.Slice(items, func(i, j int) bool {
+			si, sj := items[i].SortText, items[j].SortText
+			if si == "" {
+				si = items[i].Label
+			}
+			if sj == "" {
+				sj = items[j].Label
+			}
+			return si < sj
+		})
+
+		// Honor the server's replacement range when one is given (e.g.
+		// rust-analyzer completing after "." replaces from past the dot,
+		// not from the client-side word scan). The spec requires a
+		// single-line range containing the request position; anything
+		// else keeps the word scan.
+		reqLine, _ := b.LineColAt(reqPos)
+		for _, item := range items {
+			te := item.TextEdit
+			if te == nil {
+				continue
+			}
+			ts := b.FromLspPosition(te.Range.Start)
+			tn := b.FromLspPosition(te.Range.End)
+			tsLine, _ := b.LineColAt(ts)
+			if tsLine == reqLine && ts <= reqPos && tn >= reqPos {
+				startPos = ts
+				origWord = string(b.Slice(ts, tn))
+				if tn > reqPos {
+					// The edit also replaces text after the cursor;
+					// remove it now so candidate cycling keeps the
+					// [startPos, cursor) replacement model (and cancel
+					// restores it via origWord).
+					b.Remove(reqPos, tn)
+				}
+			}
+			break
+		}
+
+		candidates = make([]string, len(items))
+		for i, item := range items {
+			candidates[i] = item.Label
 		}
 	}
 
@@ -84,7 +143,6 @@ func (e *Editor) triggerCompletion() {
 		candidates = bufferComplete(b, origWord)
 		items = nil
 	}
-
 	if len(candidates) == 0 {
 		return
 	}
@@ -148,11 +206,14 @@ func (e *Editor) applyCompletion() {
 
 	b := e.ActiveView().buf
 
-	// LSP items carry an insertText; buffer-word candidates are plain text.
+	// LSP items carry the replacement in textEdit or insertText;
+	// buffer-word candidates are plain text.
 	text := ec.candidates[ec.index]
 	if ec.index < len(ec.items) {
 		item := ec.items[ec.index]
-		if item.InsertText != "" {
+		if item.TextEdit != nil && item.TextEdit.NewText != "" {
+			text = item.TextEdit.NewText
+		} else if item.InsertText != "" {
 			text = item.InsertText
 		} else if item.Label != "" {
 			text = item.Label
@@ -211,6 +272,41 @@ func (e *Editor) prevCompletion() {
 // hasCompletion returns true if editor completion is active.
 func (e *Editor) hasCompletion() bool {
 	return e.completion.active
+}
+
+// completionDetail returns a one-line description of the selected candidate
+// (its detail — typically a type signature — and doc comment), for the
+// message bar while the completion menu is open.
+func (e *Editor) completionDetail() string {
+	ec := &e.completion
+	if !ec.active || ec.index < 0 || ec.index >= len(ec.items) {
+		return ""
+	}
+	item := ec.items[ec.index]
+	out := item.Detail
+	if doc := docString(item.Documentation); doc != "" {
+		if out != "" {
+			out += " — " + doc
+		} else {
+			out = doc
+		}
+	}
+	// Collapse to a single line.
+	return strings.Join(strings.Fields(out), " ")
+}
+
+// docString extracts plain text from a CompletionItem documentation value,
+// which the protocol types as string | MarkupContent.
+func docString(doc any) string {
+	switch v := doc.(type) {
+	case string:
+		return v
+	case map[string]any:
+		if s, ok := v["value"].(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 // handleCompletionKey processes a key while completion is active.

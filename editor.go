@@ -28,6 +28,9 @@ type Editor struct {
 	search     SearchState
 	lspManager *LspManager
 	completion EditorCompletion
+	// completionGen invalidates in-flight async completion requests: a
+	// callback only opens the menu if its generation is still current.
+	completionGen int
 
 	// comments maps filetype → line-comment prefix (from comments.toml).
 	comments map[string]string
@@ -765,6 +768,37 @@ func (e *Editor) applySyntaxOption() {
 	}
 }
 
+// lspEnabled reports whether the lsp option is on in a resolved option map
+// (missing means on).
+func lspEnabled(opts map[string]any) bool {
+	on, ok := GetOptBool(opts, "lsp")
+	return !ok || on
+}
+
+// applyLspOption attaches or detaches language servers for every listed
+// buffer according to its resolved lsp option (per-filetype/glob
+// resolvable, so buffers can differ). Detached buffers close their
+// document and drop stale diagnostics; servers left serving no buffer are
+// shut down, and a later re-enable starts a fresh one.
+func (e *Editor) applyLspOption() {
+	used := make(map[*LspServer]bool)
+	for _, b := range e.buffers {
+		opts := e.config.BufferOptions(b.Path, b.Filetype)
+		if !lspEnabled(opts) {
+			if b.lspServer != nil {
+				b.LspClose()
+				b.ClearDiagnostics()
+			}
+		} else if b.lspServer == nil && b.Filetype != "" {
+			e.initBufferLsp(b, b.Filetype)
+		}
+		if b.lspServer != nil {
+			used[b.lspServer] = true
+		}
+	}
+	e.lspManager.ShutdownUnused(used)
+}
+
 // configureView creates a View and fully initializes the buffer (syntax,
 // LSP, file watcher, readonly detection). Use for newly opened files.
 func (e *Editor) configureView(buf *Buffer, path string) *View {
@@ -796,7 +830,9 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 		if syntaxEnabled(v.Opts) {
 			buf.InitSyntax(e.config, ft)
 		}
-		e.initBufferLsp(buf, ft)
+		if lspEnabled(v.Opts) {
+			e.initBufferLsp(buf, ft)
+		}
 	}
 
 	if path != "" && isReadonly(path) {
@@ -1019,6 +1055,14 @@ func (e *Editor) Display() {
 			e.screen.ShowCursor(x, y+th)
 		}
 	}, e.theme, e.ks.Mode().Name)
+
+	// Show the selected completion candidate's detail (type signature and
+	// doc comment) in the message bar while the menu is open.
+	if e.hasCompletion() && !e.infobar.IsActive() && e.infobar.message == "" {
+		if d := e.completionDetail(); d != "" {
+			e.infobar.Message(d)
+		}
+	}
 
 	// Show diagnostic for cursor line in infobar.
 	v := e.ActiveView()

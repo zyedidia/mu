@@ -197,7 +197,7 @@ func TestLspDeadServerFailsFast(t *testing.T) {
 	// EOF marks the server dead.
 	s2cW.Close()
 	c2sR.CloseWithError(io.ErrClosedPipe)
-	s.Initialize("/tmp", nil, nil)
+	s.Initialize("/tmp", lspCallbacks{})
 
 	deadline := time.Now().Add(3 * time.Second)
 	for !s.isDead() && time.Now().Before(deadline) {

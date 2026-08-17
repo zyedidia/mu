@@ -254,6 +254,15 @@ type LspLanguage struct {
 	Command string   `yaml:"command"`
 	Args    []string `yaml:"args"`
 	Ft      string   `yaml:"ft"`
+
+	// Settings is the workspace configuration for the server: it is pushed
+	// via workspace/didChangeConfiguration after initialization and served
+	// section-by-section when the server requests workspace/configuration
+	// (e.g. a "gopls" key answers the "gopls" section).
+	Settings map[string]any `yaml:"settings"`
+	// InitOptions is passed verbatim as initializationOptions in the
+	// initialize request, for servers configured that way.
+	InitOptions map[string]any `yaml:"init_options"`
 }
 
 // LoadLspLanguages loads the LSP server configuration.

@@ -18,20 +18,50 @@ func (e *Editor) initLsp() {
 		langs = make(map[string]LspLanguage)
 	}
 
-	// Both callbacks run on the LSP receive goroutine; marshal the state
+	// The callbacks run on the LSP receive goroutine; marshal the state
 	// changes onto the main event loop.
-	e.lspManager = NewLspManager(langs,
-		func(msg lsp.ShowMessageParams) {
+	e.lspManager = NewLspManager(langs, lspCallbacks{
+		onShow: func(msg lsp.ShowMessageParams) {
 			e.postToMain(func() {
 				e.infobar.Message(msg.Message)
 			})
 		},
-		func(diag lsp.PublishDiagnosticsParams) {
+		onDiag: func(diag lsp.PublishDiagnosticsParams) {
 			e.postToMain(func() {
 				e.handleDiagnostics(diag)
 			})
 		},
-	)
+		onProgress: func(status string) {
+			e.postToMain(func() {
+				// Server progress ("Indexing: 3/5 (60%)") is transient
+				// status; never stomp an active prompt.
+				if !e.infobar.IsActive() {
+					e.infobar.Message(status)
+				}
+			})
+		},
+	})
+}
+
+// lspAsync runs a blocking LSP call off the event loop and hands the result
+// back on it, so requests never freeze keystroke handling. Callbacks must
+// re-validate editor state: the buffer may have changed while waiting.
+func lspAsync[T any](e *Editor, call func() (T, error), done func(T, error)) {
+	go func() {
+		v, err := call()
+		e.postToMain(func() { done(v, err) })
+	}()
+}
+
+// hasBuffer reports whether b is still in the editor's buffer list (an
+// async result may arrive after its buffer was deleted).
+func (e *Editor) hasBuffer(b *Buffer) bool {
+	for _, eb := range e.buffers {
+		if eb == b {
+			return true
+		}
+	}
+	return false
 }
 
 // handleDiagnostics receives pushed diagnostics and applies them to the
@@ -99,7 +129,8 @@ func (e *Editor) registerLspBindings() {
 	}, "[", "d")
 }
 
-// lspGotoDefinition requests definition at cursor and jumps there.
+// lspGotoDefinition requests definition at cursor and jumps there when the
+// (asynchronous) answer arrives.
 func (e *Editor) lspGotoDefinition() {
 	v := e.ActiveView()
 	if v == nil || v.buf.lspServer == nil {
@@ -107,44 +138,53 @@ func (e *Editor) lspGotoDefinition() {
 		return
 	}
 	b := v.buf
+	s := b.lspServer
 	line, col := b.LineColAt(b.Cursor().Pos)
 	pos := b.LspPosition(line, col)
-
 	absPath, _ := filepath.Abs(b.Path)
-	locs, err := b.lspServer.Definition(absPath, pos)
-	if err != nil {
-		e.infobar.Error(fmt.Sprintf("definition: %v", err))
-		return
-	}
-	if len(locs) == 0 {
-		e.infobar.Message("No definition found")
-		return
-	}
 
-	loc := locs[0]
-	targetPath := loc.URI.Filename()
-	targetAbsPath, _ := filepath.Abs(b.Path)
-
-	// gd is a jump: <C-o> returns here, across files too.
-	e.pushJump()
-
-	if targetPath == targetAbsPath {
-		// Same file: jump to position.
-		target := b.FromLspPosition(loc.Range.Start)
-		*b.Cursor() = b.Cursor().MoveTo(target)
-	} else {
-		// Different file: open it and jump.
-		if err := e.OpenFile(targetPath); err != nil {
-			e.infobar.Error(fmt.Sprintf("open: %v", err))
+	lspAsync(e, func() ([]lsp.Location, error) {
+		return s.Definition(absPath, pos)
+	}, func(locs []lsp.Location, err error) {
+		// Only jump if the user is still in the buffer that asked.
+		if av := e.ActiveView(); av == nil || av.buf != b {
 			return
 		}
-		nb := e.ActiveView().buf
-		target := nb.FromLspPosition(loc.Range.Start)
-		*nb.Cursor() = nb.Cursor().MoveTo(target)
-	}
+		if err != nil {
+			e.infobar.Error(fmt.Sprintf("definition: %v", err))
+			return
+		}
+		if len(locs) == 0 {
+			e.infobar.Message("No definition found")
+			return
+		}
+
+		loc := locs[0]
+		targetPath := loc.URI.Filename()
+		targetAbsPath, _ := filepath.Abs(b.Path)
+
+		// gd is a jump: <C-o> returns here, across files too.
+		e.pushJump()
+
+		if targetPath == targetAbsPath {
+			// Same file: jump to position.
+			target := b.FromLspPosition(loc.Range.Start)
+			*b.Cursor() = b.Cursor().MoveTo(target)
+		} else {
+			// Different file: open it and jump.
+			if err := e.OpenFile(targetPath); err != nil {
+				e.infobar.Error(fmt.Sprintf("open: %v", err))
+				return
+			}
+			nb := e.ActiveView().buf
+			target := nb.FromLspPosition(loc.Range.Start)
+			*nb.Cursor() = nb.Cursor().MoveTo(target)
+		}
+	})
 }
 
-// lspHover requests hover info at cursor and displays in infobar.
+// lspHover requests hover info at cursor and displays it in the infobar
+// when the (asynchronous) answer arrives.
 func (e *Editor) lspHover() {
 	v := e.ActiveView()
 	if v == nil || v.buf.lspServer == nil {
@@ -152,27 +192,36 @@ func (e *Editor) lspHover() {
 		return
 	}
 	b := v.buf
+	s := b.lspServer
 	line, col := b.LineColAt(b.Cursor().Pos)
 	pos := b.LspPosition(line, col)
-
 	absPath, _ := filepath.Abs(b.Path)
-	info, err := b.lspServer.Hover(absPath, pos)
-	if err != nil {
-		if err == ErrLspNotSupported {
-			e.infobar.Error("Hover not supported")
-		} else {
-			e.infobar.Error(fmt.Sprintf("hover: %v", err))
+
+	lspAsync(e, func() (string, error) {
+		return s.Hover(absPath, pos)
+	}, func(info string, err error) {
+		// A late answer for a buffer the user left, or while a prompt is
+		// open, is dropped rather than displayed.
+		if av := e.ActiveView(); av == nil || av.buf != b || e.infobar.IsActive() {
+			return
 		}
-		return
-	}
-	if info == "" {
-		e.infobar.Message("No hover info")
-		return
-	}
-	// Collapse to single line for infobar display.
-	info = strings.ReplaceAll(info, "\n", " ")
-	info = strings.Join(strings.Fields(info), " ")
-	e.infobar.Message(info)
+		if err != nil {
+			if err == ErrLspNotSupported {
+				e.infobar.Error("Hover not supported")
+			} else {
+				e.infobar.Error(fmt.Sprintf("hover: %v", err))
+			}
+			return
+		}
+		if info == "" {
+			e.infobar.Message("No hover info")
+			return
+		}
+		// Collapse to single line for infobar display.
+		info = strings.ReplaceAll(info, "\n", " ")
+		info = strings.Join(strings.Fields(info), " ")
+		e.infobar.Message(info)
+	})
 }
 
 // lspNextDiagnostic jumps to the next (dir=1) or previous (dir=-1) diagnostic.
@@ -242,14 +291,28 @@ func cmdLspFormat(e *Editor, args []string) error {
 		return fmt.Errorf("no LSP server")
 	}
 	b := v.buf
+	s := b.lspServer
 	absPath, _ := filepath.Abs(b.Path)
-	edits, err := b.lspServer.Format(absPath)
-	if err != nil {
-		return err
-	}
-	b.UndoBarrier()
-	applyTextEdits(b, edits)
-	e.infobar.Message("Formatted")
+	version := b.lspVersion
+
+	lspAsync(e, func() ([]lsp.TextEdit, error) {
+		return s.Format(absPath)
+	}, func(edits []lsp.TextEdit, err error) {
+		if err != nil {
+			e.infobar.Error(fmt.Sprintf("format: %v", err))
+			return
+		}
+		// The edits are positions into the buffer as it was at request
+		// time: applying them after an edit (or to a deleted buffer)
+		// would corrupt it.
+		if !e.hasBuffer(b) || b.lspVersion != version {
+			e.infobar.Error("format: buffer changed, not applied")
+			return
+		}
+		b.UndoBarrier()
+		applyTextEdits(b, edits)
+		e.infobar.Message("Formatted")
+	})
 	return nil
 }
 

@@ -3,6 +3,7 @@ autoclose = true
 cursor = "block"
 theme = "monokai"
 syntax = true
+lsp = true
 tabsize = 4
 tabstospaces = true
 textwidth = 79

@@ -385,6 +385,10 @@ func cmdSet(e *Editor, args []string) error {
 		if name == "syntax" {
 			e.applySyntaxOption()
 		}
+		// Attach or detach language servers to match.
+		if name == "lsp" {
+			e.applyLspOption()
+		}
 	}
 
 	e.infobar.Message(fmt.Sprintf("%s=%v", name, coerced))

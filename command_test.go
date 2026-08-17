@@ -21,6 +21,7 @@ func newTestEditor() *Editor {
 		running: true,
 		w:       80,
 		h:       24,
+		mainq:   make(chan func(), 128),
 	}
 	SetupBindings(ed.ks)
 	ed.ks.activeView = func() *View {

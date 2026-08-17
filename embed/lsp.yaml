@@ -1,3 +1,16 @@
+# Language server configuration. Each entry maps a filetype to a server:
+#
+#   command / args   how to launch the server
+#   ft               the language id sent to the server (defaults to the key)
+#   settings         workspace configuration: pushed via
+#                    workspace/didChangeConfiguration after startup and served
+#                    section-by-section when the server asks for
+#                    workspace/configuration. Example:
+#                      settings:
+#                        gopls:
+#                          usePlaceholders: true
+#   init_options     passed verbatim as initializationOptions in the
+#                    initialize request, for servers configured that way.
 go:
   command: gopls
   args: ["serve"]

@@ -67,6 +67,20 @@ type LspServer struct {
 
 	dead     chan struct{} // closed when the server is unusable
 	deadOnce sync.Once
+	exited   chan struct{} // closed when the subprocess has been reaped (nil without one)
+
+	// Set before Initialize; read-only afterwards.
+	rootDir  string         // workspace root (for workspace/workspaceFolders)
+	settings map[string]any // configuration served to the server
+	initOpts map[string]any // initializationOptions for the handshake
+}
+
+// lspCallbacks bundles the editor callbacks a server invokes from its
+// receive goroutine; the editor marshals them onto the main event loop.
+type lspCallbacks struct {
+	onShow     func(lsp.ShowMessageParams)
+	onDiag     func(lsp.PublishDiagnosticsParams)
+	onProgress func(string) // display-ready $/progress status line
 }
 
 var ErrLspNotSupported = errors.New("lsp: operation not supported")
@@ -106,6 +120,9 @@ func (s *LspServer) isDead() bool {
 func startLspServer(lang LspLanguage) (*LspServer, error) {
 	c := exec.Command(lang.Command, lang.Args...)
 	c.Stderr = log.Writer()
+	// On Linux, have the kernel kill the server if the editor dies without
+	// running its shutdown path (crash, SIGKILL).
+	c.SysProcAttr = lspSysProcAttr()
 
 	stdin, err := c.StdinPipe()
 	if err != nil {
@@ -121,6 +138,14 @@ func startLspServer(lang LspLanguage) (*LspServer, error) {
 
 	s := newLspServerIO(stdin, stdout)
 	s.cmd = c
+	s.exited = make(chan struct{})
+	go func() {
+		// Reap the subprocess as soon as it exits (no zombies while the
+		// editor keeps running) and fail pending requests fast.
+		c.Wait()
+		close(s.exited)
+		s.markDead()
+	}()
 	return s, nil
 }
 
@@ -189,7 +214,8 @@ func (s *LspServer) caps() lsp.ServerCapabilities {
 }
 
 // Initialize performs the LSP initialization handshake.
-func (s *LspServer) Initialize(dir string, onShow func(lsp.ShowMessageParams), onDiag func(lsp.PublishDiagnosticsParams)) {
+func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
+	s.rootDir = dir
 	params := lsp.InitializeParams{
 		ProcessID: int32(os.Getpid()),
 		RootURI:   uri.File(dir),
@@ -208,10 +234,19 @@ func (s *LspServer) Initialize(dir string, onShow func(lsp.ShowMessageParams), o
 				Implementation: &lsp.ImplementationTextDocumentClientCapabilities{},
 				Formatting:     &lsp.DocumentFormattingClientCapabilities{},
 			},
+			Window: &lsp.WindowClientCapabilities{
+				WorkDoneProgress: true,
+			},
+			Workspace: &lsp.WorkspaceClientCapabilities{
+				Configuration: true,
+			},
 		},
 	}
+	if s.initOpts != nil {
+		params.InitializationOptions = s.initOpts
+	}
 
-	go s.receiveLoop(onShow, onDiag)
+	go s.receiveLoop(cb)
 
 	go func() {
 		// Release the send queue when the handshake ends (successfully or
@@ -246,15 +281,63 @@ func (s *LspServer) Initialize(dir string, onShow func(lsp.ShowMessageParams), o
 		s.lock.Unlock()
 
 		s.writeMessage(rpcNotification{JSONRPC: "2.0", Method: lsp.MethodInitialized, Params: struct{}{}})
+		// Push the configured settings (still before the queue is released,
+		// so they precede any didOpen).
+		if s.settings != nil {
+			s.writeMessage(rpcNotification{JSONRPC: "2.0", Method: "workspace/didChangeConfiguration",
+				Params: lsp.DidChangeConfigurationParams{Settings: s.settings}})
+		}
 		log.Printf("[lsp] initialized")
 	}()
 }
 
-// Shutdown sends shutdown + exit to the server. Uses a short timeout so a
-// hung server can't stall editor exit.
+// How long Shutdown waits for the server to exit on its own after the exit
+// notification, then again after closing its stdin, before killing it.
+const (
+	lspExitGrace = 100 * time.Millisecond
+	lspEOFGrace  = 100 * time.Millisecond
+)
+
+// Shutdown asks the server to exit (shutdown request + exit notification)
+// and escalates if it doesn't comply: close stdin (the EOF cue), then kill
+// the process. A hung server must not survive the editor, and every step is
+// bounded so it can't stall editor exit for more than a few seconds either.
 func (s *LspServer) Shutdown() {
-	s.request(lsp.MethodShutdown, nil, 2*time.Second)
-	s.notify(lsp.MethodExit, nil)
+	if !s.isDead() {
+		// The polite handshake is only worth attempting once
+		// initialization has finished; before that the send queue has
+		// never started, so the request would just burn its timeout.
+		select {
+		case <-s.ready:
+			s.request(lsp.MethodShutdown, nil, 2*time.Second)
+			s.notify(lsp.MethodExit, nil)
+		default:
+		}
+	}
+
+	if s.cmd == nil || s.cmd.Process == nil {
+		return // in-process server (tests): nothing to reap
+	}
+	select {
+	case <-s.exited:
+		return
+	case <-time.After(lspExitGrace):
+	}
+	// The exit notification was ignored (or never delivered): closing
+	// stdin gives servers that watch for EOF a second cue, and unblocks a
+	// send loop stuck writing to a full pipe.
+	s.stdin.Close()
+	select {
+	case <-s.exited:
+		return
+	case <-time.After(lspEOFGrace):
+	}
+	log.Printf("[lsp] server unresponsive on shutdown; killing pid %d", s.cmd.Process.Pid)
+	s.cmd.Process.Kill()
+	select {
+	case <-s.exited:
+	case <-time.After(2 * time.Second):
+	}
 }
 
 // --- Notifications (client → server) ---
@@ -477,7 +560,11 @@ func (s *LspServer) readMessage() (json.RawMessage, error) {
 	return json.RawMessage(buf), nil
 }
 
-func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(lsp.PublishDiagnosticsParams)) {
+func (s *LspServer) receiveLoop(cb lspCallbacks) {
+	// Progress tokens → titles, from window/workDoneProgress/create begin
+	// events. Only this goroutine touches it.
+	progress := make(map[string]string)
+
 	for {
 		msg, err := s.readMessage()
 		if err != nil {
@@ -501,20 +588,73 @@ func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(
 
 		switch header.Method {
 		case string(lsp.MethodWindowShowMessage):
-			if onShow != nil {
+			if cb.onShow != nil {
 				var m struct {
 					Params lsp.ShowMessageParams `json:"params"`
 				}
 				json.Unmarshal(msg, &m)
-				onShow(m.Params)
+				cb.onShow(m.Params)
 			}
+		case string(lsp.MethodWindowLogMessage):
+			// Server debug output: route to the log file, not the UI.
+			var m struct {
+				Params lsp.LogMessageParams `json:"params"`
+			}
+			json.Unmarshal(msg, &m)
+			log.Printf("[lsp] server: %s", m.Params.Message)
 		case string(lsp.MethodTextDocumentPublishDiagnostics):
-			if onDiag != nil {
+			if cb.onDiag != nil {
 				var m struct {
 					Params lsp.PublishDiagnosticsParams `json:"params"`
 				}
 				json.Unmarshal(msg, &m)
-				onDiag(m.Params)
+				cb.onDiag(m.Params)
+			}
+		case "$/progress":
+			if status, ok := decodeProgress(msg, progress); ok && cb.onProgress != nil {
+				cb.onProgress(status)
+			}
+		case "window/workDoneProgress/create":
+			// Void result; the $/progress notifications follow.
+			if header.ID != nil {
+				s.reply(*header.ID, nil)
+			}
+		case "client/registerCapability", "client/unregisterCapability":
+			// Void result. We do not advertise dynamic registration, so
+			// servers that register anyway get an acknowledgement and the
+			// static capabilities keep applying.
+			if header.ID != nil {
+				s.reply(*header.ID, nil)
+			}
+		case "workspace/applyEdit":
+			// Server-initiated edits (rename, code actions) are not
+			// supported; refuse per spec instead of a bare null.
+			if header.ID != nil {
+				s.reply(*header.ID, lsp.ApplyWorkspaceEditResponse{
+					Applied:       false,
+					FailureReason: "client does not support workspace/applyEdit",
+				})
+			}
+		case "workspace/workspaceFolders":
+			if header.ID != nil {
+				s.reply(*header.ID, []lsp.WorkspaceFolder{{
+					URI:  string(uri.File(s.rootDir)),
+					Name: filepath.Base(s.rootDir),
+				}})
+			}
+		case "workspace/configuration":
+			// Answer each requested item from the configured settings
+			// (null for sections we have nothing for).
+			if header.ID != nil {
+				var m struct {
+					Params lsp.ConfigurationParams `json:"params"`
+				}
+				json.Unmarshal(msg, &m)
+				out := make([]any, len(m.Params.Items))
+				for i, item := range m.Params.Items {
+					out[i] = lookupSettings(s.settings, item.Section)
+				}
+				s.reply(*header.ID, out)
 			}
 		case "":
 			// Response to a request.
@@ -526,16 +666,6 @@ func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(
 			s.lock.Unlock()
 			if ok {
 				ch <- msg
-			}
-		case "workspace/configuration":
-			// Answer with one null per requested item so the server isn't
-			// left waiting (we have no workspace configuration).
-			if header.ID != nil {
-				var m struct {
-					Params lsp.ConfigurationParams `json:"params"`
-				}
-				json.Unmarshal(msg, &m)
-				s.reply(*header.ID, make([]any, len(m.Params.Items)))
 			}
 		default:
 			if header.ID != nil {
@@ -549,22 +679,94 @@ func (s *LspServer) receiveLoop(onShow func(lsp.ShowMessageParams), onDiag func(
 	}
 }
 
+// decodeProgress turns a $/progress notification into a display string,
+// tracking begin-event titles per token in titles.
+func decodeProgress(msg json.RawMessage, titles map[string]string) (string, bool) {
+	var m struct {
+		Params struct {
+			Token json.RawMessage `json:"token"`
+			Value struct {
+				Kind       string   `json:"kind"`
+				Title      string   `json:"title"`
+				Message    string   `json:"message"`
+				Percentage *float64 `json:"percentage"`
+			} `json:"value"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(msg, &m); err != nil {
+		return "", false
+	}
+	tok := string(m.Params.Token)
+	v := m.Params.Value
+
+	var title string
+	switch v.Kind {
+	case "begin":
+		titles[tok] = v.Title
+		title = v.Title
+	case "report":
+		title = titles[tok]
+	case "end":
+		title = titles[tok]
+		delete(titles, tok)
+	default:
+		return "", false
+	}
+	if title == "" {
+		title = "lsp"
+	}
+
+	status := v.Message
+	if v.Kind == "end" && status == "" {
+		status = "done"
+	}
+	out := title
+	if status != "" {
+		out += ": " + status
+	}
+	if v.Percentage != nil && v.Kind != "end" {
+		out += fmt.Sprintf(" (%d%%)", int(*v.Percentage))
+	}
+	return out, true
+}
+
+// lookupSettings resolves a workspace/configuration section (dotted path)
+// against the configured settings map; nil when absent.
+func lookupSettings(settings map[string]any, section string) any {
+	if settings == nil {
+		return nil
+	}
+	if section == "" {
+		return settings
+	}
+	var cur any = settings
+	for _, part := range strings.Split(section, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur, ok = m[part]
+		if !ok {
+			return nil
+		}
+	}
+	return cur
+}
+
 // --- Manager ---
 
 // LspManager manages one language server per filetype.
 type LspManager struct {
 	servers map[string]*LspServer
 	langs   map[string]LspLanguage
-	onShow  func(lsp.ShowMessageParams)
-	onDiag  func(lsp.PublishDiagnosticsParams)
+	cb      lspCallbacks
 }
 
-func NewLspManager(langs map[string]LspLanguage, onShow func(lsp.ShowMessageParams), onDiag func(lsp.PublishDiagnosticsParams)) *LspManager {
+func NewLspManager(langs map[string]LspLanguage, cb lspCallbacks) *LspManager {
 	return &LspManager{
 		servers: make(map[string]*LspServer),
 		langs:   langs,
-		onShow:  onShow,
-		onDiag:  onDiag,
+		cb:      cb,
 	}
 }
 
@@ -588,8 +790,10 @@ func (m *LspManager) Open(ft, filename, contents string, version int32) (*LspSer
 		if err != nil {
 			return nil, err
 		}
+		s.settings = lang.Settings
+		s.initOpts = lang.InitOptions
 		wd, _ := os.Getwd()
-		s.Initialize(wd, m.onShow, m.onDiag)
+		s.Initialize(wd, m.cb)
 		m.servers[sft] = s
 	}
 
@@ -599,12 +803,34 @@ func (m *LspManager) Open(ft, filename, contents string, version int32) (*LspSer
 	return s, nil
 }
 
-// ShutdownAll shuts down all running servers.
+// ShutdownUnused stops servers that no longer serve any buffer (e.g. after
+// :set lsp false) so no server process lingers; a later attach starts a
+// fresh one. Shutdown runs in the background since it can block briefly.
+func (m *LspManager) ShutdownUnused(used map[*LspServer]bool) {
+	if m == nil {
+		return
+	}
+	for ft, s := range m.servers {
+		if !used[s] {
+			delete(m.servers, ft)
+			go s.Shutdown()
+		}
+	}
+}
+
+// ShutdownAll shuts down all running servers in parallel, so several hung
+// servers can't stack their shutdown timeouts.
 func (m *LspManager) ShutdownAll() {
 	if m == nil {
 		return
 	}
+	var wg sync.WaitGroup
 	for _, s := range m.servers {
-		s.Shutdown()
+		wg.Add(1)
+		go func(s *LspServer) {
+			defer wg.Done()
+			s.Shutdown()
+		}(s)
 	}
+	wg.Wait()
 }
