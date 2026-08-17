@@ -86,6 +86,9 @@ func applyMotion(ks *KeyState, m MotionDef, selecting bool) {
 	if m.Vertical {
 		ks.vertical = true
 	}
+	// Multi-cursors that converged (e.g. every cursor pressed 0 on the
+	// same line) merge into one.
+	b.MergeCursors()
 	// Pure motions in normal mode are not repeatable — discard recording.
 	if !selecting && ks.ModeID() == ModeNormal {
 		ks.recording = nil

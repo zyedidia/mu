@@ -310,6 +310,45 @@ func (b *Buffer) RemoveCursors() {
 	b.cur = 0
 }
 
+// PopCursor removes the most recently spawned cursor, making the previous
+// one active.
+func (b *Buffer) PopCursor() {
+	if len(b.cursors) <= 1 {
+		return
+	}
+	b.cursors = b.cursors[:len(b.cursors)-1]
+	if b.cur >= len(b.cursors) {
+		b.cur = len(b.cursors) - 1
+	}
+}
+
+// MergeCursors removes duplicate cursors occupying the same position,
+// preserving spawn order and keeping the active cursor active.
+func (b *Buffer) MergeCursors() {
+	if len(b.cursors) <= 1 {
+		return
+	}
+	activePos := b.cursors[b.cur].Pos
+	seen := make(map[int]bool, len(b.cursors))
+	var out []Cursor
+	for _, c := range b.cursors {
+		if seen[c.Pos] {
+			continue
+		}
+		seen[c.Pos] = true
+		c.Num = len(out)
+		out = append(out, c)
+	}
+	b.cursors = out
+	b.cur = 0
+	for i, c := range out {
+		if c.Pos == activePos {
+			b.cur = i
+			break
+		}
+	}
+}
+
 // PutCursor restores a cursor at its numbered position.
 func (b *Buffer) PutCursor(c Cursor) {
 	if c.Num >= 0 && c.Num < len(b.cursors) {

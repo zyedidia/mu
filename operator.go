@@ -774,6 +774,7 @@ func RegisterOperators(ks *KeyState) {
 
 	// v: visual mode
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		ks.mcPattern = "" // a manual selection starts a fresh <C-n> flow
 		b := ks.Buf()
 		c := b.Cursor()
 		_, _, sz := b.DecodeGraphemeAt(c.Pos)
@@ -844,10 +845,13 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "V")
 
-	// Escape in visual modes: back to normal
+	// Escape in visual modes: back to normal, collapsing any multi-cursor
+	// selection down to the primary cursor.
 	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
 		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			ks.mcPattern = ""
 			b := ks.Buf()
+			b.RemoveCursors()
 			for i := range b.cursors {
 				b.cursors[i].HasSel = false
 			}

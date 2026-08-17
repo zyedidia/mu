@@ -979,6 +979,11 @@ func (e *Editor) Display() {
 		e.infobar.Message(fmt.Sprintf("recording @%c", e.ks.macroReg))
 	}
 
+	// Multi-cursor indicator.
+	if n := e.ks.Buf().NumCursors(); n > 1 && !e.infobar.IsActive() && e.infobar.message == "" {
+		e.infobar.Message(fmt.Sprintf("%d cursors", n))
+	}
+
 	// Completion bar (above the infobar).
 	if e.infobar.HasCompletions() {
 		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)

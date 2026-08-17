@@ -172,6 +172,12 @@ type KeyState struct {
 	// the gc/gcc comment toggle.
 	commentPrefix func(b *Buffer) string
 
+	// mcPattern is the multi-cursor search pattern (a regexp source):
+	// what <C-n> in visual mode looks for to spawn the next cursor. Set by
+	// the first <C-n> (word under cursor) or adopted from a manual visual
+	// selection; cleared when the flow ends.
+	mcPattern string
+
 	// Macro state (q<reg> / @<reg>).
 	macroReg   RegisterID // register being recorded into (0 = not recording)
 	macroRec   []string   // keys recorded so far
@@ -357,12 +363,14 @@ func (ks *KeyState) ResetAction() {
 	} else if ks.mode == ModeNormal {
 		ks.StopRecording()
 	}
-	// In normal mode, ensure cursor is not sitting on a newline.
+	// In normal mode, ensure cursor is not sitting on a newline, and merge
+	// multi-cursors that converged onto the same position.
 	if ks.mode == ModeNormal {
 		b := ks.Buf()
 		for i := range b.cursors {
 			b.cursors[i] = b.cursors[i].VimClamp(b)
 		}
+		b.MergeCursors()
 	}
 }
 

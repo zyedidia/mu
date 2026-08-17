@@ -420,5 +420,6 @@ func SetupBindings(ks *KeyState) {
 	RegisterComments(ks)
 	RegisterFormat(ks)
 	RegisterMacros(ks)
+	RegisterMultiCursor(ks)
 	RegisterTextObjects(ks)
 }
