@@ -588,17 +588,21 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "J")
 
-	// u: undo (not repeatable)
+	// u: undo (not repeatable; takes a count as in vim)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		ks.recording = nil
-		ks.Buf().Undo()
+		for i := 0; i < ks.Count(); i++ {
+			ks.Buf().Undo()
+		}
 		ks.ResetAction()
 	}, "u")
 
-	// Ctrl-R: redo (not repeatable)
+	// Ctrl-R: redo (not repeatable; takes a count as in vim)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		ks.recording = nil
-		ks.Buf().Redo()
+		for i := 0; i < ks.Count(); i++ {
+			ks.Buf().Redo()
+		}
 		ks.ResetAction()
 	}, "<C-r>")
 

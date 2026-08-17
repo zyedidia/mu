@@ -501,3 +501,64 @@ func TestReplaceCharDotRepeat(t *testing.T) {
 		t.Fatalf("cursor after repeat: got %d, want 1", cursorPos(ks))
 	}
 }
+
+// --- Undo units (vim semantics) ---
+
+func TestUndoInsertSessionOneStep(t *testing.T) {
+	// An entire insert session (including backspaces) is one undo step.
+	ks := newVimState("end\n")
+
+	feedKeys(ks, "ihello")
+	feedSpecial(ks, KeyBacksp)
+	feedKeys(ks, "p!")
+	feedSpecial(ks, KeyEscape)
+	if bufText(ks) != "hellp!end\n" {
+		t.Fatalf("insert session: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "end\n" {
+		t.Fatalf("u after insert session: got %q", bufText(ks))
+	}
+}
+
+func TestUndoChangeWithInsertOneStep(t *testing.T) {
+	// cw plus the inserted text undo together, as in vim.
+	ks := newVimState("hello world\n")
+
+	feedKeys(ks, "cwbye")
+	feedSpecial(ks, KeyEscape)
+	if bufText(ks) != "bye world\n" {
+		t.Fatalf("cw: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "hello world\n" {
+		t.Fatalf("u after cw: got %q", bufText(ks))
+	}
+}
+
+func TestUndoCountedCommandOneStep(t *testing.T) {
+	// 3x is one command and one undo step.
+	ks := newVimState("abcdef\n")
+
+	feedKeys(ks, "3x")
+	if bufText(ks) != "def\n" {
+		t.Fatalf("3x: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "abcdef\n" {
+		t.Fatalf("u after 3x: got %q", bufText(ks))
+	}
+}
+
+func TestUndoCursorAtChange(t *testing.T) {
+	// Undo moves the cursor back to where the change was made.
+	ks := newVimState("abc\ndef\nghi\n")
+
+	feedKeys(ks, "jj") // line 2
+	feedDisplay(ks, "x")
+	feedKeys(ks, "gg") // move away
+	feedKeys(ks, "u")
+	if line, _ := ks.Buf().LineColAt(cursorPos(ks)); line != 2 {
+		t.Fatalf("cursor after u: line %d, want 2", line)
+	}
+}

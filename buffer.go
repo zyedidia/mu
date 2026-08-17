@@ -25,6 +25,10 @@ type Buffer struct {
 	cursors []Cursor
 	cur     int // active cursor index
 
+	// undoGroup, while positive, suppresses undo barriers so that all
+	// edits coalesce into one undo event (used for macro replay).
+	undoGroup int
+
 	modified    bool
 	readonly    bool
 	Path        string
@@ -237,6 +241,10 @@ func (b *Buffer) DoEdit(e *Edit) {
 
 // Undo reverts the most recent edit.
 func (b *Buffer) Undo() {
+	// Edits made after an undo must never coalesce backwards into the
+	// event that is now current (possible inside an undo group, where
+	// normal barriers are suppressed).
+	b.undo.Barrier()
 	c, ok := b.undo.PrevState()
 	b.undo.Undo()
 	if ok {
@@ -247,6 +255,7 @@ func (b *Buffer) Undo() {
 
 // Redo reapplies the most recently undone edit.
 func (b *Buffer) Redo() {
+	b.undo.Barrier()
 	if ep, ok := b.undo.MostRecent(); ok {
 		c := b.undo.NextState(ep)
 		c.HasSel = false
@@ -256,8 +265,33 @@ func (b *Buffer) Redo() {
 }
 
 // UndoBarrier prevents the next edit from coalescing with the previous one.
+// Inside an undo group the barrier is suppressed, so a group's edits form a
+// single undo event.
 func (b *Buffer) UndoBarrier() {
+	if b.undoGroup > 0 {
+		return
+	}
 	b.undo.Barrier()
+}
+
+// BeginUndoGroup starts an undo group: until the matching EndUndoGroup,
+// barriers are ignored and every edit coalesces into one undo event.
+// Groups nest.
+func (b *Buffer) BeginUndoGroup() {
+	if b.undoGroup == 0 {
+		b.undo.Barrier()
+	}
+	b.undoGroup++
+}
+
+// EndUndoGroup closes an undo group started with BeginUndoGroup.
+func (b *Buffer) EndUndoGroup() {
+	if b.undoGroup > 0 {
+		b.undoGroup--
+		if b.undoGroup == 0 {
+			b.undo.Barrier()
+		}
+	}
 }
 
 // --- LSP integration ---

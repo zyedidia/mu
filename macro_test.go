@@ -273,3 +273,123 @@ func TestMacroRecordDeadSequence(t *testing.T) {
 		t.Fatalf("@a: got %q", bufText(ed.ks))
 	}
 }
+
+// --- Undo grouping ---
+
+func TestMacroUndoOneStep(t *testing.T) {
+	ks := newVimState("abcdef\n")
+	ks.regs.Set(RegisterID('a'), []byte("xx"), false)
+
+	feedKeys(ks, "x") // separate pre-macro change
+	if bufText(ks) != "bcdef\n" {
+		t.Fatalf("x: got %q", bufText(ks))
+	}
+	feedKeys(ks, "@a")
+	if bufText(ks) != "def\n" {
+		t.Fatalf("@a: got %q", bufText(ks))
+	}
+	// One u undoes the whole macro...
+	feedKeys(ks, "u")
+	if bufText(ks) != "bcdef\n" {
+		t.Fatalf("u after macro: got %q", bufText(ks))
+	}
+	// ...and the next u undoes the earlier, separate change.
+	feedKeys(ks, "u")
+	if bufText(ks) != "abcdef\n" {
+		t.Fatalf("second u: got %q", bufText(ks))
+	}
+	// Redo mirrors the grouping.
+	feedSpecial(ks, "<C-r>")
+	if bufText(ks) != "bcdef\n" {
+		t.Fatalf("redo x: got %q", bufText(ks))
+	}
+	feedSpecial(ks, "<C-r>")
+	if bufText(ks) != "def\n" {
+		t.Fatalf("redo macro: got %q", bufText(ks))
+	}
+}
+
+func TestMacroCountUndoOneStep(t *testing.T) {
+	// [count]@a is a single undo step too.
+	ks := newVimState("abcdef\n")
+	ks.regs.Set(RegisterID('a'), []byte("x"), false)
+
+	feedKeys(ks, "3@a")
+	if bufText(ks) != "def\n" {
+		t.Fatalf("3@a: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "abcdef\n" {
+		t.Fatalf("u after 3@a: got %q", bufText(ks))
+	}
+}
+
+func TestMacroVisualUndoOneStep(t *testing.T) {
+	// Applying a macro to a selection undoes as one step.
+	ks := newVimState("a\nb\nc\n")
+	ks.regs.Set(RegisterID('q'), []byte("A!<Esc>"), false)
+
+	feedDisplay(ks, "V", "jj", "@q")
+	if bufText(ks) != "a!\nb!\nc!\n" {
+		t.Fatalf("visual @q: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "a\nb\nc\n" {
+		t.Fatalf("u after visual @q: got %q", bufText(ks))
+	}
+}
+
+func TestMacroInsertUndoOneStep(t *testing.T) {
+	// A macro spanning several commands (insert session + open line)
+	// still undoes in one step.
+	ks := newVimState("x\n")
+	ks.regs.Set(RegisterID('a'), []byte("A!<Esc>onew<Esc>"), false)
+
+	feedKeys(ks, "@a")
+	if bufText(ks) != "x!\nnew\n" {
+		t.Fatalf("@a: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "x\n" {
+		t.Fatalf("u after multi-command macro: got %q", bufText(ks))
+	}
+}
+
+func TestMacroWithUndoInside(t *testing.T) {
+	// A macro that itself presses u: the undo splits the group instead of
+	// corrupting history.
+	ks := newVimState("abc\n")
+	ks.regs.Set(RegisterID('a'), []byte("xu"), false)
+
+	feedKeys(ks, "@a")
+	if bufText(ks) != "abc\n" {
+		t.Fatalf("@a with inner undo: got %q", bufText(ks))
+	}
+	feedKeys(ks, "x")
+	if bufText(ks) != "bc\n" {
+		t.Fatalf("x after macro: got %q", bufText(ks))
+	}
+	feedKeys(ks, "u")
+	if bufText(ks) != "abc\n" {
+		t.Fatalf("u after macro: got %q", bufText(ks))
+	}
+}
+
+func TestUndoRedoCounts(t *testing.T) {
+	// vim: [count]u and [count]<C-r>.
+	ks := newVimState("abcd\n")
+
+	feedKeys(ks, "xxx")
+	if bufText(ks) != "d\n" {
+		t.Fatalf("xxx: got %q", bufText(ks))
+	}
+	feedKeys(ks, "3u")
+	if bufText(ks) != "abcd\n" {
+		t.Fatalf("3u: got %q", bufText(ks))
+	}
+	feedKeys(ks, "2")
+	feedSpecial(ks, "<C-r>")
+	if bufText(ks) != "cd\n" {
+		t.Fatalf("2<C-r>: got %q", bufText(ks))
+	}
+}

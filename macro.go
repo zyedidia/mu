@@ -60,6 +60,10 @@ func (ks *KeyState) runMacro(reg RegisterID, count int) {
 	}
 	ks.macroDepth++
 	defer func() { ks.macroDepth-- }()
+	// The whole replay (including all count repetitions) is one undo step.
+	b := ks.Buf()
+	b.BeginUndoGroup()
+	defer b.EndUndoGroup()
 	// Keys played from a register are subject to mappings (as in vim),
 	// even when the macro itself was started from inside a mapping
 	// expansion (e.g. "vmap <Space> @q"), where remapping is suppressed.
@@ -82,6 +86,9 @@ func (ks *KeyState) runMacro(reg RegisterID, count int) {
 // line tracks buffer growth or shrinkage caused by the macro.
 func (ks *KeyState) runMacroLines(reg RegisterID, sl, el int) {
 	b := ks.Buf()
+	// The whole per-line application is one undo step.
+	b.BeginUndoGroup()
+	defer b.EndUndoGroup()
 	total := b.NumLines()
 	for l := sl; l <= el; l++ {
 		if l > b.NumLines() {
