@@ -495,8 +495,12 @@ func blockVisualPaste(ks *KeyState) {
 				b.Insert(at, reg.Content)
 				pos = at
 			}
+			pos = motionFirstNonBlank(b, Cursor{Pos: pos}, 0)
 		default:
 			b.Insert(pos, reg.Content)
+			// Cursor on the last pasted character, as in vim.
+			_, _, gsz := b.DecodeGraphemeBefore(pos + len(reg.Content))
+			pos = pos + len(reg.Content) - gsz
 		}
 		b.cursors[i] = b.cursors[i].MoveTo(pos).VimClamp(b)
 	}

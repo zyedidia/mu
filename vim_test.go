@@ -293,3 +293,128 @@ func TestVimJoinLines(t *testing.T) {
 		t.Fatalf("J: got %q", bufText(ks))
 	}
 }
+
+// --- Paste cursor placement (vim semantics) ---
+
+func TestPasteCharwiseCursor(t *testing.T) {
+	ks := newVimState("abc\n")
+	ks.regs.Set(RegDefault, []byte("XY"), false)
+
+	// p: paste after the cursor char, cursor on the last pasted char.
+	feedKeys(ks, "p")
+	if bufText(ks) != "aXYbc\n" {
+		t.Fatalf("p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 2 {
+		t.Fatalf("p cursor: got %d, want 2 (on 'Y')", cursorPos(ks))
+	}
+
+	// P: paste before the cursor char, cursor on the last pasted char.
+	ks2 := newVimState("abc\n")
+	ks2.regs.Set(RegDefault, []byte("XY"), false)
+	feedKeys(ks2, "P")
+	if bufText(ks2) != "XYabc\n" {
+		t.Fatalf("P: got %q", bufText(ks2))
+	}
+	if cursorPos(ks2) != 1 {
+		t.Fatalf("P cursor: got %d, want 1 (on 'Y')", cursorPos(ks2))
+	}
+}
+
+func TestPasteCharwiseMultilineCursor(t *testing.T) {
+	ks := newVimState("abc\n")
+	ks.regs.Set(RegDefault, []byte("XY\nZ"), false)
+
+	feedKeys(ks, "p")
+	if bufText(ks) != "aXY\nZbc\n" {
+		t.Fatalf("p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 4 {
+		t.Fatalf("p cursor: got %d, want 4 (on 'Z')", cursorPos(ks))
+	}
+}
+
+func TestPasteCharwiseCountCursor(t *testing.T) {
+	ks := newVimState("xy\n")
+	ks.regs.Set(RegDefault, []byte("ab"), false)
+
+	feedKeys(ks, "3p")
+	if bufText(ks) != "xabababy\n" {
+		t.Fatalf("3p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 6 {
+		t.Fatalf("3p cursor: got %d, want 6 (last pasted 'b')", cursorPos(ks))
+	}
+}
+
+func TestPasteOnEmptyLine(t *testing.T) {
+	// p on an empty line pastes into that line, not the next one.
+	ks := newVimState("a\n\nb\n")
+	ks.regs.Set(RegDefault, []byte("X"), false)
+
+	feedKeys(ks, "j") // to the empty line
+	feedKeys(ks, "p")
+	if bufText(ks) != "a\nX\nb\n" {
+		t.Fatalf("p on empty line: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 2 {
+		t.Fatalf("cursor: got %d, want 2 (on 'X')", cursorPos(ks))
+	}
+}
+
+func TestPasteLinewiseCursor(t *testing.T) {
+	// Linewise paste puts the cursor on the first non-blank of the first
+	// pasted line.
+	ks := newVimState("one\ntwo\n")
+	ks.regs.Set(RegDefault, []byte("  new\n"), true)
+
+	feedKeys(ks, "p")
+	if bufText(ks) != "one\n  new\ntwo\n" {
+		t.Fatalf("p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 6 {
+		t.Fatalf("p cursor: got %d, want 6 (first non-blank of pasted line)", cursorPos(ks))
+	}
+
+	ks2 := newVimState("one\ntwo\n")
+	ks2.regs.Set(RegDefault, []byte("  new\n"), true)
+	feedKeys(ks2, "j") // paste above line 1
+	feedKeys(ks2, "P")
+	if bufText(ks2) != "one\n  new\ntwo\n" {
+		t.Fatalf("P: got %q", bufText(ks2))
+	}
+	if cursorPos(ks2) != 6 {
+		t.Fatalf("P cursor: got %d, want 6", cursorPos(ks2))
+	}
+}
+
+func TestPasteLinewiseEOFCursor(t *testing.T) {
+	// Pasting below the last line of a file without a trailing newline.
+	ks := newVimState("one")
+	ks.regs.Set(RegDefault, []byte("new\n"), true)
+
+	feedKeys(ks, "p")
+	if bufText(ks) != "one\nnew" {
+		t.Fatalf("p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 4 {
+		t.Fatalf("p cursor: got %d, want 4 (start of pasted line)", cursorPos(ks))
+	}
+}
+
+func TestVisualPasteCursor(t *testing.T) {
+	ks := newVimState("hello world\n")
+	ks.regs.Set(RegDefault, []byte("world"), false)
+
+	feedKeys(ks, "vllll") // select "hello"
+	feedKeys(ks, "p")
+	if bufText(ks) != "world world\n" {
+		t.Fatalf("visual p: got %q", bufText(ks))
+	}
+	if cursorPos(ks) != 4 {
+		t.Fatalf("visual p cursor: got %d, want 4 (last pasted char)", cursorPos(ks))
+	}
+	if ks.ModeID() != ModeNormal {
+		t.Fatal("should be back in normal mode")
+	}
+}

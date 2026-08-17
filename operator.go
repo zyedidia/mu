@@ -1293,9 +1293,12 @@ func paste(ks *KeyState, before bool) {
 	for i := 0; i < b.NumCursors(); i++ {
 		c := b.cursors[i]
 		if reg.Linewise {
+			// The cursor lands on the first non-blank of the first pasted
+			// line, as in vim.
+			var pasted int // start of the first pasted line
 			if before {
-				pos := c.LineStart(b).Pos
-				b.Insert(pos, content)
+				pasted = c.LineStart(b).Pos
+				b.Insert(pasted, content)
 			} else {
 				pos := c.LineEnd(b).Pos + 1
 				if pos > b.Len() {
@@ -1306,20 +1309,28 @@ func paste(ks *KeyState, before bool) {
 					if data[len(data)-1] == '\n' {
 						data = data[:len(data)-1]
 					}
+					pasted = b.Len() + 1
 					b.Insert(b.Len(), data)
 				} else {
+					pasted = pos
 					b.Insert(pos, content)
 				}
 			}
+			fnb := motionFirstNonBlank(b, Cursor{Pos: pasted}, 0)
+			b.cursors[i] = b.cursors[i].MoveTo(fnb).VimClamp(b)
 		} else {
 			pos := c.Pos
 			if !before {
-				_, _, sz := b.DecodeGraphemeAt(pos)
-				if sz > 0 {
+				// Paste after the cursor character, but never past the end
+				// of the line (p on an empty line pastes into it, as in vim).
+				if r, _, sz := b.DecodeGraphemeAt(pos); sz > 0 && r != '\n' {
 					pos += sz
 				}
 			}
 			b.Insert(pos, content)
+			// The cursor lands on the last pasted character, as in vim.
+			_, _, gsz := b.DecodeGraphemeBefore(pos + len(content))
+			b.cursors[i] = b.cursors[i].MoveTo(pos + len(content) - gsz).VimClamp(b)
 		}
 	}
 	ks.ResetAction()
@@ -1343,7 +1354,9 @@ func visualPaste(ks *KeyState) {
 		start, end := c.Sel[0], c.Sel[1]
 		b.Remove(start, end)
 		b.Insert(start, content)
-		b.cursors[i].HasSel = false
+		// The cursor lands on the last pasted character, as in vim.
+		_, _, gsz := b.DecodeGraphemeBefore(start + len(content))
+		b.cursors[i] = b.cursors[i].MoveTo(start + len(content) - gsz).VimClamp(b)
 	}
 	ks.SetMode(ModeNormal)
 	ks.ResetAction()
