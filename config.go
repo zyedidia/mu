@@ -10,8 +10,10 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/pelletier/go-toml"
+	"github.com/zyedidia/ftdetect"
 	"github.com/zyedidia/glob"
 	"gopkg.in/yaml.v2"
 )
@@ -132,6 +134,12 @@ func (o *Options) Resolve(path, ft string) map[string]any {
 type Config struct {
 	opts *Options
 	dir  string // user config directory (~/.config/mu)
+
+	// Filetype detectors, built lazily from the embedded set plus the user's
+	// detectors/ directory. Cached here rather than in a package global so the
+	// set always reflects this config's directory.
+	detectorsOnce sync.Once
+	detectors     ftdetect.Detectors
 }
 
 // LoadConfig loads the configuration, merging embedded defaults with user

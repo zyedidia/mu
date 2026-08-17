@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -56,33 +57,98 @@ type SyntaxState struct {
 	mu sync.Mutex
 }
 
-// Global filetype detectors (lazily initialized).
-var (
-	ftDetectors     ftdetect.Detectors
-	ftDetectorsOnce sync.Once
-)
-
-func loadDetectors(cfg *Config) ftdetect.Detectors {
-	ftDetectorsOnce.Do(func() {
-		ftDetectors = make(ftdetect.Detectors)
-		walkFn := func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") {
-				return nil
-			}
-			data, err := embedFS.ReadFile(path)
-			if err != nil {
-				return nil
-			}
-			det, err := ftdetect.LoadDetectorJson(data)
-			if err != nil {
-				return nil
-			}
-			ftDetectors.RegisterDetector(det)
+// readDetectors loads every *.json detector under dir in fsys, in the lexical
+// order WalkDir visits them. A malformed file is logged and skipped so one bad
+// detector cannot take out the rest. A missing dir yields nothing.
+func readDetectors(fsys fs.FS, dir, src string) []*ftdetect.Detector {
+	var dets []*ftdetect.Detector
+	fs.WalkDir(fsys, dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") {
 			return nil
 		}
-		fs.WalkDir(embedFS, "embed/detectors", walkFn)
+		data, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			log.Printf("detectors: %s: %s: %v", src, path, err)
+			return nil
+		}
+		det, err := ftdetect.LoadDetectorJson(data)
+		if err != nil {
+			log.Printf("detectors: %s: %s: %v", src, path, err)
+			return nil
+		}
+		if det.Name == "" {
+			log.Printf("detectors: %s: %s: missing name", src, path)
+			return nil
+		}
+		dets = append(dets, det)
+		return nil
 	})
-	return ftDetectors
+	return dets
+}
+
+// registerDisplacing registers d under each of its extensions and filenames,
+// skipping any key in claimed. A detector whose keys are all claimed drops out
+// entirely; one that declares no keys at all is header-only and always
+// registers, since those are matched by regex rather than looked up by key.
+func registerDisplacing(ds ftdetect.Detectors, d *ftdetect.Detector, claimed map[string]bool) {
+	keep := func(keys []string) []string {
+		var out []string
+		for _, k := range keys {
+			if !claimed[k] {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
+	kept := *d
+	kept.Exts = keep(d.Exts)
+	kept.Files = keep(d.Files)
+	if len(kept.Exts) == 0 && len(kept.Files) == 0 && (len(d.Exts) > 0 || len(d.Files) > 0) {
+		return
+	}
+	ds.RegisterDetector(&kept)
+}
+
+// loadDetectors builds the filetype detector set: the embedded defaults with
+// the user's detectors from ~/.config/mu/detectors/*.json layered over them.
+// The result is cached on the Config.
+//
+// Layering happens on two levels. A user detector replaces an embedded one of
+// the same name, and beyond that, any extension or filename a user detector
+// claims is served by user detectors alone. The second rule is what makes an
+// override usable: ftdetect resolves a key held by several detectors via their
+// file/header regexes, so an embedded plain-extension detector left sitting
+// next to a user one makes Detect match neither and report no filetype at all.
+func loadDetectors(cfg *Config) ftdetect.Detectors {
+	cfg.detectorsOnce.Do(func() {
+		embedded := readDetectors(embedFS, "embed/detectors", "embedded")
+		user := readDetectors(os.DirFS(cfg.dir), "detectors", cfg.dir)
+
+		replaced := make(map[string]bool, len(user))
+		claimed := make(map[string]bool)
+		for _, d := range user {
+			replaced[d.Name] = true
+			for _, k := range d.Exts {
+				claimed[k] = true
+			}
+			for _, k := range d.Files {
+				claimed[k] = true
+			}
+		}
+
+		ds := make(ftdetect.Detectors)
+		for _, d := range embedded {
+			if replaced[d.Name] {
+				continue
+			}
+			registerDisplacing(ds, d, claimed)
+		}
+		for _, d := range user {
+			ds.RegisterDetector(d)
+		}
+		cfg.detectors = ds
+	})
+	return cfg.detectors
 }
 
 // DetectFiletype guesses the filetype from the filename and first line.

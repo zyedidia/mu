@@ -189,7 +189,7 @@ func completeOptionName(e *Editor, prefix string) []string {
 func completeOptionValue(e *Editor, optName, prefix string) []string {
 	switch optName {
 	case "theme":
-		return completeThemeName(prefix)
+		return completeThemeName(e.config, prefix)
 	case "clipboard":
 		return filterPrefix([]string{"internal", "external", "terminal"}, prefix)
 	case "cursor":
@@ -214,20 +214,28 @@ func completeOptionValue(e *Editor, optName, prefix string) []string {
 	return nil
 }
 
-// completeThemeName returns theme names matching the prefix.
-func completeThemeName(prefix string) []string {
+// completeThemeName returns theme names matching the prefix, drawn from the
+// user config directory as well as the embedded themes. A user theme shadows
+// an embedded one of the same name (see Config.ReadFile), so each name is
+// offered once no matter where it came from.
+func completeThemeName(cfg *Config, prefix string) []string {
 	var names []string
-	// Embedded themes.
-	fs.WalkDir(embedFS, "embed/themes", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {
+	seen := make(map[string]bool)
+	collect := func(fsys fs.FS, dir string) {
+		fs.WalkDir(fsys, dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {
+				return nil
+			}
+			name := strings.TrimSuffix(filepath.Base(path), ".yaml")
+			if strings.HasPrefix(name, prefix) && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
 			return nil
-		}
-		name := strings.TrimSuffix(filepath.Base(path), ".yaml")
-		if strings.HasPrefix(name, prefix) {
-			names = append(names, name)
-		}
-		return nil
-	})
+		})
+	}
+	collect(os.DirFS(cfg.dir), "themes")
+	collect(embedFS, "embed/themes")
 	sort.Strings(names)
 	return names
 }
