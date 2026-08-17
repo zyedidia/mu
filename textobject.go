@@ -419,5 +419,6 @@ func SetupBindings(ks *KeyState) {
 	RegisterVisualBlock(ks)
 	RegisterComments(ks)
 	RegisterFormat(ks)
+	RegisterMacros(ks)
 	RegisterTextObjects(ks)
 }

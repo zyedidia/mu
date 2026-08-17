@@ -92,6 +92,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 	ks.activeView = func() *View {
 		return ed.ActiveView()
 	}
+	ks.dispatch = ed.dispatchKey
 
 	// Comment prefix lookup for gc (comment toggle) and gq (formatting).
 	// A missing entry is not an error: gq formats plain text in any
@@ -784,14 +785,7 @@ func (e *Editor) Run() {
 				break
 			}
 
-			if e.infobar.IsActive() {
-				e.infobar.HandleKey(key)
-			} else if e.hasCompletion() {
-				e.handleCompletionKey(key)
-			} else {
-				e.infobar.Clear()
-				e.ks.HandleKey(key)
-			}
+			e.dispatchKey(key)
 		case *tcell.EventResize:
 			w, h := ev.Size()
 			e.Resize(w, h)
@@ -804,6 +798,24 @@ func (e *Editor) Run() {
 		}
 
 		e.Display()
+	}
+}
+
+// dispatchKey routes one key: to the infobar prompt or completion menu when
+// one is active, otherwise into the vim state machine. Macro replay routes
+// its keys through here too, so recorded ':' and '/' interactions work; the
+// infobar and completion branches record their keys explicitly (HandleKey
+// records its own).
+func (e *Editor) dispatchKey(key string) {
+	if e.infobar.IsActive() {
+		e.ks.RecordMacroKey(key)
+		e.infobar.HandleKey(key)
+	} else if e.hasCompletion() {
+		e.ks.RecordMacroKey(key)
+		e.handleCompletionKey(key)
+	} else {
+		e.infobar.Clear()
+		e.ks.HandleKey(key)
 	}
 }
 
@@ -853,6 +865,11 @@ func (e *Editor) Display() {
 		if d, ok := v.buf.GetDiagnosticAt(line); ok {
 			e.infobar.Message(fmt.Sprintf("[%s] %s", d.Type.String(), d.Text))
 		}
+	}
+
+	// Macro recording indicator (vim: "recording @q").
+	if e.ks.macroReg != 0 && !e.infobar.IsActive() && e.infobar.message == "" {
+		e.infobar.Message(fmt.Sprintf("recording @%c", e.ks.macroReg))
 	}
 
 	// Completion bar (above the infobar).

@@ -185,18 +185,18 @@ func TestImap(t *testing.T) {
 
 func TestVmapScope(t *testing.T) {
 	ed := newMapTestEditor(t, "x12\nx34\n")
-	evalOrFatal(t, ed, "vmap q d")
+	evalOrFatal(t, ed, "vmap Q d")
 
-	// q in normal mode: unmapped, does nothing.
-	feedKeys(ed.ks, "q")
+	// Q in normal mode: unmapped, does nothing.
+	feedKeys(ed.ks, "Q")
 	if bufText(ed.ks) != "x12\nx34\n" {
-		t.Fatalf("q in normal mode changed buffer: %q", bufText(ed.ks))
+		t.Fatalf("Q in normal mode changed buffer: %q", bufText(ed.ks))
 	}
 
-	// q in visual-block mode: runs the block delete.
-	feedDisplay(ed.ks, "l", "<C-v>", "j", "q")
+	// Q in visual-block mode: runs the block delete.
+	feedDisplay(ed.ks, "l", "<C-v>", "j", "Q")
 	if bufText(ed.ks) != "x2\nx4\n" {
-		t.Fatalf("vmap q in block mode: got %q", bufText(ed.ks))
+		t.Fatalf("vmap Q in block mode: got %q", bufText(ed.ks))
 	}
 	if ed.ks.ModeID() != ModeNormal {
 		t.Fatal("should be back in normal mode after block delete")

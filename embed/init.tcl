@@ -29,3 +29,7 @@ nmap j gj
 nmap k gk
 vmap j gj
 vmap k gk
+
+# Space in visual mode applies the q macro to every selected line
+# (record one with qq ... q, select lines, press space).
+vmap <Space> @q

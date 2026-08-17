@@ -172,6 +172,18 @@ type KeyState struct {
 	// the gc/gcc comment toggle.
 	commentPrefix func(b *Buffer) string
 
+	// Macro state (q<reg> / @<reg>).
+	macroReg   RegisterID // register being recorded into (0 = not recording)
+	macroRec   []string   // keys recorded so far
+	macroDepth int        // >0 while replaying a macro (nested @)
+	lastMacro  RegisterID // register of the last @<reg> for @@
+
+	// dispatch routes a key the way a real keystroke would be routed
+	// (through the editor's infobar/completion checks). Set by the editor;
+	// macro replay uses it so recorded ':' and '/' interactions work. When
+	// nil, keys go straight to HandleKey.
+	dispatch func(key string)
+
 	// charWait is set when an action needs the next keystroke as an argument
 	// (e.g. f, t, r). The function is called with the next key.
 	charWait func(ks *KeyState, ch string)
@@ -354,8 +366,29 @@ func (ks *KeyState) ResetAction() {
 	}
 }
 
+// RecordMacroKey appends a key to an active macro recording. HandleKey
+// calls it for every key it processes; the editor calls it directly for
+// keys consumed elsewhere (infobar prompts, completion menus). Keys from
+// macro replays and mapping expansions are not re-recorded.
+func (ks *KeyState) RecordMacroKey(key string) {
+	if ks.macroReg != 0 && ks.macroDepth == 0 && !ks.replaying && !ks.remapping {
+		ks.macroRec = append(ks.macroRec, key)
+	}
+}
+
+// dispatchKey routes one key as the editor would route a real keystroke.
+func (ks *KeyState) dispatchKey(key string) {
+	if ks.dispatch != nil {
+		ks.dispatch(key)
+	} else {
+		ks.HandleKey(key)
+	}
+}
+
 // HandleKey processes a single key event through the vim state machine.
 func (ks *KeyState) HandleKey(key string) {
+	ks.RecordMacroKey(key)
+
 	// Dot repeat recording: start a fresh recording on the first key of a
 	// normal-mode action (no pending state yet). Once started, keep
 	// appending until the action completes.
@@ -493,12 +526,19 @@ func (ks *KeyState) dispatchDead(mode *Mode, keys []string) {
 			ks.ResetAction()
 		}
 	}
-	// Re-dispatch the tail. Pop it from the dot-repeat recording first,
-	// since HandleKey will record those keys again.
+	// Re-dispatch the tail. Pop it from the dot-repeat and macro
+	// recordings first, since HandleKey will record those keys again.
 	rest := keys[n:]
-	if ks.recording != nil && !ks.replaying && !ks.remapping {
-		if cut := len(ks.recording) - len(rest); cut >= 0 {
-			ks.recording = ks.recording[:cut]
+	if !ks.replaying && !ks.remapping {
+		if ks.recording != nil {
+			if cut := len(ks.recording) - len(rest); cut >= 0 {
+				ks.recording = ks.recording[:cut]
+			}
+		}
+		if ks.macroReg != 0 && ks.macroDepth == 0 {
+			if cut := len(ks.macroRec) - len(rest); cut >= 0 {
+				ks.macroRec = ks.macroRec[:cut]
+			}
 		}
 	}
 	for _, k := range rest {
@@ -531,15 +571,20 @@ func (ks *KeyState) StopRecording() {
 	ks.recording = nil
 }
 
-// Replay executes the last recorded action.
+// Replay executes the last recorded action. The recorded keys are the raw
+// keys the user typed, so mappings apply to them again — even when the
+// replay itself was triggered from inside a mapping expansion.
 func (ks *KeyState) Replay() {
 	if len(ks.lastKeys) == 0 || ks.replaying {
 		return
 	}
 	ks.replaying = true
+	savedRemap := ks.remapping
+	ks.remapping = false
 	for _, key := range ks.lastKeys {
 		ks.HandleKey(key)
 	}
+	ks.remapping = savedRemap
 	ks.replaying = false
 }
 
