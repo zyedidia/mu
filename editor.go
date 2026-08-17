@@ -579,6 +579,11 @@ func (e *Editor) viewForFile(path string) (*View, error) {
 		v.savedCursor = *b.Cursor()
 		return v, nil
 	}
+	// Refuse FIFOs: reading one blocks until a writer appears, freezing
+	// the editor (the write-probe in isReadonly has the same hazard).
+	if fi, err := os.Stat(path); err == nil && fi.Mode()&os.ModeNamedPipe != 0 {
+		return nil, fmt.Errorf("%s is a named pipe", path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

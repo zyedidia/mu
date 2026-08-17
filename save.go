@@ -195,13 +195,23 @@ func createBackup(path string) error {
 
 // isReadonly returns true if the file exists and is not writable.
 func isReadonly(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		// Doesn't exist yet — not readonly. Any other stat error
+		// (unreachable parent, ...) is treated as readonly, as before.
+		return !os.IsNotExist(err)
+	}
+	if !fi.Mode().IsRegular() {
+		// Never open-probe special files: opening a FIFO for writing
+		// blocks until a reader appears. Judge by permission bits alone,
+		// erring toward writable — a real failure still surfaces (without
+		// hanging) when the write happens.
+		return fi.Mode().Perm()&0222 == 0
+	}
+	// Regular files: probing with an actual open is the accurate check
+	// (covers ACLs and read-only filesystems), and cannot block.
 	f, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err != nil {
-		// File doesn't exist yet — not readonly.
-		if os.IsNotExist(err) {
-			return false
-		}
-		// Permission denied or other error — treat as readonly.
 		return true
 	}
 	f.Close()
