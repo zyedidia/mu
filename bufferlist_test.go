@@ -257,15 +257,19 @@ func TestWriteCopyKeepsName(t *testing.T) {
 }
 
 func TestWriteCopyToOpenFileNoCollision(t *testing.T) {
-	// :w naming a file open in another buffer writes it but never creates
-	// two buffers claiming one path.
+	// :w naming an existing file needs ! (vim E13); :w! writes it but
+	// never creates two buffers claiming one path.
 	ed, a, b := setupBufEditor(t)
 
 	cur := ed.ActiveView().buf // b.txt
 	ed.ks.Buf().Insert(0, []byte("new "))
 	ed.RunCommand("w " + a)
+	if !ed.infobar.msgErr {
+		t.Fatal("w onto an existing file should need !")
+	}
+	ed.RunCommand("w! " + a)
 	if ed.infobar.msgErr {
-		t.Fatalf("w to open path: %s", ed.infobar.message)
+		t.Fatalf("w! to open path: %s", ed.infobar.message)
 	}
 	if cur.Path != b {
 		t.Fatalf("buffer adopted a colliding path: %q", cur.Path)
@@ -320,4 +324,107 @@ func TestReopenHiddenFileReusesBuffer(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("%d buffers listed for %q, want 1", n, a)
 	}
+}
+
+// --- Force-variant aliases (:w!, :e!, :bd!, :tabe) ---
+
+func TestForceWriteReadonly(t *testing.T) {
+	// :w! writes a read-only file via the temp-and-rename strategy.
+	ed, a, _ := setupBufEditor(t)
+
+	ed.RunCommand("b a.txt")
+	os.Chmod(a, 0444)
+	ed.ks.Buf().Insert(0, []byte("edit "))
+	ed.RunCommand("w!")
+	if ed.infobar.msgErr {
+		t.Fatalf("w! on read-only file: %s", ed.infobar.message)
+	}
+	data, _ := os.ReadFile(a)
+	if string(data) != "edit aaa\n" {
+		t.Fatalf("read-only file content: got %q", data)
+	}
+	if ed.ks.Buf().Modified() {
+		t.Fatal("buffer should be unmodified after w!")
+	}
+	// Permissions carried over by the save.
+	if fi, err := os.Stat(a); err == nil && fi.Mode().Perm() != 0444 {
+		t.Fatalf("permissions changed: %v", fi.Mode().Perm())
+	}
+}
+
+func TestForceEditReloads(t *testing.T) {
+	ed, a, _ := setupBufEditor(t)
+
+	ed.RunCommand("b a.txt")
+	ed.ks.Buf().Insert(0, []byte("dirty "))
+	ed.RunCommand("e")
+	if !ed.infobar.msgErr {
+		t.Fatal(":e on modified buffer should refuse")
+	}
+	ed.RunCommand("e!")
+	if ed.infobar.msgErr {
+		t.Fatalf("e!: %s", ed.infobar.message)
+	}
+	if got := bufText(ed.ks); got != "aaa\n" {
+		t.Fatalf("e! should reload from disk: got %q", got)
+	}
+	_ = a
+}
+
+func TestForceBDelete(t *testing.T) {
+	ed, _, b := setupBufEditor(t)
+
+	deleted := ed.ActiveView().buf // b.txt
+	ed.ks.Buf().Insert(0, []byte("dirty "))
+	ed.RunCommand("bd")
+	if !ed.infobar.msgErr {
+		t.Fatal(":bd on modified buffer should refuse")
+	}
+	ed.infobar.Clear()
+	ed.RunCommand("bd!")
+	if ed.infobar.msgErr {
+		t.Fatalf("bd!: %s", ed.infobar.message)
+	}
+	if ed.bufferListed(deleted) {
+		t.Fatal("bd! should remove the buffer")
+	}
+	ed.RunCommand("ls")
+	if strings.Contains(ed.infobar.message, b) {
+		t.Fatalf("deleted buffer still listed: %q", ed.infobar.message)
+	}
+}
+
+func TestTabeAlias(t *testing.T) {
+	ed, a, _ := setupBufEditor(t)
+
+	before := len(ed.tabs)
+	ed.RunCommand("tabe " + a)
+	if ed.infobar.msgErr {
+		t.Fatalf("tabe: %s", ed.infobar.message)
+	}
+	if len(ed.tabs) != before+1 {
+		t.Fatalf("tabs = %d, want %d", len(ed.tabs), before+1)
+	}
+	if ed.ActiveView().buf.Path != a {
+		t.Fatalf("tabe should show %q, got %q", a, ed.ActiveView().buf.Path)
+	}
+}
+
+func TestForceWriteQuit(t *testing.T) {
+	// :wq! writes (forced) and quits.
+	ed, a, _ := setupBufEditor(t)
+
+	ed.RunCommand("b a.txt")
+	os.Chmod(a, 0444)
+	ed.ks.Buf().Insert(0, []byte("edit "))
+	// Make it the only remaining state to quit from.
+	ed.RunCommand("wq!")
+	if !ed.running {
+		// Only the a.txt pane existed; wq! should have closed it. But
+		// other buffers (initial, b.txt) are unmodified, so quitting is
+		// allowed.
+		return
+	}
+	// Still running means quit was refused; that would be a bug.
+	t.Fatalf("wq! did not quit: %s", ed.infobar.message)
 }

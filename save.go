@@ -23,13 +23,20 @@ func (b *Buffer) Save() error {
 // SaveTo writes the buffer's contents to path without adopting it: the
 // buffer keeps its own file name and modified state (vim's ":w file").
 func (b *Buffer) SaveTo(path string) error {
+	return b.saveTo(path, false)
+}
+
+// saveTo writes the buffer's contents to path. With force, the read-only
+// check is skipped: the atomic temp-and-rename write succeeds for a
+// read-only file in a writable directory (vim :w!).
+func (b *Buffer) saveTo(path string, force bool) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
 	}
 
-	if isReadonly(absPath) {
-		return fmt.Errorf("%s is read-only", path)
+	if !force && isReadonly(absPath) {
+		return fmt.Errorf("%s is read-only (use :w! to override)", path)
 	}
 
 	// Create backup of existing file.
@@ -52,7 +59,11 @@ func (b *Buffer) SaveTo(path string) error {
 // SaveAs writes the buffer to the given path and adopts it as the buffer's
 // file name.
 func (b *Buffer) SaveAs(path string) error {
-	if err := b.SaveTo(path); err != nil {
+	return b.saveAs(path, false)
+}
+
+func (b *Buffer) saveAs(path string, force bool) error {
+	if err := b.saveTo(path, force); err != nil {
 		return err
 	}
 

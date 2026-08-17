@@ -21,8 +21,10 @@ var editorCommands = []CommandDef{
 	{"quitall", cmdQuitAll, "quitall: close all panes and tabs"},
 	{"quitall!", cmdForceQuitAll, "quitall!: close all without saving"},
 	{"write", cmdWrite, "write [filename]: save the buffer"},
+	{"write!", cmdForceWrite, "write! [filename]: save, overriding read-only and existing-file checks"},
 	{"writeall", cmdWriteAll, "writeall: save all modified buffers"},
-	{"edit", cmdEdit, "edit <filename>: open a file"},
+	{"edit", cmdEdit, "edit [filename]: open a file, or reload the current one"},
+	{"edit!", cmdForceEdit, "edit! [filename]: reload, discarding unsaved changes"},
 	{"set", cmdSet, "set <name> [value]: get or set an option"},
 	{"substitute", cmdSubstitute, "substitute <pattern> <replacement>: replace all matches in buffer"},
 	{"vsplit", cmdVSplit, "vsplit [filename]: vertical split"},
@@ -38,6 +40,7 @@ var editorCommands = []CommandDef{
 	{"bnext", cmdBNext, "bnext: next buffer"},
 	{"bprev", cmdBPrev, "bprev: previous buffer"},
 	{"bdelete", cmdBDelete, "bdelete [n|name]: remove a buffer from the buffer list"},
+	{"bdelete!", cmdForceBDelete, "bdelete! [n|name]: remove a buffer, discarding unsaved changes"},
 	{"jumps", cmdJumps, "jumps: list the jump list"},
 	{"map", makeMapCmd(mapModeSets["map"]), "map <keys> <expansion>: map keys in normal/visual/pending modes (non-recursive)"},
 	{"nmap", makeMapCmd(mapModeSets["nmap"]), "nmap <keys> <expansion>: map keys in normal mode"},
@@ -53,27 +56,34 @@ var editorCommands = []CommandDef{
 
 // vimAliases maps vim-style short commands to TCL command strings.
 var vimAliases = map[string]string{
-	"q":    "quit",
-	"q!":   "quit!",
-	"qa":   "quitall",
-	"qa!":  "quitall!",
-	"w":    "write",
-	"wa":   "writeall",
-	"wq":   "write; quit",
-	"x":    "write; quit",
-	"wqa":  "writeall; quitall",
-	"wqa!": "writeall; quitall!",
-	"xa":   "writeall; quitall",
-	"xa!":  "writeall; quitall!",
-	"e":    "edit",
-	"s":    "substitute",
-	"vs":   "vsplit",
-	"sp":   "split",
-	"vsp":  "vsplit",
-	"b":    "buffer",
-	"bn":   "bnext",
-	"bp":   "bprev",
-	"bd":   "bdelete",
+	"q":       "quit",
+	"q!":      "quit!",
+	"qa":      "quitall",
+	"qa!":     "quitall!",
+	"w":       "write",
+	"w!":      "write!",
+	"wa":      "writeall",
+	"wq":      "write; quit",
+	"wq!":     "write!; quit",
+	"x":       "write; quit",
+	"x!":      "write!; quit",
+	"wqa":     "writeall; quitall",
+	"wqa!":    "writeall; quitall!",
+	"xa":      "writeall; quitall",
+	"xa!":     "writeall; quitall!",
+	"e":       "edit",
+	"e!":      "edit!",
+	"s":       "substitute",
+	"vs":      "vsplit",
+	"sp":      "split",
+	"vsp":     "vsplit",
+	"tabe":    "tabnew",
+	"tabedit": "tabnew",
+	"b":       "buffer",
+	"bn":      "bnext",
+	"bp":      "bprev",
+	"bd":      "bdelete",
+	"bd!":     "bdelete!",
 }
 
 // RunCommand parses and executes an ex command string. It expands vim
@@ -154,6 +164,16 @@ func cmdForceQuitAll(e *Editor, args []string) error {
 }
 
 func cmdWrite(e *Editor, args []string) error {
+	return writeCmd(e, args, false)
+}
+
+// cmdForceWrite is :w! — write, overriding the read-only check and the
+// existing-file check for :w <path>.
+func cmdForceWrite(e *Editor, args []string) error {
+	return writeCmd(e, args, true)
+}
+
+func writeCmd(e *Editor, args []string, force bool) error {
 	v := e.ActiveView()
 	if v == nil {
 		return fmt.Errorf("no buffer")
@@ -161,11 +181,15 @@ func cmdWrite(e *Editor, args []string) error {
 	b := v.buf
 
 	// :w <path> naming a different file writes a copy there; the buffer
-	// keeps its own name and modified state (vim). Only an unnamed buffer
-	// adopts the argument as its file name — and never one already open
-	// in another buffer, which would leave two buffers claiming one file.
+	// keeps its own name and modified state (vim). Overwriting an existing
+	// file this way requires ! (vim E13). Only an unnamed buffer adopts
+	// the argument as its file name — and never one already open in
+	// another buffer, which would leave two buffers claiming one file.
 	if len(args) > 0 && b.Path != "" && !samePath(args[0], b.Path) {
-		if err := b.SaveTo(args[0]); err != nil {
+		if !force && fileExists(args[0]) {
+			return fmt.Errorf("file exists: %s (use :w! to override)", args[0])
+		}
+		if err := b.saveTo(args[0], force); err != nil {
 			return err
 		}
 		e.infobar.Message(fmt.Sprintf("\"%s\" written", args[0]))
@@ -185,8 +209,9 @@ func cmdWrite(e *Editor, args []string) error {
 		return fmt.Errorf("no file name")
 	}
 
-	// Check if file is readonly before attempting save.
-	if fileExists(path) && isReadonly(path) {
+	// Check if file is readonly before attempting save; :w! skips the
+	// prompt and forces the write directly.
+	if !force && fileExists(path) && isReadonly(path) {
 		e.infobar.Prompt("File is read-only. Save with sudo? (y/n)", func(key string) {
 			if key == "y" {
 				if err := e.saveWithSudo(b, path); err != nil {
@@ -201,7 +226,7 @@ func cmdWrite(e *Editor, args []string) error {
 		return nil
 	}
 
-	if err := b.SaveAs(path); err != nil {
+	if err := b.saveAs(path, force); err != nil {
 		return err
 	}
 	// Persist undo history after successful save.
@@ -250,9 +275,19 @@ func cmdWriteAll(e *Editor, args []string) error {
 }
 
 func cmdEdit(e *Editor, args []string) error {
+	return editCmd(e, args, false)
+}
+
+// cmdForceEdit is :e! — reload, discarding unsaved changes.
+func cmdForceEdit(e *Editor, args []string) error {
+	return editCmd(e, args, true)
+}
+
+func editCmd(e *Editor, args []string, force bool) error {
 	v := e.ActiveView()
 	// :e with no filename, or naming the file already shown in this pane,
-	// reloads it from disk (vim), refusing to drop unsaved changes.
+	// reloads it from disk (vim), refusing to drop unsaved changes unless
+	// forced.
 	reload := len(args) == 0
 	if !reload && v != nil && v.buf.Path != "" && samePath(v.buf.Path, args[0]) {
 		reload = true
@@ -261,8 +296,8 @@ func cmdEdit(e *Editor, args []string) error {
 		if v == nil || v.buf.Path == "" {
 			return fmt.Errorf("edit: no file name")
 		}
-		if v.buf.Modified() {
-			return fmt.Errorf("No write since last change (buffer modified)")
+		if !force && v.buf.Modified() {
+			return fmt.Errorf("No write since last change (use :e! to override)")
 		}
 		if err := v.buf.Reload(); err != nil {
 			return err
@@ -509,6 +544,15 @@ func cmdBPrev(e *Editor, args []string) error {
 }
 
 func cmdBDelete(e *Editor, args []string) error {
+	return bdeleteCmd(e, args, false)
+}
+
+// cmdForceBDelete is :bd! — remove a buffer, discarding unsaved changes.
+func cmdForceBDelete(e *Editor, args []string) error {
+	return bdeleteCmd(e, args, true)
+}
+
+func bdeleteCmd(e *Editor, args []string, force bool) error {
 	var b *Buffer
 	if len(args) > 0 {
 		var err error
@@ -521,8 +565,8 @@ func cmdBDelete(e *Editor, args []string) error {
 	if b == nil {
 		return fmt.Errorf("no buffer")
 	}
-	if b.Modified() {
-		return fmt.Errorf("No write since last change for %s", bufDisplayName(b))
+	if !force && b.Modified() {
+		return fmt.Errorf("No write since last change for %s (use :bd! to override)", bufDisplayName(b))
 	}
 	e.deleteBuffer(b)
 	return nil
