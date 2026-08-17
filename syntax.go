@@ -215,6 +215,14 @@ func (ss *SyntaxState) finishBackground(tbl memo.Table, gen int) {
 	ss.pendingEdits = nil
 }
 
+// DisableSyntax drops the buffer's highlighting state (the syntax option).
+// All syntax methods no-op on a buffer without state, so rendering falls
+// back to plain text. Safe while a background highlight runs: the goroutine
+// holds its own reference to the old state and finishes into it.
+func (b *Buffer) DisableSyntax() {
+	b.syntax = nil
+}
+
 // SyntaxReset discards all highlighting state after the buffer content was
 // replaced wholesale, and starts a fresh background highlight. Must be
 // called from the main goroutine.

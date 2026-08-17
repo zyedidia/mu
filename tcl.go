@@ -43,5 +43,10 @@ func (e *Editor) RunInitScript() {
 	if err := e.EvalTCL(string(data)); err != nil {
 		log.Printf("init.tcl: %v", err)
 		e.infobar.Error(fmt.Sprintf("init.tcl: %v", err))
+		return
 	}
+	// Startup scripts run silently, as in vim: drop confirmation messages
+	// commands produced (e.g. "syntax=false" from set) so the first frame
+	// starts clean. Script errors above still show.
+	e.infobar.Clear()
 }

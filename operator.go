@@ -650,7 +650,7 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}
 
-	// J: join lines
+	// J: join lines (at each cursor's own line)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
@@ -659,10 +659,12 @@ func RegisterOperators(ks *KeyState) {
 		if count > 1 {
 			count--
 		}
-		for j := 0; j < count; j++ {
-			line, _ := b.LineColAt(b.Cursor().Pos)
-			if joinLineAt(b, line) < 0 {
-				break
+		for i := 0; i < b.NumCursors(); i++ {
+			for j := 0; j < count; j++ {
+				line, _ := b.LineColAt(b.cursors[i].Pos)
+				if joinLineAt(b, line) < 0 {
+					break
+				}
 			}
 		}
 		ks.ResetAction()
@@ -711,10 +713,12 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
-		c := b.Cursor()
-		r, _, sz := b.DecodeGraphemeAt(c.Pos)
-		if r != '\n' && sz > 0 {
-			*c = c.MoveTo(c.Pos + sz)
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			r, _, sz := b.DecodeGraphemeAt(c.Pos)
+			if r != '\n' && sz > 0 {
+				b.cursors[i] = c.MoveTo(c.Pos + sz)
+			}
 		}
 		ks.SetMode(ModeInsert)
 	}, "a")
@@ -723,8 +727,10 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
-		c := b.Cursor()
-		*c = c.MoveTo(motionFirstNonBlank(b, *c, 0))
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			b.cursors[i] = c.MoveTo(motionFirstNonBlank(b, c, 0))
+		}
 		ks.SetMode(ModeInsert)
 	}, "I")
 
@@ -732,41 +738,48 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
-		c := b.Cursor()
-		*c = c.MoveTo(c.LineEnd(b).Pos)
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			b.cursors[i] = c.MoveTo(c.LineEnd(b).Pos)
+		}
 		ks.SetMode(ModeInsert)
 	}, "A")
 
-	// o: open line below
+	// o: open line below (each cursor opens a line below its own line)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
-		c := b.Cursor()
-		*c = c.MoveTo(c.LineEnd(b).Pos)
-		insertNewline(ks, b, b.cur)
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			b.cursors[i] = c.MoveTo(c.LineEnd(b).Pos)
+			insertNewline(ks, b, i)
+		}
 		ks.SetMode(ModeInsert)
 	}, "o")
 
-	// O: open line above
+	// O: open line above (each cursor opens a line above its own line)
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
-		c := b.Cursor()
-		line, _ := b.LineColAt(c.Pos)
-		start := b.OffsetAt(line, 0)
-		b.Insert(start, []byte("\n"))
-		// Cursor was pushed to start+1; move back to the new empty line.
-		*b.Cursor() = b.Cursor().MoveTo(start)
 		v := ks.ActiveView()
 		autoindent := false
 		if v != nil && v.Opts != nil {
 			autoindent, _ = GetOptBool(v.Opts, "autoindent")
 		}
-		if autoindent {
-			// Original line is now line+1 after the inserted newline.
-			ws := leadingWS(b.GetLine(line + 1))
-			if len(ws) > 0 {
-				b.Insert(b.Cursor().Pos, ws)
+		for i := 0; i < b.NumCursors(); i++ {
+			line, _ := b.LineColAt(b.cursors[i].Pos)
+			start := b.OffsetAt(line, 0)
+			b.Insert(start, []byte("\n"))
+			// The cursor was pushed to start+1; move back to the new
+			// empty line.
+			b.cursors[i] = b.cursors[i].MoveTo(start)
+			if autoindent {
+				// The original line is now line+1 after the inserted
+				// newline.
+				ws := leadingWS(b.GetLine(line + 1))
+				if len(ws) > 0 {
+					b.Insert(b.cursors[i].Pos, ws)
+				}
 			}
 		}
 		ks.SetMode(ModeInsert)
@@ -882,12 +895,15 @@ func RegisterOperators(ks *KeyState) {
 			ks.blockInsert = false
 			b.RemoveCursors()
 		}
-		c := b.Cursor()
-		if c.Pos > 0 {
-			_, _, sz := b.DecodeGraphemeBefore(c.Pos)
-			r, _ := b.DecodeRuneAt(c.Pos - sz)
-			if r != '\n' {
-				*c = c.MoveTo(c.Pos - sz)
+		// Every cursor steps left off the insert position, as in vim.
+		for i := 0; i < b.NumCursors(); i++ {
+			c := b.cursors[i]
+			if c.Pos > 0 {
+				_, _, sz := b.DecodeGraphemeBefore(c.Pos)
+				r, _ := b.DecodeRuneAt(c.Pos - sz)
+				if r != '\n' {
+					b.cursors[i] = c.MoveTo(c.Pos - sz)
+				}
 			}
 		}
 		ks.SetMode(ModeNormal)
@@ -996,6 +1012,7 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeReplace].Bindings.Bind(func(ks *KeyState) {
 		ks.SetMode(ModeNormal)
 	}, KeyEscape)
+	ks.modes[ModeReplace].Bindings.Bind(ks.modes[ModeReplace].Bindings.root.children[KeyEscape].action, "<C-c>")
 
 	// Replace mode: overwrite char and advance
 	ks.modes[ModeReplace].OnKey = func(ks *KeyState, key string) {

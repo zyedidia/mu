@@ -234,12 +234,15 @@ func TestDisplayMotionTabs(t *testing.T) {
 
 func TestInitScriptRemapsJK(t *testing.T) {
 	ed := newMapTestEditor(t, "abcdefghij\nqrstuvwxyz\n")
+	// Run the script before configuring the view: a `set` in init.tcl
+	// refreshes view options from config, which would overwrite manual
+	// view settings made earlier.
+	ed.RunInitScript()
 	v := ed.ActiveView()
 	v.LineNums = false
 	v.GutterWidth = 0
 	v.SoftWrap = true
 	v.Resize(5, 10)
-	ed.RunInitScript()
 
 	// The default init.tcl maps j/k to gj/gk: j moves one display row.
 	feedDisplay(ed.ks, "j")

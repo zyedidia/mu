@@ -744,6 +744,27 @@ func (e *Editor) refreshViewOptions() {
 	}
 }
 
+// syntaxEnabled reports whether the syntax option is on in a resolved
+// option map (missing means on).
+func syntaxEnabled(opts map[string]any) bool {
+	on, ok := GetOptBool(opts, "syntax")
+	return !ok || on
+}
+
+// applySyntaxOption enables or disables highlighting for every listed
+// buffer according to its resolved syntax option (the option is
+// per-filetype/glob resolvable, so buffers can differ).
+func (e *Editor) applySyntaxOption() {
+	for _, b := range e.buffers {
+		opts := e.config.BufferOptions(b.Path, b.Filetype)
+		if !syntaxEnabled(opts) {
+			b.DisableSyntax()
+		} else if b.syntax == nil && b.Filetype != "" {
+			b.InitSyntax(e.config, b.Filetype)
+		}
+	}
+}
+
 // configureView creates a View and fully initializes the buffer (syntax,
 // LSP, file watcher, readonly detection). Use for newly opened files.
 func (e *Editor) configureView(buf *Buffer, path string) *View {
@@ -772,7 +793,9 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 	buf.StartWatcher()
 
 	if ft != "" {
-		buf.InitSyntax(e.config, ft)
+		if syntaxEnabled(v.Opts) {
+			buf.InitSyntax(e.config, ft)
+		}
 		e.initBufferLsp(buf, ft)
 	}
 
@@ -981,11 +1004,18 @@ func (e *Editor) Display() {
 		e.drawTabBar(0)
 	}
 
-	// Draw all panes in the tab (offset by tab bar height).
+	// Draw all panes in the tab (offset by tab bar height). With multiple
+	// cursors the view draws every cursor (primary included) as a fake
+	// block cursor, so the hardware cursor is hidden rather than doubling
+	// up on the primary.
+	multi := e.ks.Buf().NumCursors() > 1
+	if multi {
+		e.screen.HideCursor()
+	}
 	t.Display(func(x, y int, mainc rune, combc []rune, style Style) {
 		e.screen.SetContent(x, y+th, mainc, combc, style.TCellStyle())
 	}, func(x, y int, main bool) {
-		if main && !e.infobar.IsActive() && !e.infobar.showCursor {
+		if main && !multi && !e.infobar.IsActive() && !e.infobar.showCursor {
 			e.screen.ShowCursor(x, y+th)
 		}
 	}, e.theme, e.ks.Mode().Name)

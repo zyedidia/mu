@@ -223,3 +223,120 @@ func TestMCInsertAtCursors(t *testing.T) {
 		t.Fatalf("adopted single-char change: got %q", bufText(ks))
 	}
 }
+
+func TestMCCtrlCCollapses(t *testing.T) {
+	ks := newVimState("foo bar foo\n")
+
+	// <C-c> from the visual flow collapses like Escape.
+	feedSpecial(ks, "<C-n>", "<C-n>", "<C-c>")
+	b := ks.Buf()
+	if b.NumCursors() != 1 || ks.ModeID() != ModeNormal {
+		t.Fatalf("after C-c: %d cursors, mode %v", b.NumCursors(), ks.ModeID())
+	}
+
+	// <C-c> in normal mode collapses cursors left over from an edit.
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "y") // back to normal with 2 cursors
+	if b.NumCursors() != 2 {
+		t.Fatalf("cursors after y = %d, want 2", b.NumCursors())
+	}
+	feedSpecial(ks, "<C-c>")
+	if b.NumCursors() != 1 {
+		t.Fatalf("cursors after normal-mode C-c = %d, want 1", b.NumCursors())
+	}
+}
+
+func TestMCAppendAll(t *testing.T) {
+	// a moves every cursor right, not just the primary.
+	ks := newVimState("foo bar foo\n")
+	ks.Buf().SpawnCursor(8) // second cursor on the second "foo"
+	feedKeys(ks, "aX")
+	feedSpecial(ks, KeyEscape)
+	if got := bufText(ks); got != "fXoo bar fXoo\n" {
+		t.Fatalf("aX at all cursors: got %q", got)
+	}
+}
+
+func TestMCLineInsertAll(t *testing.T) {
+	// A appends at every cursor's line end; I inserts at every cursor's
+	// first non-blank.
+	ks := newVimState("  foo x\n  foo y\n")
+	feedKeys(ks, "w") // onto the first "foo"
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "y")
+	feedKeys(ks, "A!")
+	feedSpecial(ks, KeyEscape)
+	if got := bufText(ks); got != "  foo x!\n  foo y!\n" {
+		t.Fatalf("A at all cursors: got %q", got)
+	}
+	feedKeys(ks, "I-")
+	feedSpecial(ks, KeyEscape)
+	if got := bufText(ks); got != "  -foo x!\n  -foo y!\n" {
+		t.Fatalf("I at all cursors: got %q", got)
+	}
+}
+
+func TestMCOpenBelowAll(t *testing.T) {
+	ks := newVimState("foo a\nfoo b\n")
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "y")
+	feedKeys(ks, "oz")
+	feedSpecial(ks, KeyEscape)
+	if got := bufText(ks); got != "foo a\nz\nfoo b\nz\n" {
+		t.Fatalf("o at all cursors: got %q", got)
+	}
+}
+
+func TestMCOpenAboveAll(t *testing.T) {
+	ks := newVimState("foo a\nfoo b\n")
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "y")
+	feedKeys(ks, "Oz")
+	feedSpecial(ks, KeyEscape)
+	if got := bufText(ks); got != "z\nfoo a\nz\nfoo b\n" {
+		t.Fatalf("O at all cursors: got %q", got)
+	}
+}
+
+func TestMCJoinAll(t *testing.T) {
+	ks := newVimState("foo\nb\nfoo\nd\n")
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "y")
+	feedKeys(ks, "J")
+	if got := bufText(ks); got != "foo b\nfoo d\n" {
+		t.Fatalf("J at all cursors: got %q", got)
+	}
+}
+
+func TestMCInsertEscapeMovesAllLeft(t *testing.T) {
+	// Leaving insert mode steps every cursor left, so each ends on the
+	// last inserted character.
+	ks := newVimState("foo bar foo\n")
+	feedSpecial(ks, "<C-n>", "<C-n>")
+	feedKeys(ks, "cxyz")
+	feedSpecial(ks, KeyEscape)
+	b := ks.Buf()
+	if got := bufText(ks); got != "xyz bar xyz\n" {
+		t.Fatalf("change: got %q", got)
+	}
+	if b.NumCursors() != 2 {
+		t.Fatalf("cursors = %d, want 2", b.NumCursors())
+	}
+	if b.cursors[0].Pos != 2 || b.cursors[1].Pos != 10 {
+		t.Fatalf("cursor positions = %d,%d, want 2,10 (on the z's)",
+			b.cursors[0].Pos, b.cursors[1].Pos)
+	}
+}
+
+func TestReplaceModeCtrlC(t *testing.T) {
+	// <C-c> leaves replace mode like Escape.
+	ks := newVimState("abc\n")
+	feedKeys(ks, "R")
+	if ks.ModeID() != ModeReplace {
+		t.Fatalf("mode = %v, want replace", ks.ModeID())
+	}
+	feedSpecial(ks, "<C-c>")
+	if ks.ModeID() != ModeNormal {
+		t.Fatalf("mode after C-c = %v, want normal", ks.ModeID())
+	}
+}

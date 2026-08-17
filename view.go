@@ -12,6 +12,22 @@ type DrawFunc func(x, y int, mainc rune, combc []rune, style Style)
 // CursorFunc is called for each cursor position on screen.
 type CursorFunc func(x, y int, main bool)
 
+// overlayCell records a drawn cell's content so it can be redrawn restyled.
+type overlayCell struct {
+	r     rune
+	combc []rune
+	style Style
+	ok    bool
+}
+
+// fakeCursorCell is a screen cell where a fake cursor must appear. clipped
+// marks a cursor whose true position is one past the right edge (pinned to
+// the last column).
+type fakeCursorCell struct {
+	x, y, off int
+	clipped   bool
+}
+
 // View manages the visible window into a Buffer: scrolling, viewport
 // dimensions, and rendering. Each View has its own saved cursor so that
 // multiple views of the same buffer scroll independently.
@@ -479,6 +495,31 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		hlStyle = th.Style("search")
 	}
 
+	// Fake cursors: the terminal hardware cursor can only mark one
+	// position, so when several cursors exist every one of them (primary
+	// included) is drawn as a block cursor by inverting its cell, which
+	// stays visible on any background (selection, search, cursorline). A
+	// theme may override the look with a "cursor" style.
+	fake := isActive && v.buf.NumCursors() > 1
+	cursorStyle := func(base Style) Style {
+		if th.HasStyle("cursor") {
+			return th.Style("cursor")
+		}
+		base.Attr ^= AttrReverse
+		return base
+	}
+	var cursorAt, cursorDrawn map[int]bool
+	var edgeCells []overlayCell
+	var fakeCursors []fakeCursorCell
+	if fake {
+		cursorAt = make(map[int]bool)
+		cursorDrawn = make(map[int]bool)
+		for _, c := range v.buf.Cursors() {
+			cursorAt[c.Pos] = true
+		}
+		edgeCells = make([]overlayCell, v.height)
+	}
+
 	var curOff int
 
 	// When horizontally scrolled, end-of-line fills must reach the right
@@ -502,6 +543,17 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			if cursorlines[by] && !hasHL {
 				style.Bg = cursorlineStyle.Bg
 			}
+			if fake {
+				// Only the first cell drawn for the cursor's offset is
+				// the cursor cell (a tab's later cells and end-of-line
+				// fills share the offset).
+				if cursorAt[curOff] && !cursorDrawn[curOff] {
+					cursorDrawn[curOff] = true
+					style = cursorStyle(style)
+				} else if sx == v.width-1 {
+					edgeCells[vy] = overlayCell{mainc, combc, style, true}
+				}
+			}
 			draw(sx, vy, mainc, combc, style)
 		},
 		Track: func(off, bx, by, vx, vy int) bool {
@@ -521,11 +573,30 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 						s = v.width - 1
 					}
 					showCursor(s, vy, i == 0)
+					if fake {
+						fakeCursors = append(fakeCursors, fakeCursorCell{s, vy, off, sx >= v.width})
+					}
 				}
 			}
 			return false
 		},
 	}, &v.vis, v.bufferWidth(), v.height, stpos, v.SoftWrap, v.WordWrap, th)
+
+	// Fake cursors whose cell produced no drawn glyph — a cursor at the
+	// end of the buffer, or pinned to the last column of an exactly-full
+	// row — get an overlay cell drawn directly (for the pinned case, the
+	// captured content of that column, so the glyph under the cursor is
+	// preserved).
+	for _, fc := range fakeCursors {
+		if cursorDrawn[fc.off] {
+			continue
+		}
+		cell := overlayCell{r: ' ', style: th.Default()}
+		if fc.clipped && edgeCells[fc.y].ok {
+			cell = edgeCells[fc.y]
+		}
+		draw(fc.x, fc.y, cell.r, cell.combc, cursorStyle(cell.style))
+	}
 
 	// Draw line numbers.
 	if v.LineNums {

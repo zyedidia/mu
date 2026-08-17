@@ -338,3 +338,29 @@ func TestInitScriptError(t *testing.T) {
 		t.Fatalf("expected init.tcl error in infobar, got %q", ed.infobar.message)
 	}
 }
+
+func TestInitScriptSilent(t *testing.T) {
+	// Commands in init.tcl must not leave their confirmation messages in
+	// the message bar (vim rc files are silent), but the settings apply.
+	ed := newMapTestEditor(t, "")
+	script := "set syntax false\nnmap Q dd\n"
+	if err := os.WriteFile(filepath.Join(configDirOverride, "init.tcl"), []byte(script), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ed.RunInitScript()
+	if ed.infobar.message != "" {
+		t.Fatalf("startup message bar not clean: %q", ed.infobar.message)
+	}
+
+	// The set still took effect: files opened afterwards have no syntax.
+	dataDirOverride = t.TempDir()
+	t.Cleanup(func() { dataDirOverride = "" })
+	path := filepath.Join(t.TempDir(), "x.go")
+	os.WriteFile(path, []byte("package main\n"), 0644)
+	if err := ed.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if ed.ActiveView().buf.syntax != nil {
+		t.Fatal("set syntax false from init.tcl should apply to later opens")
+	}
+}

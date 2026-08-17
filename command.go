@@ -381,6 +381,10 @@ func cmdSet(e *Editor, args []string) error {
 			return err
 		}
 		e.refreshViewOptions()
+		// Tear down or (re)build highlighting state to match.
+		if name == "syntax" {
+			e.applySyntaxOption()
+		}
 	}
 
 	e.infobar.Message(fmt.Sprintf("%s=%v", name, coerced))

@@ -121,7 +121,8 @@ func RegisterMultiCursor(ks *KeyState) {
 		ks.ClearCounts()
 	}, "<C-p>")
 
-	// Escape in normal mode: collapse to the primary cursor.
+	// Escape in normal mode: collapse to the primary cursor. <C-c> acts
+	// like Escape, as in every other mode.
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		ks.mcPattern = ""
 		b := ks.Buf()
@@ -130,4 +131,5 @@ func RegisterMultiCursor(ks *KeyState) {
 		}
 		ks.ResetAction()
 	}, KeyEscape)
+	ks.modes[ModeNormal].Bindings.Bind(ks.modes[ModeNormal].Bindings.root.children[KeyEscape].action, "<C-c>")
 }
