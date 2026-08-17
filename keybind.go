@@ -167,6 +167,11 @@ type KeyState struct {
 	// them back to the primary cursor.
 	blockInsert bool
 
+	// commentPrefix returns the line-comment prefix for a buffer (from the
+	// comments.toml config), or "" if unknown. Set by the editor; used by
+	// the gc/gcc comment toggle.
+	commentPrefix func(b *Buffer) string
+
 	// charWait is set when an action needs the next keystroke as an argument
 	// (e.g. f, t, r). The function is called with the next key.
 	charWait func(ks *KeyState, ch string)

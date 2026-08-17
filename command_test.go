@@ -25,6 +25,10 @@ func newTestEditor() *Editor {
 	ed.ks.activeView = func() *View {
 		return ed.ActiveView()
 	}
+	ed.comments = cfg.LoadComments()
+	ed.ks.commentPrefix = func(b *Buffer) string {
+		return ed.comments[b.Filetype]
+	}
 	ed.initTCL()
 	ed.registerEditorBindings()
 	ed.registerSearchBindings()

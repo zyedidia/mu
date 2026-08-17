@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"unicode"
 )
 
@@ -399,6 +400,21 @@ func execVisualOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, i
 
 // --- Operator binding helpers ---
 
+// execDoubledOp runs the pending operator linewise if the pressed key
+// doubles it: either the operator's full key (dd) or the last key of a
+// multi-key operator (gcc, gcgc).
+func execDoubledOp(ks *KeyState, key string) {
+	p := ks.Pending()
+	if p == nil || (p.Key != key && !strings.HasSuffix(p.Key, key)) {
+		return
+	}
+	if p.Key == "c" {
+		execLineChange(ks)
+	} else {
+		execLineOp(ks, p.Key, p.Fn)
+	}
+}
+
 func registerOperator(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, int)) {
 	op := &PendingOp{
 		Name: key,
@@ -411,15 +427,12 @@ func registerOperator(ks *KeyState, key string, opFn func(*KeyState, *Buffer, in
 		ks.SetPending(op)
 	}, key)
 
-	// Operator-pending: doubled operator = linewise.
+	// Operator-pending: doubled operator = linewise (dd, yy). Repeating
+	// just the last key of a multi-key operator also counts (vim: gcc,
+	// guu), so the handler dispatches on the pending operator, not the
+	// bound key.
 	ks.modes[ModeOperatorPending].Bindings.Bind(func(ks *KeyState) {
-		if p := ks.Pending(); p != nil && p.Key == key {
-			if key == "c" {
-				execLineChange(ks)
-			} else {
-				execLineOp(ks, key, opFn)
-			}
-		}
+		execDoubledOp(ks, key)
 	}, key)
 
 	// Visual modes: operate on selection.

@@ -28,6 +28,9 @@ type Editor struct {
 	lspManager *LspManager
 	completion EditorCompletion
 
+	// comments maps filetype → line-comment prefix (from comments.toml).
+	comments map[string]string
+
 	// mainq holds actions posted from background goroutines (LSP receive
 	// loop, file watchers) to run on the main event-loop goroutine.
 	mainq chan func()
@@ -87,6 +90,19 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 
 	ks.activeView = func() *View {
 		return ed.ActiveView()
+	}
+
+	ed.comments = cfg.LoadComments()
+	ks.commentPrefix = func(b *Buffer) string {
+		p := ed.comments[b.Filetype]
+		if p == "" {
+			if b.Filetype == "" {
+				ed.infobar.Error("comment toggle: unknown filetype")
+			} else {
+				ed.infobar.Error(fmt.Sprintf("comment toggle: no comment prefix for filetype %q", b.Filetype))
+			}
+		}
+		return p
 	}
 
 	ks.onModeChange = func(mode ModeID) {

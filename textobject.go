@@ -417,5 +417,6 @@ func SetupBindings(ks *KeyState) {
 	RegisterMotions(ks)
 	RegisterOperators(ks)
 	RegisterVisualBlock(ks)
+	RegisterComments(ks)
 	RegisterTextObjects(ks)
 }

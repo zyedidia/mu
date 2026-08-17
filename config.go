@@ -216,6 +216,37 @@ func (c *Config) LoadTheme(name string) (*Theme, error) {
 	return LoadThemeYAML(data)
 }
 
+// --- Comment prefixes ---
+
+// LoadComments loads the filetype → line-comment-prefix table from
+// comments.toml. User entries in the config directory are merged over the
+// embedded defaults, so a user file only needs the overrides.
+func (c *Config) LoadComments() map[string]string {
+	m := make(map[string]string)
+	merge := func(data []byte, src string) {
+		var raw map[string]any
+		if err := toml.Unmarshal(data, &raw); err != nil {
+			log.Printf("comments: parse %s: %v", src, err)
+			return
+		}
+		for ft, v := range raw {
+			if s, ok := v.(string); ok {
+				m[ft] = s
+			} else {
+				log.Printf("comments: %s: %s: expected string", src, ft)
+			}
+		}
+	}
+	if data, err := embedFS.ReadFile("embed/comments.toml"); err == nil {
+		merge(data, "embedded comments.toml")
+	}
+	userPath := filepath.Join(c.dir, "comments.toml")
+	if data, err := os.ReadFile(userPath); err == nil {
+		merge(data, userPath)
+	}
+	return m
+}
+
 // --- LSP config ---
 
 // LspLanguage describes how to launch a language server.
