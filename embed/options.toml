@@ -5,6 +5,7 @@ theme = "monokai"
 syntax = true
 tabsize = 4
 tabstospaces = true
+textwidth = 79
 scrollmargin = 5
 hscrollmargin = 5
 linenums = true

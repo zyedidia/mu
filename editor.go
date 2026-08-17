@@ -92,17 +92,12 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		return ed.ActiveView()
 	}
 
+	// Comment prefix lookup for gc (comment toggle) and gq (formatting).
+	// A missing entry is not an error: gq formats plain text in any
+	// filetype, and gc simply does nothing.
 	ed.comments = cfg.LoadComments()
 	ks.commentPrefix = func(b *Buffer) string {
-		p := ed.comments[b.Filetype]
-		if p == "" {
-			if b.Filetype == "" {
-				ed.infobar.Error("comment toggle: unknown filetype")
-			} else {
-				ed.infobar.Error(fmt.Sprintf("comment toggle: no comment prefix for filetype %q", b.Filetype))
-			}
-		}
-		return p
+		return ed.comments[b.Filetype]
 	}
 
 	ks.onModeChange = func(mode ModeID) {
