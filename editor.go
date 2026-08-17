@@ -28,6 +28,7 @@ type Editor struct {
 	search     SearchState
 	lspManager *LspManager
 	completion EditorCompletion
+	palette    Palette
 	// completionGen invalidates in-flight async completion requests: a
 	// callback only opens the menu if its generation is still current.
 	completionGen int
@@ -188,6 +189,11 @@ func (e *Editor) registerEditorBindings() {
 		})
 		e.infobar.SetCompleter(cmdCompleter(e))
 	}, ":")
+
+	// Ctrl-P: searchable palette (files, text, buffers, and commands).
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.startPalette("")
+	}, "<C-p>")
 
 	// bindCW binds an action to <C-w> followed by key, and also
 	// <C-w> followed by <C-key> (for when Ctrl is held across both).
@@ -998,7 +1004,10 @@ func (e *Editor) Run() {
 // infobar and completion branches record their keys explicitly (HandleKey
 // records its own).
 func (e *Editor) dispatchKey(key string) {
-	if e.infobar.IsActive() {
+	if e.palette.active {
+		e.ks.RecordMacroKey(key)
+		e.handlePaletteKey(key)
+	} else if e.infobar.IsActive() {
 		e.ks.RecordMacroKey(key)
 		e.infobar.HandleKey(key)
 	} else if e.hasCompletion() {
@@ -1084,7 +1093,9 @@ func (e *Editor) Display() {
 	}
 
 	// Completion bar (above the infobar).
-	if e.infobar.HasCompletions() {
+	if e.palette.active {
+		e.drawPalette()
+	} else if e.infobar.HasCompletions() {
 		e.infobar.DrawCompletions(e.screen, e.h-2, e.w, e.theme)
 	} else if e.hasCompletion() {
 		e.drawEditorCompletions(e.h - 2)

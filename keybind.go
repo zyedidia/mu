@@ -574,7 +574,7 @@ func (ks *KeyState) replayKeys(keys []string) {
 	saved := ks.remapping
 	ks.remapping = true
 	for _, k := range keys {
-		ks.HandleKey(k)
+		ks.dispatchKey(k)
 	}
 	ks.remapping = saved
 }

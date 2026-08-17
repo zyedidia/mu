@@ -113,6 +113,11 @@ func TestCmdCompleter(t *testing.T) {
 	if len(candidates) == 0 {
 		t.Fatal("'set theme m' should have theme candidates")
 	}
+
+	candidates = c("palette f")
+	if len(candidates) != 1 || candidates[0] != "files" {
+		t.Fatalf("'palette f' completions: %v", candidates)
+	}
 }
 
 func TestInfoBarTabCompletion(t *testing.T) {
