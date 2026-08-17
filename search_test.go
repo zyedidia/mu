@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -191,5 +193,101 @@ func TestSearchViaKeybinding(t *testing.T) {
 	ed.ks.HandleKey("n")
 	if b.Cursor().Pos != 4 {
 		t.Fatalf("n after single match: pos=%d, want 4", b.Cursor().Pos)
+	}
+}
+
+// --- Incremental search viewport restore ---
+
+// setupIncSearchTest builds an editor with 40 lines, a small view scrolled
+// to a distinctive position, and "needle" on line 35.
+func setupIncSearchTest(t *testing.T) (*Editor, *View, *Buffer, Viewport, int) {
+	t.Helper()
+	configDirOverride = t.TempDir()
+	t.Cleanup(func() { configDirOverride = "" })
+	ed := newTestEditor()
+	v := ed.ActiveView()
+	b := v.buf
+	var text strings.Builder
+	for i := 0; i < 40; i++ {
+		if i == 35 {
+			text.WriteString("needle\n")
+		} else {
+			fmt.Fprintf(&text, "line %d\n", i)
+		}
+	}
+	b.text.Insert(0, []byte(text.String()))
+	v.LineNums = false
+	v.GutterWidth = 0
+	v.ScrollMargin = 2
+	v.Resize(20, 10)
+
+	// Settle on a scrolled position: cursor on line 20.
+	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(20, 2))
+	v.Relocate()
+	origVp := v.Viewport()
+	if origVp.TopLine == 0 {
+		t.Fatal("setup: viewport should be scrolled")
+	}
+	return ed, v, b, origVp, b.Cursor().Pos
+}
+
+func TestSearchCancelRestoresViewport(t *testing.T) {
+	ed, v, b, origVp, origPos := setupIncSearchTest(t)
+
+	ed.ks.HandleKey("/")
+	if !ed.infobar.IsActive() {
+		t.Fatal("search prompt should be active")
+	}
+	for _, ch := range "needle" {
+		ed.infobar.HandleKey(string(ch))
+	}
+	v.Relocate()
+	if line, _ := b.LineColAt(b.Cursor().Pos); line != 35 {
+		t.Fatalf("incremental search cursor on line %d, want 35", line)
+	}
+	if v.Viewport() == origVp {
+		t.Fatal("incremental search should have scrolled the viewport")
+	}
+
+	// Escape: cursor AND viewport return exactly.
+	ed.infobar.HandleKey(KeyEscape)
+	if b.Cursor().Pos != origPos {
+		t.Fatalf("cursor after cancel = %d, want %d", b.Cursor().Pos, origPos)
+	}
+	if v.Viewport() != origVp {
+		t.Fatalf("viewport after cancel = %+v, want %+v", v.Viewport(), origVp)
+	}
+	// The restored state is stable under the next relocate.
+	v.Relocate()
+	if v.Viewport() != origVp {
+		t.Fatalf("viewport after relocate = %+v, want %+v", v.Viewport(), origVp)
+	}
+}
+
+func TestSearchNoMatchRestoresViewport(t *testing.T) {
+	ed, v, b, origVp, origPos := setupIncSearchTest(t)
+
+	ed.ks.HandleKey("/")
+	for _, ch := range "needle" {
+		ed.infobar.HandleKey(string(ch))
+	}
+	v.Relocate()
+	if v.Viewport() == origVp {
+		t.Fatal("incremental search should have scrolled the viewport")
+	}
+
+	// Extending the pattern so nothing matches snaps the view back while
+	// still typing.
+	for _, ch := range "zzz" {
+		ed.infobar.HandleKey(string(ch))
+	}
+	if b.Cursor().Pos != origPos || v.Viewport() != origVp {
+		t.Fatalf("no-match state = (%d, %+v), want (%d, %+v)",
+			b.Cursor().Pos, v.Viewport(), origPos, origVp)
+	}
+	ed.infobar.HandleKey(KeyEscape)
+	if b.Cursor().Pos != origPos || v.Viewport() != origVp {
+		t.Fatalf("cancel state = (%d, %+v), want (%d, %+v)",
+			b.Cursor().Pos, v.Viewport(), origPos, origVp)
 	}
 }

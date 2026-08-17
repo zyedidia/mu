@@ -261,19 +261,23 @@ func extractSubmatch(str string) (name string, num int, rest string, ok bool) {
 // --- Editor search methods ---
 
 // incrementalSearch moves the cursor to the nearest match as the user types
-// and highlights the match.
-func (e *Editor) incrementalSearch(input string, origPos int, dir int) {
+// and highlights the match. When the pattern is empty or matches nothing,
+// the cursor and viewport return to their pre-search state.
+func (e *Editor) incrementalSearch(input string, origPos int, origView Viewport, dir int) {
 	b := e.ActiveView().buf
 	v := e.ActiveView()
-	if input == "" {
+	restore := func() {
 		*b.Cursor() = b.Cursor().MoveTo(origPos)
+		v.SetViewport(origView)
 		v.Highlight = [2]int{}
+	}
+	if input == "" {
+		restore()
 		return
 	}
 	re, err := compileSearch(input)
 	if err != nil {
-		*b.Cursor() = b.Cursor().MoveTo(origPos)
-		v.Highlight = [2]int{}
+		restore()
 		return
 	}
 	var loc []int
@@ -286,8 +290,7 @@ func (e *Editor) incrementalSearch(input string, origPos int, dir int) {
 		*b.Cursor() = b.Cursor().MoveTo(loc[0])
 		v.Highlight = [2]int{loc[0], loc[1]}
 	} else {
-		*b.Cursor() = b.Cursor().MoveTo(origPos)
-		v.Highlight = [2]int{}
+		restore()
 	}
 }
 
@@ -507,13 +510,21 @@ func (e *Editor) useIncSearch() bool {
 func (e *Editor) registerSearchBindings() {
 	// /: search forward
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		b := e.ActiveView().buf
+		v := e.ActiveView()
+		b := v.buf
 		if e.useIncSearch() {
 			origPos := b.Cursor().Pos
+			origView := v.Viewport()
 			e.infobar.StartPromptIncremental("/",
-				func(input string) { e.incrementalSearch(input, origPos, 1) },
+				func(input string) { e.incrementalSearch(input, origPos, origView, 1) },
 				func(input string) { e.clearSearchHighlight(); e.finalizeSearch(input, 1) },
-				func() { e.clearSearchHighlight(); *b.Cursor() = b.Cursor().MoveTo(origPos) },
+				func() {
+					// Cancel: put both the cursor and the viewport back
+					// exactly where they were.
+					e.clearSearchHighlight()
+					*b.Cursor() = b.Cursor().MoveTo(origPos)
+					v.SetViewport(origView)
+				},
 			)
 		} else {
 			e.infobar.StartPrompt("/", func(input string) {
@@ -524,13 +535,19 @@ func (e *Editor) registerSearchBindings() {
 
 	// ?: search backward
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		b := e.ActiveView().buf
+		v := e.ActiveView()
+		b := v.buf
 		if e.useIncSearch() {
 			origPos := b.Cursor().Pos
+			origView := v.Viewport()
 			e.infobar.StartPromptIncremental("?",
-				func(input string) { e.incrementalSearch(input, origPos, -1) },
+				func(input string) { e.incrementalSearch(input, origPos, origView, -1) },
 				func(input string) { e.clearSearchHighlight(); e.finalizeSearch(input, -1) },
-				func() { e.clearSearchHighlight(); *b.Cursor() = b.Cursor().MoveTo(origPos) },
+				func() {
+					e.clearSearchHighlight()
+					*b.Cursor() = b.Cursor().MoveTo(origPos)
+					v.SetViewport(origView)
+				},
 			)
 		} else {
 			e.infobar.StartPrompt("?", func(input string) {

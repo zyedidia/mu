@@ -275,6 +275,24 @@ func (v *View) effHScrollMargin() int {
 	return m
 }
 
+// Viewport is a snapshot of a view's scroll position, for exact
+// save/restore (e.g. returning from a cancelled search).
+type Viewport struct {
+	TopLine, TopCol, StCol int
+}
+
+// Viewport returns the current scroll position.
+func (v *View) Viewport() Viewport {
+	return Viewport{TopLine: v.topline, TopCol: v.topcol, StCol: v.stcol}
+}
+
+// SetViewport restores a scroll position snapshot.
+func (v *View) SetViewport(vp Viewport) {
+	v.topline = vp.TopLine
+	v.topcol = vp.TopCol
+	v.stcol = vp.StCol
+}
+
 // --- Visual-row viewport ---
 //
 // The viewport starts at a visual row: topline is a buffer line and topcol
