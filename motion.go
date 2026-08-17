@@ -745,14 +745,13 @@ func RegisterMotions(ks *KeyState) {
 
 	// Ctrl-D / Ctrl-U: half-page scroll. Scrolls the view and moves the
 	// cursor by the same number of visual rows so the cursor stays at the
-	// same screen row. At file boundaries the cursor moves to stay visible.
+	// same screen row; in visual modes the selection extends with it. At
+	// file boundaries the cursor moves to stay visible.
 	scrollHalfPage := func(ks *KeyState, dir int) {
 		v := ks.activeView()
 		if v == nil {
 			return
 		}
-		ks.ensureLineVx()
-		b := ks.Buf()
 		halfPage := v.height / 2
 		count := ks.RawCount()
 		if count == 0 {
@@ -770,20 +769,26 @@ func RegisterMotions(ks *KeyState) {
 		}
 		v.setTopRow(tl, tr)
 
-		// Move cursor by the same number of rows.
-		c := b.Cursor()
-		cl, cr := v.displayRowOf(c.Pos)
-		nl, nr := v.stepRows(cl, cr, scroll)
-		*c = c.MoveTo(v.displayPos(nl, nr, c.Vx)).VimClamp(b)
-		ks.vertical = true
+		// Move every cursor by the same number of rows (extending the
+		// selection in visual modes).
+		applyMotion(ks, MotionDef{
+			Fn: func(b *Buffer, c Cursor, _ int) int {
+				cl, cr := v.displayRowOf(c.Pos)
+				nl, nr := v.stepRows(cl, cr, scroll)
+				return v.displayPos(nl, nr, c.Vx)
+			},
+			Vertical: true,
+		}, ks.Mode().IsVisual)
 		ks.ClearCounts()
 	}
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		scrollHalfPage(ks, 1)
-	}, "<C-d>")
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		scrollHalfPage(ks, -1)
-	}, "<C-u>")
+	for _, mode := range []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeVisualBlock} {
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			scrollHalfPage(ks, 1)
+		}, "<C-d>")
+		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			scrollHalfPage(ks, -1)
+		}, "<C-u>")
+	}
 
 	registerCharMotion(ks, "f", motionFindChar, motionFindCharBack, Inclusive)
 	registerCharMotion(ks, "F", motionFindCharBack, motionFindChar, Charwise)

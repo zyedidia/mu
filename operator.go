@@ -1198,53 +1198,61 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "L")
 
+	// The scroll family works in visual modes too (vim v_CTRL-F etc.),
+	// extending the selection when it moves the cursor.
+	scrollModes := []ModeID{ModeNormal, ModeVisual, ModeVisualLine, ModeVisualBlock}
+
 	// Ctrl-F/Ctrl-B: full page down/up (by visual rows under softwrap)
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		if v := ks.ActiveView(); v != nil {
-			applyDisplayMotion(ks, true, v.height*ks.Count())
+	pageMove := func(down bool) KeyAction {
+		return func(ks *KeyState) {
+			if v := ks.ActiveView(); v != nil {
+				applyDisplayMotion(ks, down, v.height*ks.Count())
+			}
 		}
-	}, "<C-f>")
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		if v := ks.ActiveView(); v != nil {
-			applyDisplayMotion(ks, false, v.height*ks.Count())
-		}
-	}, "<C-b>")
+	}
+	for _, mode := range scrollModes {
+		ks.modes[mode].Bindings.Bind(pageMove(true), "<C-f>")
+		ks.modes[mode].Bindings.Bind(pageMove(false), "<C-b>")
+	}
 
 	// Ctrl-E/Ctrl-Y: scroll the view by visual rows. The cursor stays put
 	// until it would leave the scroll margin, then it is pushed along (as
 	// in vim), so the next relocate doesn't snap the viewport back.
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		if v := ks.ActiveView(); v != nil {
-			ks.ensureLineVx()
-			b := v.buf
-			tl, tr := v.topRow()
-			tl, tr = v.stepRows(tl, tr, ks.Count())
-			v.setTopRow(tl, tr)
-			ml, mr := v.stepRows(tl, tr, v.effScrollMargin())
-			c := b.Cursor()
-			if cl, cr := v.displayRowOf(c.Pos); cl < ml || (cl == ml && cr < mr) {
-				*c = c.MoveTo(v.displayPos(ml, mr, c.Vx)).VimClamp(b)
-				ks.vertical = true
+	scrollView := func(dir int) KeyAction {
+		return func(ks *KeyState) {
+			if v := ks.ActiveView(); v != nil {
+				tl, tr := v.topRow()
+				tl, tr = v.stepRows(tl, tr, dir*ks.Count())
+				v.setTopRow(tl, tr)
+				var ml, mr int
+				if dir > 0 {
+					ml, mr = v.stepRows(tl, tr, v.effScrollMargin())
+				} else {
+					ml, mr = v.stepRows(tl, tr, v.height-1-v.effScrollMargin())
+				}
+				// A cursor inside the margin reports a failed motion and
+				// stays put.
+				applyMotion(ks, MotionDef{
+					Fn: func(b *Buffer, c Cursor, _ int) int {
+						cl, cr := v.displayRowOf(c.Pos)
+						if dir > 0 && (cl < ml || (cl == ml && cr < mr)) {
+							return v.displayPos(ml, mr, c.Vx)
+						}
+						if dir < 0 && (cl > ml || (cl == ml && cr > mr)) {
+							return v.displayPos(ml, mr, c.Vx)
+						}
+						return -1
+					},
+					Vertical: true,
+				}, ks.Mode().IsVisual)
 			}
+			ks.ClearCounts()
 		}
-		ks.ClearCounts()
-	}, "<C-e>")
-	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
-		if v := ks.ActiveView(); v != nil {
-			ks.ensureLineVx()
-			b := v.buf
-			tl, tr := v.topRow()
-			tl, tr = v.stepRows(tl, tr, -ks.Count())
-			v.setTopRow(tl, tr)
-			ml, mr := v.stepRows(tl, tr, v.height-1-v.effScrollMargin())
-			c := b.Cursor()
-			if cl, cr := v.displayRowOf(c.Pos); cl > ml || (cl == ml && cr > mr) {
-				*c = c.MoveTo(v.displayPos(ml, mr, c.Vx)).VimClamp(b)
-				ks.vertical = true
-			}
-		}
-		ks.ClearCounts()
-	}, "<C-y>")
+	}
+	for _, mode := range scrollModes {
+		ks.modes[mode].Bindings.Bind(scrollView(1), "<C-e>")
+		ks.modes[mode].Bindings.Bind(scrollView(-1), "<C-y>")
+	}
 
 	// m<char>: set mark
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {

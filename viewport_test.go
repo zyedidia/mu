@@ -402,3 +402,77 @@ func TestRelocateWrappedUnderfullClamp(t *testing.T) {
 		t.Fatalf("underfull wrapped window: top = (%d,%d), want (2,5)", v.topline, v.topcol)
 	}
 }
+
+func TestVisualHalfPageScroll(t *testing.T) {
+	// v_CTRL-D / v_CTRL-U: half-page movement extends the selection and
+	// keeps the cursor on the same screen row.
+	ks, v := newScrollState(strings.Repeat("abcde\n", 20), 20, 10, 0)
+	b := ks.Buf()
+
+	feedDisplay(ks, "v", "<C-d>")
+	c := b.Cursor()
+	want := b.OffsetAt(5, 0) // half of a 10-row window
+	if c.Pos != want {
+		t.Fatalf("v C-d: pos=%d, want %d (line 5)", c.Pos, want)
+	}
+	if !c.HasSel || c.Sel[0] != 0 || c.Sel[1] != want+1 {
+		t.Fatalf("v C-d: sel=%v, want [0,%d]", c.Sel, want+1)
+	}
+	if v.topline != 5 {
+		t.Fatalf("v C-d: topline=%d, want 5 (cursor keeps its screen row)", v.topline)
+	}
+	if ks.ModeID() != ModeVisual {
+		t.Fatalf("mode = %v, want visual", ks.ModeID())
+	}
+
+	feedDisplay(ks, "<C-u>")
+	c = b.Cursor()
+	if c.Pos != 0 || c.Sel != [2]int{0, 1} {
+		t.Fatalf("v C-u back: pos=%d sel=%v", c.Pos, c.Sel)
+	}
+	if v.topline != 0 {
+		t.Fatalf("v C-u: topline=%d, want 0", v.topline)
+	}
+}
+
+func TestVisualLinePageScroll(t *testing.T) {
+	// V_CTRL-F: full-page movement extends the linewise selection.
+	ks, _ := newScrollState(strings.Repeat("abcde\n", 30), 20, 10, 0)
+	b := ks.Buf()
+
+	feedDisplay(ks, "V", "<C-f>")
+	c := b.Cursor()
+	if l, _ := b.LineColAt(c.Pos); l != 10 {
+		t.Fatalf("V C-f: cursor line=%d, want 10", l)
+	}
+	if !c.HasSel || c.Sel[0] != 0 || c.Sel[1] != b.OffsetAt(11, 0) {
+		t.Fatalf("V C-f: sel=%v, want [0,%d] (lines 0-10)", c.Sel, b.OffsetAt(11, 0))
+	}
+}
+
+func TestVisualScrollLineExtends(t *testing.T) {
+	// v_CTRL-E: the cursor pushed along by the scroll extends the
+	// selection; v_CTRL-Y with the cursor inside the margins leaves it.
+	ks, v := newScrollState(strings.Repeat("abcde\n", 20), 20, 10, 0)
+	b := ks.Buf()
+
+	feedDisplay(ks, "v", "<C-e>")
+	if v.topline != 1 {
+		t.Fatalf("v C-e: topline=%d, want 1", v.topline)
+	}
+	c := b.Cursor()
+	if c.Pos != b.OffsetAt(1, 0) {
+		t.Fatalf("v C-e: pos=%d, want %d (pushed to new top)", c.Pos, b.OffsetAt(1, 0))
+	}
+	if !c.HasSel || c.Sel[0] != 0 || c.Sel[1] != c.Pos+1 {
+		t.Fatalf("v C-e: sel=%v", c.Sel)
+	}
+
+	feedDisplay(ks, "<C-y>")
+	if v.topline != 0 {
+		t.Fatalf("v C-y: topline=%d, want 0", v.topline)
+	}
+	if b.Cursor().Pos != b.OffsetAt(1, 0) {
+		t.Fatalf("v C-y: pos=%d, want unchanged (inside margins)", b.Cursor().Pos)
+	}
+}
