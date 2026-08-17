@@ -1,0 +1,104 @@
+name: prebuilt binaries
+
+# Manual only. Every run reuses the same release, replacing its assets.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # The rolling tag backing the "prebuilt binaries" release.
+  TAG: prebuilt
+
+jobs:
+  release:
+    name: prepare release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Move the tag to the commit being built so the release page shows the
+      # code the binaries actually came from.
+      - name: Move the rolling tag
+        run: |
+          git tag -f "$TAG"
+          git push -f origin "refs/tags/$TAG"
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo 'Prebuilt `mu` binaries, rebuilt on demand from the latest commit.'
+            echo
+            echo 'This release is reused for every build, so the assets below are'
+            echo 'always replaced with fresh ones from the commit named here.'
+            echo
+            echo "Built from \`$GITHUB_SHA\`."
+          } > notes.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title 'prebuilt binaries' --notes-file notes.md
+          else
+            gh release create "$TAG" --title 'prebuilt binaries' --notes-file notes.md --latest=false
+          fi
+
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goos: darwin, goarch: arm64}
+          - {goos: linux, goarch: amd64}
+          - {goos: linux, goarch: arm64}
+          - {goos: linux, goarch: arm}
+          - {goos: linux, goarch: ppc64le}
+          - {goos: linux, goarch: riscv64}
+          - {goos: openbsd, goarch: amd64}
+          - {goos: freebsd, goarch: amd64}
+          - {goos: windows, goarch: amd64}
+          - {goos: windows, goarch: arm64}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # mu is pure Go, so every target cross-compiles from the Linux runner.
+      # Go's linker ad-hoc signs the darwin binary even when cross-compiling,
+      # which is what lets it run on Apple Silicon.
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          bin=mu
+          if [ "$GOOS" = windows ]; then
+            bin=mu.exe
+          fi
+          mkdir -p dist
+          go build -trimpath -ldflags '-s -w' -o "dist/$bin" .
+
+      - name: Package
+        id: package
+        run: |
+          name="mu-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = windows ]; then
+            asset="$name.zip"
+            (cd dist && zip -q "../$asset" mu.exe)
+          else
+            asset="$name.tar.gz"
+            tar -czf "$asset" -C dist mu
+          fi
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "${{ steps.package.outputs.asset }}" --clobber

@@ -1,0 +1,28 @@
+name: test
+
+# Branch pushes only: the prebuilt-binaries workflow force-moves its rolling
+# tag, and there is no reason to re-run the tests for that.
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
