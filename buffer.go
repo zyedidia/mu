@@ -38,6 +38,10 @@ type Buffer struct {
 	Filetype    string
 	modTime     time.Time // mtime when last loaded/saved
 	savedHash   []byte    // md5 of contents at last save/load (nil if too large)
+	savedLen    int       // content length at last save/load
+	editGen     int       // bumped on every edit (cache invalidation)
+	hashGen     int       // editGen the cached hash verdict belongs to
+	hashClean   bool      // cached "content matches savedHash" verdict
 	diagnostics []Diagnostic
 	// Keep the original protocol diagnostics as well as the display-friendly
 	// projection above; code-action requests must echo relevant diagnostics.
@@ -127,22 +131,42 @@ const hashCutoff = 1024 * 1024 // 1MB
 
 // Modified returns whether the buffer has been modified since last save.
 // For small files, uses a hash comparison to avoid false positives (e.g.
-// after undoing all changes).
+// after undoing all changes). Called on every status-bar draw, so it must
+// be cheap: a different length decides without hashing (this also covers
+// buffers grown past hashCutoff since load, whose saved hash describes a
+// smaller content), and the hash verdict is cached per edit generation so
+// idle redraws never re-hash.
 func (b *Buffer) Modified() bool {
-	if b.savedHash != nil {
-		return !bytes.Equal(b.hash(), b.savedHash)
+	if b.savedHash == nil {
+		return b.modified
 	}
-	return b.modified
+	if b.Len() != b.savedLen {
+		return true
+	}
+	if b.hashGen != b.editGen {
+		b.hashClean = bytes.Equal(b.hash(), b.savedHash)
+		b.hashGen = b.editGen
+	}
+	return !b.hashClean
 }
 
 // markUnmodified records the current state as the "saved" baseline.
 func (b *Buffer) markUnmodified() {
 	b.modified = false
+	b.savedLen = b.Len()
 	if b.Len() <= hashCutoff {
 		b.savedHash = b.hash()
+		b.hashGen = b.editGen
+		b.hashClean = true
 	} else {
 		b.savedHash = nil
 	}
+}
+
+// EditGen returns a counter that changes on every buffer edit, for caches
+// keyed on buffer content (row geometry, the Modified hash verdict).
+func (b *Buffer) EditGen() int {
+	return b.editGen
 }
 
 func (b *Buffer) hash() []byte {
@@ -189,6 +213,7 @@ func (b *Buffer) applyEdit(start, end int, val []byte) {
 	b.text.Remove(start, end)
 	b.text.Insert(start, val)
 	b.modified = true
+	b.editGen++
 
 	// Update syntax highlighting memo table.
 	b.SyntaxApplyEdit(start, end, len(val))

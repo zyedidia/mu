@@ -481,7 +481,9 @@ func (n *Rope) EachLeaf(fn func(n *Rope) bool) bool {
 	}
 }
 
-// ReadAt implements the io.ReaderAt interface.
+// ReadAt implements the io.ReaderAt interface. It copies directly from the
+// leaves into p: unlike Slice, it never concatenates pieces into a fresh
+// allocation, so the read caches refilling through it allocate nothing.
 func (n *Rope) ReadAt(p []byte, off int64) (nread int, err error) {
 	if off > int64(n.length) {
 		return 0, io.EOF
@@ -492,9 +494,28 @@ func (n *Rope) ReadAt(p []byte, off int64) (nread int, err error) {
 		end = int64(n.length)
 		err = io.EOF
 	}
-	b := n.Slice(int(off), int(end))
-	nread = copy(p, b)
+	nread = n.readInto(p, int(off), int(end))
 	return nread, err
+}
+
+// readInto copies the range [start, end) into p, returning the number of
+// bytes copied.
+func (n *Rope) readInto(p []byte, start, end int) int {
+	if start >= end {
+		return 0
+	}
+	if n.kind == tLeaf {
+		return copy(p, n.value[start:end])
+	}
+	leftLength := n.left.length
+	nread := 0
+	if start < leftLength {
+		nread = n.left.readInto(p, start, min(end, leftLength))
+	}
+	if end > leftLength {
+		nread += n.right.readInto(p[nread:], max(0, start-leftLength), end-leftLength)
+	}
+	return nread
 }
 
 // WriteTo implements the io.WriterTo interface.

@@ -155,25 +155,32 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		vx += rwidth
 	}
 
+	// Track the buffer line and byte column incrementally through the
+	// walk: a per-character LineColAt lookup was a large share of render
+	// time on big buffers.
+	blen := b.Len()
+	var by, bx int
+	if off < blen {
+		by, bx = b.LineColAt(off)
+	}
+
 	for {
-		blen := b.Len()
 		if off >= blen {
-			by, bx := 0, 0
+			eby, ebx := 0, 0
 			if blen > 0 {
-				by, bx = b.LineColAt(blen - 1)
-				bx++
+				eby, ebx = b.LineColAt(blen - 1)
+				ebx++
 			}
 			if softwrap && x >= width {
 				newline()
 			}
-			if tracker.Track != nil && tracker.Track(blen, bx, by, x, y) {
+			if tracker.Track != nil && tracker.Track(blen, ebx, eby, x, y) {
 				return
 			}
 			break
 		}
 
 		r, combc, size, gwidth := b.DecodeGraphemeWidthAt(off)
-		by, bx := b.LineColAt(off)
 		// Lazy wrap: break the row only when another character must be
 		// placed on it, so a line exactly filling the width keeps its
 		// newline on the same row instead of adding a blank continuation
@@ -229,5 +236,11 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		}
 
 		off += size
+		if r == '\n' {
+			by++
+			bx = 0
+		} else {
+			bx += size
+		}
 	}
 }

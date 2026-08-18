@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -54,6 +55,14 @@ type View struct {
 	// Highlight is a byte range [start, end) to display with a search
 	// highlight style. Set to [0,0] for no highlight.
 	Highlight [2]int
+
+	// Cached softwrap row geometry (see rowStarts): for each buffer line,
+	// the byte column where each of its visual rows starts. Valid for one
+	// buffer edit generation, length, and view width.
+	geomGen   int
+	geomLen   int
+	geomWidth int
+	geomRows  map[int][]int
 
 	// Opts holds per-buffer resolved options (autoindent, tabsize, etc.).
 	Opts map[string]any
@@ -160,15 +169,59 @@ func (v *View) bLoc2vLoc(bl bLoc) (vl vLoc) {
 // using the same render walk as the display, so they agree exactly with
 // what is on screen (including per-row tab expansion).
 
+// rowStarts returns the byte columns where each visual row of the line
+// starts ([0] alone for an unwrapped line), cached until the buffer or the
+// view width changes. The cache is what keeps the geometry helpers cheap on
+// enormous lines: the line is walked once per edit, not several times per
+// frame (each helper used to re-walk it from the start, which made a
+// keystroke on a multi-megabyte line cost hundreds of milliseconds).
+func (v *View) rowStarts(line int) []int {
+	b := v.buf
+	w := v.bufferWidth()
+	if v.geomRows == nil || v.geomGen != b.EditGen() || v.geomLen != b.Len() || v.geomWidth != w {
+		v.geomRows = make(map[int][]int)
+		v.geomGen = b.EditGen()
+		v.geomLen = b.Len()
+		v.geomWidth = w
+	}
+	if s, ok := v.geomRows[line]; ok {
+		return s
+	}
+	start := b.OffsetAt(line, 0)
+	nl := start + b.LineLen(line)
+	starts := []int{0}
+	b.RenderForward(RenderTracker{
+		Track: func(off, bx, by, tx, ty int) bool {
+			if by > line || off >= nl {
+				return true
+			}
+			if ty == len(starts) {
+				starts = append(starts, bx)
+			}
+			return false
+		},
+	}, &v.vis, w, v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
+	v.geomRows[line] = starts
+	return starts
+}
+
 // displayLoc returns the visual row of pos within its buffer line and the
 // row-local visual column.
 func (v *View) displayLoc(pos int) (row, col int) {
 	b := v.buf
-	line, _ := b.LineColAt(pos)
-	start := b.OffsetAt(line, 0)
+	line, bcol := b.LineColAt(pos)
+	starts := v.rowStarts(line)
+	row = sort.SearchInts(starts, bcol+1) - 1
+	if row < 0 {
+		row = 0
+	}
+	// Walk just this row for the row-local visual column: the renderer
+	// resets the column at every wrap, so rendering from a row boundary
+	// reproduces the display exactly.
+	start := b.OffsetAt(line, starts[row])
 	b.RenderForward(RenderTracker{
 		Track: func(off, bx, by, tx, ty int) bool {
-			row, col = ty, tx
+			col = tx
 			return off >= pos
 		},
 	}, &v.vis, v.bufferWidth(), v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
@@ -182,20 +235,7 @@ func (v *View) displayRows(line int) int {
 	if !v.SoftWrap {
 		return 1
 	}
-	b := v.buf
-	start := b.OffsetAt(line, 0)
-	nl := start + b.LineLen(line)
-	rows := 1
-	b.RenderForward(RenderTracker{
-		Track: func(off, bx, by, tx, ty int) bool {
-			if by > line || off >= nl {
-				return true
-			}
-			rows = ty + 1
-			return false
-		},
-	}, &v.vis, v.bufferWidth(), v.height, start, v.SoftWrap, v.WordWrap, DefaultTheme)
-	return rows
+	return len(v.rowStarts(line))
 }
 
 // displayRowOf returns the buffer line of pos and its visual row within that
@@ -218,21 +258,10 @@ func (v *View) rowStartCol(line, row int) int {
 	if !v.SoftWrap || row <= 0 {
 		return 0
 	}
-	b := v.buf
-	col := 0
-	b.RenderForward(RenderTracker{
-		Track: func(off, bx, by, tx, ty int) bool {
-			if by > line || ty > row {
-				return true
-			}
-			if ty == row {
-				col = bx
-				return true
-			}
-			return false
-		},
-	}, &v.vis, v.bufferWidth(), v.height, b.OffsetAt(line, 0), v.SoftWrap, v.WordWrap, DefaultTheme)
-	return col
+	if s := v.rowStarts(line); row < len(s) {
+		return s[row]
+	}
+	return 0
 }
 
 // displayPos returns the byte offset on the given visual row of a line whose
@@ -244,20 +273,23 @@ func (v *View) displayPos(line, row, wantX int) int {
 		line = b.NumLines()
 	}
 	pos := b.OffsetAt(line, 0)
+	starts := v.rowStarts(line)
+	if row < 0 || row >= len(starts) {
+		return pos
+	}
+	// Walk just the requested row.
 	b.RenderForward(RenderTracker{
 		Track: func(off, bx, by, tx, ty int) bool {
-			if by > line || ty > row {
+			if by > line || ty > 0 {
 				return true
 			}
-			if ty == row {
-				if tx > wantX {
-					return true
-				}
-				pos = off
+			if tx > wantX {
+				return true
 			}
+			pos = off
 			return false
 		},
-	}, &v.vis, v.bufferWidth(), v.height, b.OffsetAt(line, 0), v.SoftWrap, v.WordWrap, DefaultTheme)
+	}, &v.vis, v.bufferWidth(), v.height, b.OffsetAt(line, starts[row]), v.SoftWrap, v.WordWrap, DefaultTheme)
 	return pos
 }
 
