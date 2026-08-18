@@ -102,6 +102,10 @@ func completeCommandArg(e *Editor, cmd, argStr string) []string {
 		if argIndex == 1 && len(args) > 0 {
 			return completeOptionValue(e, args[0], lastArg)
 		}
+	case "palette":
+		if argIndex == 0 {
+			return filterPrefix([]string{"actions", "buffers", "commands", "files", "text"}, lastArg)
+		}
 	}
 
 	return nil

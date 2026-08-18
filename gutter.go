@@ -38,6 +38,7 @@ func (b *Buffer) AddDiagnostic(line, col int, text string, dtype DiagnosticType)
 // ClearDiagnostics removes all diagnostics from the buffer.
 func (b *Buffer) ClearDiagnostics() {
 	b.diagnostics = b.diagnostics[:0]
+	b.lspDiagnostics = b.lspDiagnostics[:0]
 }
 
 // GetDiagnosticAt returns the first diagnostic on the given line.

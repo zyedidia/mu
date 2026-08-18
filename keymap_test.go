@@ -261,6 +261,17 @@ func TestMapRhsWithSpace(t *testing.T) {
 	}
 }
 
+func TestMapExpansionContinuesIntoPrompt(t *testing.T) {
+	ed := newMapTestEditor(t, "")
+	evalOrFatal(t, ed, "nmap <Space>g :palette text<CR>")
+
+	ed.dispatchKey(" ")
+	ed.dispatchKey("g")
+	if !ed.palette.active || ed.infobar.prompt != "Text> " {
+		t.Fatalf("mapping opened prompt %q, palette active=%v", ed.infobar.prompt, ed.palette.active)
+	}
+}
+
 func TestMapCharArgExpansion(t *testing.T) {
 	// The expansion may contain a char-argument motion (f); the argument is
 	// consumed during the replay.

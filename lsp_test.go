@@ -118,6 +118,7 @@ func (f *fakeLspServer) run() {
 					"capabilities": map[string]any{
 						"hoverProvider":      true,
 						"completionProvider": map[string]any{},
+						"codeActionProvider": true,
 					},
 				},
 			})
@@ -134,6 +135,24 @@ func (f *fakeLspServer) run() {
 				"jsonrpc": "2.0",
 				"id":      *msg.ID,
 				"result":  []map[string]any{{"label": "foobar"}},
+			})
+		case "textDocument/codeAction":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"title": "Make greeting",
+					"kind":  "quickfix",
+					"edit": map[string]any{"changes": map[string]any{
+						"file:///tmp/x.go": []map[string]any{{
+							"range": map[string]any{
+								"start": map[string]any{"line": 0, "character": 0},
+								"end":   map[string]any{"line": 0, "character": 2},
+							},
+							"newText": "hello",
+						}},
+					}},
+				}},
 			})
 		case "shutdown":
 			f.write(map[string]any{"jsonrpc": "2.0", "id": *msg.ID, "result": nil})

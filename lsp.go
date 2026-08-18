@@ -78,9 +78,10 @@ type LspServer struct {
 // lspCallbacks bundles the editor callbacks a server invokes from its
 // receive goroutine; the editor marshals them onto the main event loop.
 type lspCallbacks struct {
-	onShow     func(lsp.ShowMessageParams)
-	onDiag     func(lsp.PublishDiagnosticsParams)
-	onProgress func(string) // display-ready $/progress status line
+	onShow      func(lsp.ShowMessageParams)
+	onDiag      func(lsp.PublishDiagnosticsParams)
+	onProgress  func(string) // display-ready $/progress status line
+	onApplyEdit func(lspWorkspaceEdit) lsp.ApplyWorkspaceEditResponse
 }
 
 var ErrLspNotSupported = errors.New("lsp: operation not supported")
@@ -242,8 +243,27 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 			},
 		},
 	}
+	// CodeActionLiteralSupport tells modern servers they may return actions
+	// carrying edits (rather than only legacy Command values).  Use a map for
+	// this small capability fragment because protocol v0.12 predates several
+	// of the generated convenience types used by newer protocol packages.
+	var initParams map[string]any
+	if raw, err := json.Marshal(params); err == nil && json.Unmarshal(raw, &initParams) == nil {
+		caps := initParams["capabilities"].(map[string]any)
+		textDocument := caps["textDocument"].(map[string]any)
+		textDocument["codeAction"] = map[string]any{
+			"codeActionLiteralSupport": map[string]any{
+				"codeActionKind": map[string]any{
+					"valueSet": []string{"", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports"},
+				},
+			},
+		}
+		workspace := caps["workspace"].(map[string]any)
+		workspace["applyEdit"] = true
+		workspace["workspaceEdit"] = map[string]any{"documentChanges": true}
+	}
 	if s.initOpts != nil {
-		params.InitializationOptions = s.initOpts
+		initParams["initializationOptions"] = s.initOpts
 	}
 
 	go s.receiveLoop(cb)
@@ -257,7 +277,7 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 		defer s.releaseResponse(id)
 		// Write directly: the send loop is still parked on s.ready, so
 		// initialize/initialized are guaranteed to precede queued messages.
-		if err := s.writeMessage(rpcRequest{JSONRPC: "2.0", ID: id, Method: lsp.MethodInitialize, Params: params}); err != nil {
+		if err := s.writeMessage(rpcRequest{JSONRPC: "2.0", ID: id, Method: lsp.MethodInitialize, Params: initParams}); err != nil {
 			log.Printf("[lsp] init error: %v", err)
 			return
 		}
@@ -627,13 +647,18 @@ func (s *LspServer) receiveLoop(cb lspCallbacks) {
 				s.reply(*header.ID, nil)
 			}
 		case "workspace/applyEdit":
-			// Server-initiated edits (rename, code actions) are not
-			// supported; refuse per spec instead of a bare null.
 			if header.ID != nil {
-				s.reply(*header.ID, lsp.ApplyWorkspaceEditResponse{
-					Applied:       false,
-					FailureReason: "client does not support workspace/applyEdit",
-				})
+				var m struct {
+					Params struct {
+						Edit lspWorkspaceEdit `json:"edit"`
+					} `json:"params"`
+				}
+				json.Unmarshal(msg, &m)
+				if cb.onApplyEdit == nil {
+					s.reply(*header.ID, lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: "client cannot apply workspace edits"})
+				} else {
+					s.reply(*header.ID, cb.onApplyEdit(m.Params.Edit))
+				}
 			}
 		case "workspace/workspaceFolders":
 			if header.ID != nil {

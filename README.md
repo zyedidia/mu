@@ -16,6 +16,12 @@ The UI is kept minimal to reduce distractions. Markers only appear in the
 single-column gutter next to line numbers, and messages only appear in the
 command/info bar.
 
+Press `Ctrl-P` for the searchable palette. It can find files, search file
+contents, switch open buffers, and run editor commands. The modes are also
+available directly as `:palette files`, `:palette text`, `:palette buffers`,
+`:palette commands`, and `:palette actions` (LSP code actions at the cursor);
+use Up/Down to select and Enter to open or apply.
+
 Prebuilt binaries are included in the GitHub releases.
 
 Building from source is easy: just run `go build`.
