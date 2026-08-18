@@ -94,6 +94,12 @@ func (e *Editor) RunCommand(input string) {
 		return
 	}
 
+	// :!cmd runs a shell command with the terminal, as in vim.
+	if strings.HasPrefix(input, "!") {
+		e.runShellCommand(input[1:])
+		return
+	}
+
 	// Bare number: go to line.
 	if _, err := strconv.Atoi(input); err == nil {
 		input = "goto " + input
