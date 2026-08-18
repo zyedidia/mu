@@ -33,3 +33,5 @@ vmap k gk
 # Space in visual mode applies the q macro to every selected line
 # (record one with qq ... q, select lines, press space).
 vmap <Space> @q
+
+nmap <Space>a :palette actions<cr>

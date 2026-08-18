@@ -173,8 +173,8 @@ func (c *Config) LoadHighlighter(name string) (*flare.Highlighter, error) {
 }
 
 // highlighterData loads a highlighting grammar by filetype name, preferring
-// the config directory, then the grammars bundled with mu, then the ones built
-// into flare.
+// the config directory (a user highlighters/ dir overrides), then the ones
+// built into flare.
 func (c *Config) highlighterData(name string) ([]byte, error) {
 	if data, err := c.ReadFile(filepath.Join("highlighters", name+".lang")); err == nil {
 		return data, nil

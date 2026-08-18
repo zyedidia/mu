@@ -355,7 +355,7 @@ Algorithm:
 
 Filetype detection: `zyedidia/ftdetect` matches filename patterns and content
 heuristics to select the appropriate `.lang` grammar file. Grammars are looked
-up in the config directory first, then `embed/highlighters`, then the ones
+up in the config directory first (`~/.config/mu/highlighters/`), then the ones
 built into flare; `include` directives inside a grammar resolve the same way.
 
 ## Configuration
