@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -163,11 +164,25 @@ func DetectFiletype(cfg *Config, name string, firstLine []byte) string {
 
 // LoadHighlighter loads a flare highlighter for the given filetype name.
 func (c *Config) LoadHighlighter(name string) (*flare.Highlighter, error) {
-	data, err := c.ReadFile(filepath.Join("highlighters", name+".lang"))
-	if err != nil {
-		return nil, err
+	// Grammars can pull in other grammars with 'include', which flare resolves
+	// through its package-level loader, so point that at this config as well.
+	// Otherwise an included grammar would come from a different set than the
+	// one being loaded here.
+	flare.SetLoader(c.highlighterData)
+	return flare.LoadHighlighterBuiltin(name, true)
+}
+
+// highlighterData loads a highlighting grammar by filetype name, preferring
+// the config directory, then the grammars bundled with mu, then the ones built
+// into flare.
+func (c *Config) highlighterData(name string) ([]byte, error) {
+	if data, err := c.ReadFile(filepath.Join("highlighters", name+".lang")); err == nil {
+		return data, nil
 	}
-	return flare.LoadHighlighter(name, data, true)
+	if data, err := flare.BuiltinLoader(name); err == nil {
+		return data, nil
+	}
+	return nil, fmt.Errorf("no highlighter for filetype %q", name)
 }
 
 // --- Buffer syntax methods ---

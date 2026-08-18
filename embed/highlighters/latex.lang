@@ -1,4 +1,0 @@
-# LaTeX is highlighted by the tex grammar, which is the name .tex, .bib and
-# .cls files are detected as.
-
-token <- include{"tex"}

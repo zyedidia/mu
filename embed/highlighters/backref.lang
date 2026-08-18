@@ -1,7 +1,0 @@
-// example of Lua's context-sensitive block comments
-token <- cap{
-    '--[' ref{'='*, "eq"} '['
-    (!('--]' back{"eq"} ']') .)*
-    ('--]' back{"eq"} ']')?,
-    "comment"
-}
