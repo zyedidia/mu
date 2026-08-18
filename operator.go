@@ -403,7 +403,11 @@ func execVisualOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, i
 // the position of the inserted space, or -1 when there is no next line.
 func joinLineAt(b *Buffer, line int) int {
 	end := b.OffsetAt(line, 0) + b.LineLen(line)
-	if end >= b.Len() {
+	// No next line to join with: on the buffer's last line — including
+	// when only the phantom line after a trailing newline follows — J
+	// does nothing (vim). Without the +1, J on the last line would eat
+	// the final newline and leave a trailing space.
+	if end+1 >= b.Len() {
 		return -1
 	}
 	nlEnd := end + 1 // past the \n
@@ -650,7 +654,9 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}
 
-	// J: join lines (at each cursor's own line)
+	// J: join lines (at each cursor's own line). The cursor lands on the
+	// join point — the inserted space — and with a count on the seam of
+	// the last join, as in vim.
 	ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		b.UndoBarrier()
@@ -662,9 +668,11 @@ func RegisterOperators(ks *KeyState) {
 		for i := 0; i < b.NumCursors(); i++ {
 			for j := 0; j < count; j++ {
 				line, _ := b.LineColAt(b.cursors[i].Pos)
-				if joinLineAt(b, line) < 0 {
+				p := joinLineAt(b, line)
+				if p < 0 {
 					break
 				}
+				b.cursors[i] = b.cursors[i].MoveTo(p)
 			}
 		}
 		ks.ResetAction()

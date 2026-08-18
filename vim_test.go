@@ -292,6 +292,32 @@ func TestVimJoinLines(t *testing.T) {
 	if bufText(ks) != "hello world\n" {
 		t.Fatalf("J: got %q", bufText(ks))
 	}
+	// The cursor lands on the join point (the inserted space).
+	if pos := cursorPos(ks); pos != 5 {
+		t.Fatalf("J cursor: pos=%d, want 5 (the inserted space)", pos)
+	}
+}
+
+func TestVimJoinLinesCount(t *testing.T) {
+	// 3J joins three lines; the cursor ends on the seam of the last join.
+	ks := newVimState("aa\nbb\ncc\ndd\n")
+
+	feedKeys(ks, "3J")
+	if bufText(ks) != "aa bb cc\ndd\n" {
+		t.Fatalf("3J: got %q", bufText(ks))
+	}
+	if pos := cursorPos(ks); pos != 5 {
+		t.Fatalf("3J cursor: pos=%d, want 5 (space before cc)", pos)
+	}
+
+	// J at the last line does nothing and leaves the cursor put.
+	feedKeys(ks, "j0J")
+	if bufText(ks) != "aa bb cc\ndd\n" {
+		t.Fatalf("J at last line: got %q", bufText(ks))
+	}
+	if pos := cursorPos(ks); pos != 9 {
+		t.Fatalf("J at last line: pos=%d, want 9", pos)
+	}
 }
 
 // --- Paste cursor placement (vim semantics) ---
