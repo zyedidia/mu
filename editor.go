@@ -976,47 +976,69 @@ func (e *Editor) Run() {
 			break
 		}
 
-		switch ev := ev.(type) {
-		case *tcell.EventKey:
-			if e.pasting {
-				// Paste content in flight: collect it, with no key
-				// dispatch and no per-key frame.
-				e.collectPasteKey(ev)
-				continue
-			}
-			key := keyEventToString(ev)
-			if key == "" {
-				continue
-			}
-			if e.checkExternalModified() {
-				// A reload prompt was just opened: show it and let the
-				// NEXT keystroke answer it, not this one.
+		// Coalesce queued input: handle every pending event, then render
+		// one frame. Without this the editor renders a frame per key
+		// event, so a key-repeat rate above the frame rate makes input
+		// queue up behind redraws and scrolling keeps running after the
+		// key is released — worst on slow machines, where scrolling
+		// frames are the most expensive. The batch is capped so a
+		// continuous event stream can never starve rendering.
+		e.handleEvent(ev)
+		for i := 0; e.running && i < 128 && e.screen.HasPendingEvent(); i++ {
+			ev = e.screen.PollEvent()
+			if ev == nil {
 				break
 			}
-
-			e.dispatchKey(key)
-		case *tcell.EventPaste:
-			if ev.Start() {
-				e.pasting = true
-				e.pasteBuf.Reset()
-				continue
-			}
-			e.pasting = false
-			text := e.pasteBuf.String()
-			e.pasteBuf.Reset()
-			e.pasteText(text)
-		case *tcell.EventResize:
-			w, h := ev.Size()
-			e.Resize(w, h)
-		case *tcell.EventClipboard:
-			// A terminal answered an OSC 52 clipboard read: refresh the
-			// '+' register with the received content.
-			e.regs.storeClipboard(ev.Data())
-		case *tcell.EventInterrupt:
-			e.drainMain()
+			e.handleEvent(ev)
 		}
 
+		if e.pasting {
+			// Mid-paste: keep collecting without rendering.
+			continue
+		}
 		e.Display()
+	}
+}
+
+// handleEvent processes a single event (no rendering).
+func (e *Editor) handleEvent(ev tcell.Event) {
+	switch ev := ev.(type) {
+	case *tcell.EventKey:
+		if e.pasting {
+			// Paste content in flight: collect it without key dispatch.
+			e.collectPasteKey(ev)
+			return
+		}
+		key := keyEventToString(ev)
+		if key == "" {
+			return
+		}
+		if e.checkExternalModified() {
+			// A reload prompt was just opened: show it and let the NEXT
+			// keystroke answer it, not this one.
+			return
+		}
+
+		e.dispatchKey(key)
+	case *tcell.EventPaste:
+		if ev.Start() {
+			e.pasting = true
+			e.pasteBuf.Reset()
+			return
+		}
+		e.pasting = false
+		text := e.pasteBuf.String()
+		e.pasteBuf.Reset()
+		e.pasteText(text)
+	case *tcell.EventResize:
+		w, h := ev.Size()
+		e.Resize(w, h)
+	case *tcell.EventClipboard:
+		// A terminal answered an OSC 52 clipboard read: refresh the
+		// '+' register with the received content.
+		e.regs.storeClipboard(ev.Data())
+	case *tcell.EventInterrupt:
+		e.drainMain()
 	}
 }
 
@@ -1079,8 +1101,17 @@ func (e *Editor) Display() {
 	if multi {
 		e.screen.HideCursor()
 	}
+	// Cells arrive in long runs of one style; memoizing the last tcell
+	// conversion skips it for nearly every cell.
+	var lastStyle Style
+	var lastTStyle tcell.Style
+	haveStyle := false
 	t.Display(func(x, y int, mainc rune, combc []rune, style Style) {
-		e.screen.SetContent(x, y+th, mainc, combc, style.TCellStyle())
+		if !haveStyle || style != lastStyle {
+			lastStyle, lastTStyle = style, style.TCellStyle()
+			haveStyle = true
+		}
+		e.screen.SetContent(x, y+th, mainc, combc, lastTStyle)
 	}, func(x, y int, main bool) {
 		if main && !multi && !e.infobar.IsActive() && !e.infobar.showCursor {
 			e.screen.ShowCursor(x, y+th)

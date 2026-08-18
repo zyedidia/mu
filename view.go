@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 // DrawFunc is called for each cell to render.
@@ -63,6 +61,10 @@ type View struct {
 	geomLen   int
 	geomWidth int
 	geomRows  map[int][]int
+
+	// Per-frame scratch reused by Display.
+	scratchLines       []int
+	scratchCursorlines map[int]bool
 
 	// Opts holds per-buffer resolved options (autoindent, tabsize, etc.).
 	Opts map[string]any
@@ -516,11 +518,23 @@ func diagGutterStyle(th *Theme, t DiagnosticType) Style {
 func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active ...bool) {
 	isActive := len(active) == 0 || active[0]
 	gutter := v.gutterTotalWidth()
-	lines := make([]int, v.height) // maps visual row -> buffer line+1
+
+	// Per-frame scratch, reused across frames to avoid churn.
+	if cap(v.scratchLines) < v.height {
+		v.scratchLines = make([]int, v.height)
+	}
+	lines := v.scratchLines[:v.height] // maps visual row -> buffer line+1
+	for i := range lines {
+		lines[i] = 0
+	}
+	if v.scratchCursorlines == nil {
+		v.scratchCursorlines = make(map[int]bool)
+	}
+	clear(v.scratchCursorlines)
 
 	// Track which lines have cursors (for cursorline).
 	// Disable cursorline when any cursor has an active selection.
-	cursorlines := make(map[int]bool)
+	cursorlines := v.scratchCursorlines
 	if v.CursorLine && isActive {
 		hasSelection := false
 		for _, c := range v.buf.Cursors() {
@@ -647,10 +661,11 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		draw(fc.x, fc.y, cell.r, cell.combc, cursorStyle(cell.style))
 	}
 
-	// Draw line numbers.
+	// Draw line numbers (without fmt: this runs per visible line per
+	// frame).
 	if v.LineNums {
 		lnumWid := v.lineNumWidth()
-		strfmt := fmt.Sprintf("%%%dd ", lnumWid-1)
+		var numBuf [20]byte
 		lnumStyleFn := func(l int) Style {
 			style := th.Style("line-number")
 			if th.HasStyle("current-line-number") && cursorlines[l] {
@@ -663,17 +678,24 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			if l == 0 {
 				break
 			}
-			var ls string
-			if i != 0 && l == lines[i-1] {
-				ls = strings.Repeat(" ", lnumWid)
-			} else {
-				ls = fmt.Sprintf(strfmt, l)
-			}
+			style := lnumStyleFn(l - 1)
 			x := v.GutterWidth
-			for _, c := range ls {
-				draw(x, i, c, nil, lnumStyleFn(l-1))
-				x++
+			if i != 0 && l == lines[i-1] {
+				// Continuation row of a wrapped line: blank.
+				for j := 0; j < lnumWid; j++ {
+					draw(x+j, i, ' ', nil, style)
+				}
+				continue
 			}
+			num := strconv.AppendInt(numBuf[:0], int64(l), 10)
+			pad := lnumWid - 1 - len(num)
+			for j := 0; j < pad; j++ {
+				draw(x+j, i, ' ', nil, style)
+			}
+			for j, c := range num {
+				draw(x+pad+j, i, rune(c), nil, style)
+			}
+			draw(x+lnumWid-1, i, ' ', nil, style)
 		}
 	}
 

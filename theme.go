@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"github.com/gdamore/tcell/v2"
 	"gopkg.in/yaml.v2"
@@ -159,6 +160,11 @@ var DefaultTheme = &Theme{
 type Theme struct {
 	def   Style
 	rules map[string]Style
+
+	// cache memoizes resolved Style lookups (group parsing and the
+	// hierarchical fallback run per drawn cell otherwise). Copy-on-write:
+	// misses build a new map and swap it in, so readers never lock.
+	cache atomic.Value // map[string]Style
 }
 
 // LoadThemeYAML parses a YAML theme definition. The YAML must contain a
@@ -182,11 +188,28 @@ func LoadThemeYAML(data []byte) (*Theme, error) {
 // hierarchical lookup: "constant.string" falls back to "constant" if
 // "constant.string" is not defined. Colon-separated parts are resolved
 // independently and can include attribute names (e.g. "keyword:bold").
+// Lookups are memoized: this runs for every drawn cell with a syntax group.
 func (t *Theme) Style(group string) Style {
 	if t == nil {
 		return Style{}
 	}
+	if m, _ := t.cache.Load().(map[string]Style); m != nil {
+		if s, ok := m[group]; ok {
+			return s
+		}
+	}
+	s := t.resolveStyle(group)
+	old, _ := t.cache.Load().(map[string]Style)
+	m := make(map[string]Style, len(old)+1)
+	for k, v := range old {
+		m[k] = v
+	}
+	m[group] = s
+	t.cache.Store(m)
+	return s
+}
 
+func (t *Theme) resolveStyle(group string) Style {
 	st := t.def
 	parts := strings.Split(group, ":")
 

@@ -16,6 +16,10 @@ gutter, status bar, tcell diff + `Show`). The viewport is 120×40. Two things
 are deliberately excluded: terminal I/O (the simulation screen diffs but
 writes nowhere) and LSP servers (none are attached).
 
+The run loop coalesces queued input (all pending events are handled, then
+one frame renders), so real-world latency under key repeat is one frame,
+not one frame per key. The benchmarks measure the per-frame cost itself.
+
 Frame-time budget for judging results, based on keystroke echo latency:
 
 - **≤ 2 ms** excellent — invisible even on key repeat
@@ -89,13 +93,13 @@ Reference points, not targets — rerun on your machine before comparing:
 
 | Scenario | ns/frame | B/op |
 | --- | --- | --- |
-| small | 0.62 ms | 100 KB |
-| large (8MB) | 0.56 ms | 121 KB |
-| large + wrap + syntax | 0.74 ms | 210 KB |
-| grown buffer | 0.55 ms | 121 KB |
-| typing, 8MB + syntax | 2.1 ms | 315 KB |
-| 8 cursors, 1MB | 1.3 ms | 201 KB |
-| one 2MB line, wrap | 1.1 ms | 249 KB |
+| small | 0.48 ms | 84 KB |
+| large (8MB) | 0.47 ms | 95 KB |
+| large + wrap + syntax | 0.50 ms | 96 KB |
+| grown buffer | 0.48 ms | 95 KB |
+| typing, 8MB + syntax | 1.8 ms | 180 KB |
+| 8 cursors, 1MB | 1.1 ms | 95 KB |
+| one 2MB line, wrap | 0.96 ms | 239 KB |
 
 ## Fixed findings (the scenarios above are their regression guards)
 
@@ -117,6 +121,13 @@ Reference points, not targets — rerun on your machine before comparing:
    length, and width; helpers now binary-search it and walk at most one
    row) and incremental line/col tracking in the render walk.
    `FrameLongLine` went 490 ms → 1.1 ms.
+4. **Per-cell style resolution** (`theme.go`, `view.go`, `editor.go`).
+   `Theme.Style` re-parsed group names per drawn cell and every cell paid
+   a `TCellStyle` conversion; line numbers went through `fmt.Sprintf`.
+   Fixed: memoized style lookups (copy-on-write cache), a last-style memo
+   in the draw path, fmt-free line numbers, and reused per-frame scratch.
+   `ViewDisplay` went 414 µs → 99 µs and syntax highlighting now adds
+   almost nothing per frame.
 
 Remaining known costs, in likely-impact order:
 
@@ -125,8 +136,9 @@ Remaining known costs, in likely-impact order:
   is still slow per keystroke; motion and scrolling are cached.
 - The `text.Reader` takes a mutex per rune and grapheme decoding
   allocates per character — only visible inside full-line walks now.
-- The ~100–200 KB/frame allocation floor (per-frame maps and slices in
-  `View.Display`, per-line `fmt.Sprintf` for line numbers).
+- Most remaining allocs/op are the *simulation screen* allocating per
+  changed cell (`simscreen.drawCell`) — a benchmark artifact; the real
+  terminal backend has a different write path.
 
 Healthy: syntax adds only 0.05–0.2ms (windowed memoization works), softwrap
 is nearly free, and frame time is viewport-bound, not file-bound.
