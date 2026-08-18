@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/zyedidia/gotcl"
@@ -31,6 +32,11 @@ type Editor struct {
 	// completionGen invalidates in-flight async completion requests: a
 	// callback only opens the menu if its generation is still current.
 	completionGen int
+
+	// Bracketed paste collection (see paste.go): between the EventPaste
+	// markers, key events accumulate in pasteBuf instead of dispatching.
+	pasting  bool
+	pasteBuf strings.Builder
 
 	// comments maps filetype → line-comment prefix (from comments.toml).
 	comments map[string]string
@@ -966,6 +972,12 @@ func (e *Editor) Run() {
 
 		switch ev := ev.(type) {
 		case *tcell.EventKey:
+			if e.pasting {
+				// Paste content in flight: collect it, with no key
+				// dispatch and no per-key frame.
+				e.collectPasteKey(ev)
+				continue
+			}
 			key := keyEventToString(ev)
 			if key == "" {
 				continue
@@ -977,6 +989,16 @@ func (e *Editor) Run() {
 			}
 
 			e.dispatchKey(key)
+		case *tcell.EventPaste:
+			if ev.Start() {
+				e.pasting = true
+				e.pasteBuf.Reset()
+				continue
+			}
+			e.pasting = false
+			text := e.pasteBuf.String()
+			e.pasteBuf.Reset()
+			e.pasteText(text)
 		case *tcell.EventResize:
 			w, h := ev.Size()
 			e.Resize(w, h)

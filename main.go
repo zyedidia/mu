@@ -55,6 +55,11 @@ func main() {
 	// keeps the terminal's native text selection working.
 	screen.SetStyle(th.Default().TCellStyle())
 
+	// Bracketed paste: pasted text arrives as one block between EventPaste
+	// markers (see paste.go) instead of a stream of keystrokes run through
+	// the keymap.
+	screen.EnablePaste()
+
 	// Create editor.
 	ed := NewEditor(screen, cfg, th)
 
