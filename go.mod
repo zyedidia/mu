@@ -17,7 +17,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.3.4 // indirect
-	github.com/zyedidia/flare v0.1.1-0.20260818195652-c28f4a1c0159 // indirect
+	github.com/zyedidia/flare v0.1.1-0.20260818205547-98b798d7d3a6 // indirect
 	github.com/zyedidia/ftdetect v0.1.0 // indirect
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 // indirect
 	github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 // indirect

@@ -44,6 +44,8 @@ github.com/zyedidia/flare v0.1.1-0.20260817215207-ce60e977dfad h1:p1as2EdZNvu+5I
 github.com/zyedidia/flare v0.1.1-0.20260817215207-ce60e977dfad/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/flare v0.1.1-0.20260818195652-c28f4a1c0159 h1:+l7bqNkwYGFqmaIuRRmmGA4PQQbHLUAUhoWi+bTJBAM=
 github.com/zyedidia/flare v0.1.1-0.20260818195652-c28f4a1c0159/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
+github.com/zyedidia/flare v0.1.1-0.20260818205547-98b798d7d3a6 h1:31CRZzFivkkjWC2J3Ay+n5cpnZEHUl0GgFCCSbn2HtY=
+github.com/zyedidia/flare v0.1.1-0.20260818205547-98b798d7d3a6/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/ftdetect v0.1.0 h1:vid9p+sAXbu20dbdvdn953+7FB4FA9pzy51pAbA2F78=
 github.com/zyedidia/ftdetect v0.1.0/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
