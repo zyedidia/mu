@@ -957,6 +957,22 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}, KeyEnter)
 
+	// Arrow keys in insert mode: move without leaving insert. The normal
+	// motion functions already have the right semantics here — without
+	// normal mode's VimClamp, right can reach the end-of-line position,
+	// while left/right still stop at the line boundaries and up/down keep
+	// a sticky column. As in vim, movement splits the undo sequence.
+	insertArrow := func(m MotionDef) KeyAction {
+		return func(ks *KeyState) {
+			ks.Buf().UndoBarrier()
+			applyMotion(ks, m, false)
+		}
+	}
+	ks.modes[ModeInsert].Bindings.Bind(insertArrow(MotionDef{Fn: motionLeft}), KeyLeft)
+	ks.modes[ModeInsert].Bindings.Bind(insertArrow(MotionDef{Fn: motionRight}), KeyRight)
+	ks.modes[ModeInsert].Bindings.Bind(insertArrow(MotionDef{Fn: motionUp, Vertical: true}), KeyUp)
+	ks.modes[ModeInsert].Bindings.Bind(insertArrow(MotionDef{Fn: motionDown, Vertical: true}), KeyDown)
+
 	// Tab in insert mode is handled by registerCompletionBindings
 	// (triggers completion or inserts tab depending on context).
 
