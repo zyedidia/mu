@@ -19,9 +19,10 @@ type fakeLspServer struct {
 	in  *bufio.Reader // client → server
 	out io.Writer     // server → client
 
-	initDelay  time.Duration
-	hoverDelay time.Duration
-	complDelay time.Duration
+	initDelay   time.Duration
+	hoverDelay  time.Duration
+	complDelay  time.Duration
+	symbolsFlat bool // reply to documentSymbol with the legacy SymbolInformation shape
 
 	mu       sync.Mutex
 	received []string                // method order as received
@@ -116,9 +117,13 @@ func (f *fakeLspServer) run() {
 				"id":      *msg.ID,
 				"result": map[string]any{
 					"capabilities": map[string]any{
-						"hoverProvider":      true,
-						"completionProvider": map[string]any{},
-						"codeActionProvider": true,
+						"hoverProvider":          true,
+						"completionProvider":     map[string]any{},
+						"codeActionProvider":     true,
+						"signatureHelpProvider":  map[string]any{},
+						"referencesProvider":     true,
+						"documentSymbolProvider": true,
+						"renameProvider":         true,
 					},
 				},
 			})
@@ -151,6 +156,73 @@ func (f *fakeLspServer) run() {
 							},
 							"newText": "hello",
 						}},
+					}},
+				}},
+			})
+		case "textDocument/signatureHelp":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": map[string]any{
+					"signatures": []map[string]any{{
+						"label":      "foo(a, b int)",
+						"parameters": []map[string]any{{"label": "a"}, {"label": "b int"}},
+					}},
+					"activeParameter": 1,
+				},
+			})
+		case "textDocument/references":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"uri": "file:///tmp/x.go",
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 2},
+					},
+				}},
+			})
+		case "textDocument/documentSymbol":
+			var result []map[string]any
+			if f.symbolsFlat {
+				result = []map[string]any{{
+					"name": "bar",
+					"kind": 12, // Function
+					"location": map[string]any{
+						"uri": "file:///tmp/x.go",
+						"range": map[string]any{
+							"start": map[string]any{"line": 1, "character": 5},
+							"end":   map[string]any{"line": 1, "character": 8},
+						},
+					},
+				}}
+			} else {
+				result = []map[string]any{{
+					"name": "foo",
+					"kind": 12, // Function
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 2, "character": 1},
+					},
+					"selectionRange": map[string]any{
+						"start": map[string]any{"line": 0, "character": 5},
+						"end":   map[string]any{"line": 0, "character": 8},
+					},
+				}}
+			}
+			f.write(map[string]any{"jsonrpc": "2.0", "id": *msg.ID, "result": result})
+		case "textDocument/rename":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": map[string]any{"changes": map[string]any{
+					"file:///tmp/x.go": []map[string]any{{
+						"range": map[string]any{
+							"start": map[string]any{"line": 0, "character": 0},
+							"end":   map[string]any{"line": 0, "character": 2},
+						},
+						"newText": "renamed",
 					}},
 				}},
 			})
@@ -646,4 +718,101 @@ func TestLspShutdownPolite(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("shutdown/exit never sent: %v", fake.methods())
+}
+
+// Tier 2 requests: signature help, references, document symbols, rename.
+
+func TestLspSignatureHelpRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	help, err := s.SignatureHelp("/tmp/x.go", lsp.Position{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := signatureHelpText(help); got != "foo(a, [b int])" {
+		t.Fatalf("signature help: got %q, want %q", got, "foo(a, [b int])")
+	}
+}
+
+// signatureHelpText must also handle the [start, end) offset-pair form of
+// ParameterInformation.Label, not just a plain substring.
+func TestSignatureHelpTextOffsetLabel(t *testing.T) {
+	help := &lspSignatureHelp{
+		Signatures: []lspSignatureInformation{{
+			Label: "foo(a, b int)",
+			Parameters: []lspParameterInformation{
+				{Label: json.RawMessage(`[4,5]`)},
+				{Label: json.RawMessage(`[7,12]`)},
+			},
+		}},
+		ActiveParameter: uint32Ptr(1),
+	}
+	if got := signatureHelpText(help); got != "foo(a, [b int])" {
+		t.Fatalf("offset label: got %q, want %q", got, "foo(a, [b int])")
+	}
+}
+
+func uint32Ptr(v uint32) *uint32 { return &v }
+
+func TestLspReferencesRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	locs, err := s.References("/tmp/x.go", lsp.Position{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locs) != 1 || locs[0].URI.Filename() != "/tmp/x.go" {
+		t.Fatalf("references: got %v", locs)
+	}
+}
+
+func TestLspDocumentSymbolsHierarchical(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	syms, err := s.DocumentSymbols("/tmp/x.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(syms) != 1 || syms[0].Name != "foo" || syms[0].Kind != lsp.SymbolKindFunction {
+		t.Fatalf("document symbols: got %+v", syms)
+	}
+	if syms[0].SelectionRange.Start.Character != 5 {
+		t.Fatalf("selection range: got %+v", syms[0].SelectionRange)
+	}
+}
+
+// DocumentSymbols must also normalize the flat, legacy SymbolInformation
+// response shape (identified by a "location" field) into DocumentSymbol.
+func TestLspDocumentSymbolsFlatFallback(t *testing.T) {
+	fake := &fakeLspServer{symbolsFlat: true}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	syms, err := s.DocumentSymbols("/tmp/x.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(syms) != 1 || syms[0].Name != "bar" {
+		t.Fatalf("flat document symbols: got %+v", syms)
+	}
+	if syms[0].SelectionRange != syms[0].Range {
+		t.Fatalf("flat symbol should reuse location as both range and selection range: %+v", syms[0])
+	}
+}
+
+func TestLspRenameRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	edit, err := s.Rename("/tmp/x.go", lsp.Position{}, "renamed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	edits, ok := edit.Changes["file:///tmp/x.go"]
+	if !ok || len(edits) != 1 || edits[0].NewText != "renamed" {
+		t.Fatalf("rename edit: got %+v", edit)
+	}
 }

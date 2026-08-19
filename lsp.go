@@ -234,6 +234,14 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 				Definition:     &lsp.DefinitionTextDocumentClientCapabilities{},
 				Implementation: &lsp.ImplementationTextDocumentClientCapabilities{},
 				Formatting:     &lsp.DocumentFormattingClientCapabilities{},
+				SignatureHelp:  &lsp.SignatureHelpTextDocumentClientCapabilities{},
+				References:     &lsp.ReferencesTextDocumentClientCapabilities{},
+				DocumentSymbol: &lsp.DocumentSymbolClientCapabilities{
+					HierarchicalDocumentSymbolSupport: true,
+				},
+				Rename: &lsp.RenameClientCapabilities{
+					PrepareSupport: true,
+				},
 			},
 			Window: &lsp.WindowClientCapabilities{
 				WorkDoneProgress: true,
@@ -528,6 +536,83 @@ func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
 		return nil, err
 	}
 	return edits.Result, nil
+}
+
+func (s *LspServer) References(filename string, pos lsp.Position) ([]lsp.Location, error) {
+	if s == nil || s.caps().ReferencesProvider == nil {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.ReferenceParams{
+		TextDocumentPositionParams: lsp.TextDocumentPositionParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
+			Position:     pos,
+		},
+		Context: lsp.ReferenceContext{IncludeDeclaration: true},
+	}
+	resp, err := s.request(lsp.MethodTextDocumentReferences, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var locs struct {
+		Result []lsp.Location `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &locs); err != nil {
+		return nil, err
+	}
+	return locs.Result, nil
+}
+
+// DocumentSymbols requests the symbol outline of filename. Servers may
+// answer with the hierarchical DocumentSymbol form or the flat legacy
+// SymbolInformation form; both are normalized to DocumentSymbol, using each
+// SymbolInformation's location as both range and selection range.
+func (s *LspServer) DocumentSymbols(filename string) ([]lsp.DocumentSymbol, error) {
+	if s == nil || s.caps().DocumentSymbolProvider == nil {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.DocumentSymbolParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
+	}
+	resp, err := s.request(lsp.MethodTextDocumentDocumentSymbol, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		Result []json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.Result) == 0 {
+		return nil, nil
+	}
+	// Distinguish the two shapes by a field only one of them has.
+	var probe struct {
+		Location *lsp.Location `json:"location"`
+	}
+	json.Unmarshal(raw.Result[0], &probe)
+	out := make([]lsp.DocumentSymbol, len(raw.Result))
+	if probe.Location != nil {
+		for i, r := range raw.Result {
+			var si lsp.SymbolInformation
+			if err := json.Unmarshal(r, &si); err != nil {
+				return nil, err
+			}
+			out[i] = lsp.DocumentSymbol{
+				Name:           si.Name,
+				Kind:           si.Kind,
+				Range:          si.Location.Range,
+				SelectionRange: si.Location.Range,
+			}
+		}
+		return out, nil
+	}
+	for i, r := range raw.Result {
+		if err := json.Unmarshal(r, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // --- JSON-RPC transport ---

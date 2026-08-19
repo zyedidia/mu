@@ -27,7 +27,7 @@ type Palette struct {
 func init() {
 	editorCommands = append(editorCommands, CommandDef{
 		"palette", cmdPalette,
-		"palette [files|text|buffers|commands|actions]: open the searchable palette",
+		"palette [files|text|buffers|commands|actions|references|symbols|diagnostics]: open the searchable palette",
 	})
 }
 
@@ -63,6 +63,15 @@ func (e *Editor) startPalette(mode string) error {
 	case "actions", "action", "code-actions":
 		e.lspCodeActions()
 		return nil
+	case "references", "reference", "refs":
+		e.lspFindReferences()
+		return nil
+	case "symbols", "symbol":
+		e.lspDocumentSymbols()
+		return nil
+	case "diagnostics", "diagnostic", "diag":
+		prompt = "Diagnostics> "
+		filter = filterPaletteItems(e.diagnosticItems())
 	default:
 		return fmt.Errorf("palette: unknown mode %q", mode)
 	}
@@ -90,6 +99,9 @@ func (e *Editor) paletteModes(query string) []paletteItem {
 		{"Buffers — search open buffers", "buffers"},
 		{"Commands — run an editor command", "commands"},
 		{"Code Actions — apply an LSP code action", "actions"},
+		{"References — find references to symbol under cursor", "references"},
+		{"Symbols — jump to a symbol in this document", "symbols"},
+		{"Diagnostics — jump to a diagnostic", "diagnostics"},
 	}
 	items := make([]paletteItem, 0, len(modes))
 	for _, m := range modes {

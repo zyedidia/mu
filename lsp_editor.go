@@ -119,7 +119,7 @@ func (e *Editor) initBufferLsp(buf *Buffer, ft string) {
 	buf.lspFt = ft
 }
 
-// registerLspBindings adds gd, K, ]d, [d keybindings and LSP commands.
+// registerLspBindings adds gd, K, gr, ]d, [d keybindings and LSP commands.
 func (e *Editor) registerLspBindings() {
 	// gd: go to definition
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
@@ -130,6 +130,11 @@ func (e *Editor) registerLspBindings() {
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.lspHover()
 	}, "K")
+
+	// gr: find references
+	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
+		e.lspFindReferences()
+	}, "g", "r")
 
 	// ]d: next diagnostic
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
@@ -142,6 +147,11 @@ func (e *Editor) registerLspBindings() {
 		e.lspNextDiagnostic(-1)
 		ks.ResetAction()
 	}, "[", "d")
+
+	// <C-k> in insert mode: signature help
+	e.ks.modes[ModeInsert].Bindings.Bind(func(ks *KeyState) {
+		e.lspSignatureHelpAt()
+	}, "<C-k>")
 }
 
 // lspGotoDefinition requests definition at cursor and jumps there when the
@@ -174,28 +184,30 @@ func (e *Editor) lspGotoDefinition() {
 			return
 		}
 
-		loc := locs[0]
-		targetPath := loc.URI.Filename()
-		targetAbsPath, _ := filepath.Abs(b.Path)
-
 		// gd is a jump: <C-o> returns here, across files too.
 		e.pushJump()
-
-		if targetPath == targetAbsPath {
-			// Same file: jump to position.
-			target := b.FromLspPosition(loc.Range.Start)
-			*b.Cursor() = b.Cursor().MoveTo(target)
-		} else {
-			// Different file: open it and jump.
-			if err := e.OpenFile(targetPath); err != nil {
-				e.infobar.Error(fmt.Sprintf("open: %v", err))
-				return
-			}
-			nb := e.ActiveView().buf
-			target := nb.FromLspPosition(loc.Range.Start)
-			*nb.Cursor() = nb.Cursor().MoveTo(target)
-		}
+		e.jumpToLspLocation(b, locs[0])
 	})
+}
+
+// jumpToLspLocation moves the cursor to loc, which is relative to origin:
+// same file moves the cursor in place, a different file is opened first.
+func (e *Editor) jumpToLspLocation(origin *Buffer, loc lsp.Location) {
+	targetPath := loc.URI.Filename()
+	originAbsPath, _ := filepath.Abs(origin.Path)
+
+	if targetPath == originAbsPath {
+		target := origin.FromLspPosition(loc.Range.Start)
+		*origin.Cursor() = origin.Cursor().MoveTo(target)
+		return
+	}
+	if err := e.OpenFile(targetPath); err != nil {
+		e.infobar.Error(fmt.Sprintf("open: %v", err))
+		return
+	}
+	nb := e.ActiveView().buf
+	target := nb.FromLspPosition(loc.Range.Start)
+	*nb.Cursor() = nb.Cursor().MoveTo(target)
 }
 
 // lspHover requests hover info at cursor and displays it in the infobar

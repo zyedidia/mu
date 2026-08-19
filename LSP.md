@@ -81,6 +81,8 @@ Server pushes `textDocument/publishDiagnostics` with errors/warnings.
 - Show diagnostic text in infobar when cursor is on the affected line
 
 **Keybinding**: `]d` / `[d` to jump to next/previous diagnostic.
+**Command**: `:lsp-diagnostics` — palette listing every diagnostic across
+all open buffers; selecting one jumps to it.
 
 ### 4. Go to Definition
 
@@ -129,12 +131,17 @@ Request `textDocument/formatting` for the whole document. Returns a list of
 
 **Command**: `:lsp-format`
 
-## Features — Tier 2 (Add Later)
+## Features — Tier 2 (Implemented)
 
 ### 8. Signature Help
 
-`textDocument/signatureHelp` — shows function parameter info while typing.
-Display in infobar with the active parameter highlighted.
+`textDocument/signatureHelp` — shows function parameter info on demand.
+Displayed in the infobar with the active parameter bracketed (`foo(a, [b
+int])`); handles both the label-substring and UTF-16 offset-pair forms of
+`ParameterInformation.Label`.
+
+**Keybinding**: `<C-k>` in insert mode.
+**Command**: `:lsp-signature`
 
 ### 9. Code Actions
 
@@ -143,22 +150,26 @@ infobar.
 
 ### 10. Rename
 
-`textDocument/rename` with optional `textDocument/prepareRename`. Prompt for
-new name, apply workspace edits.
+`textDocument/rename`. Prompts for a new name (prefilled with the word
+under the cursor) and applies the resulting workspace edit via the same
+path as code actions.
 
 **Command**: `:lsp-rename`
 
 ### 11. Find References
 
-`textDocument/references` — find all usages. Show results in a picker or
-jump through with keybindings.
+`textDocument/references` — find all usages. Results open in the searchable
+palette; selecting one jumps to it (opening the file first if needed).
 
 **Keybinding**: `gr` in normal mode.
+**Command**: `:lsp-references`
 
 ### 12. Document Symbols
 
-`textDocument/documentSymbol` — list all symbols in the current file. Show
-in a picker for quick navigation.
+`textDocument/documentSymbol` — list all symbols in the current file
+(flattened from the hierarchical response, indented by nesting depth; the
+flat legacy `SymbolInformation` shape is normalized to match). Opens in the
+searchable palette for quick navigation.
 
 **Command**: `:lsp-symbols`
 
@@ -191,12 +202,13 @@ picker.
 |-----|------|--------|
 | `gd` | Normal | Go to definition |
 | `K` | Normal | Hover documentation |
-| `gr` | Normal | Find references (tier 2) |
+| `gr` | Normal | Find references |
 | `]d` | Normal | Next diagnostic |
 | `[d` | Normal | Previous diagnostic |
 | `<C-space>` | Insert | Trigger completion |
 | `<C-n>` | Completion | Next item |
 | `<C-p>` | Completion | Previous item |
+| `<C-k>` | Insert | Signature help |
 
 ## Command Summary
 
@@ -205,9 +217,18 @@ picker.
 | `:lsp-def` | Go to definition |
 | `:lsp-hover` | Show hover info |
 | `:lsp-format` | Format document |
-| `:lsp-rename` | Rename symbol (tier 2) |
-| `:lsp-symbols` | Document symbols (tier 2) |
+| `:lsp-actions` | Show code actions |
+| `:lsp-rename` | Rename symbol |
+| `:lsp-references` | Find references |
+| `:lsp-symbols` | Document symbols |
+| `:lsp-signature` | Show signature help |
+| `:lsp-diagnostics` | List diagnostics across open buffers |
 | `:lsp-workspace-symbols` | Workspace symbols (tier 3) |
+
+All of the palette-based commands above (`:lsp-actions`, `:lsp-references`,
+`:lsp-symbols`, `:lsp-diagnostics`) are also reachable from the top-level
+searchable palette (`<C-p>`, or `:palette`), which lists them alongside
+Files/Text/Buffers/Commands.
 
 ## Implementation Order
 
