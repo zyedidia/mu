@@ -93,13 +93,13 @@ Reference points, not targets — rerun on your machine before comparing:
 
 | Scenario | ns/frame | B/op |
 | --- | --- | --- |
-| small | 0.48 ms | 84 KB |
-| large (8MB) | 0.47 ms | 95 KB |
-| large + wrap + syntax | 0.50 ms | 96 KB |
-| grown buffer | 0.48 ms | 95 KB |
-| typing, 8MB + syntax | 1.8 ms | 180 KB |
-| 8 cursors, 1MB | 1.1 ms | 95 KB |
-| one 2MB line, wrap | 0.96 ms | 239 KB |
+| small | 0.35 ms | 24 KB |
+| large (8MB) | 0.36 ms | 24 KB |
+| large + wrap + syntax | 0.37 ms | 31 KB |
+| grown buffer | 0.34 ms | 24 KB |
+| typing, 8MB + syntax | 1.7 ms | 137 KB |
+| 8 cursors, 1MB | 1.1 ms | 35 KB |
+| one 2MB line, wrap | 0.70 ms | 44 KB |
 
 ## Fixed findings (the scenarios above are their regression guards)
 
@@ -128,6 +128,15 @@ Reference points, not targets — rerun on your machine before comparing:
    in the draw path, fmt-free line numbers, and reused per-frame scratch.
    `ViewDisplay` went 414 µs → 99 µs and syntax highlighting now adds
    almost nothing per frame.
+5. **Scroll-frame overheads** (`syntax.go`, `view.go`, `editor.go`,
+   `display.go`). Highlight matches were extracted for exactly the
+   visible range, so scrolling re-ran the match VM every frame — they now
+   carry a 16KB margin on scroll-triggered recomputes (edit-triggered
+   ones stay viewport-sized, since edits invalidate every keystroke). The
+   per-frame whole-screen `Fill` is gone: components tile the screen
+   completely (views blank past end-of-buffer, bars pad their rows). The
+   render walk memoizes the last syntax group's resolved style. Together:
+   motion frames ~0.50 → ~0.36 ms and per-frame allocation 96 → 31 KB.
 
 Remaining known costs, in likely-impact order:
 

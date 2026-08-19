@@ -584,6 +584,9 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 	}
 
 	var curOff int
+	// Walk end position (in view coordinates), for blanking the region
+	// past the end of the buffer.
+	endX, endY := 0, 0
 
 	// When horizontally scrolled, end-of-line fills must reach the right
 	// edge of the visible window (stcol+width), not just column `width`.
@@ -621,6 +624,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		},
 		Track: func(off, bx, by, vx, vy int) bool {
 			curOff = off
+			endX, endY = vx, vy
 			if vy >= v.height {
 				return true
 			}
@@ -644,6 +648,26 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			return false
 		},
 	}, &v.vis, v.bufferWidth(), v.height, stpos, v.SoftWrap, v.WordWrap, th)
+
+	// The walk paints nothing past the end of the buffer; blank the
+	// remainder of the viewport (the phantom-line row's tail and any rows
+	// below it) so the editor needs no per-frame whole-screen clear. For
+	// a full window the walk ends past the last row and this is free.
+	if endY < v.height {
+		blank := th.Default()
+		sx := gutter + endX - v.stcol
+		if sx < gutter {
+			sx = gutter
+		}
+		for x := sx; x < v.width; x++ {
+			draw(x, endY, ' ', nil, blank)
+		}
+		for yy := endY + 1; yy < v.height; yy++ {
+			for x := 0; x < v.width; x++ {
+				draw(x, yy, ' ', nil, blank)
+			}
+		}
+	}
 
 	// Fake cursors whose cell produced no drawn glyph — a cursor at the
 	// end of the buffer, or pinned to the last column of an exactly-full

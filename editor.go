@@ -1063,10 +1063,11 @@ func (e *Editor) dispatchKey(key string) {
 	}
 }
 
-// Display renders the entire screen.
+// Display renders the entire screen. There is no whole-screen clear: the
+// components tile the screen completely each frame (panes blank past their
+// buffer's end, and the bars pad their rows), so a clear would only add
+// per-cell work.
 func (e *Editor) Display() {
-	defStyle := e.theme.Default().TCellStyle()
-	e.screen.Fill(' ', defStyle)
 
 	// Recalculate Vx for all cursors unless the last action was a purely
 	// vertical motion (j/k/gj/gk/Ctrl-D/Ctrl-U) or a key sequence is still
@@ -1083,6 +1084,7 @@ func (e *Editor) Display() {
 
 	t := e.ActiveTab()
 	if t == nil {
+		e.screen.Fill(' ', e.theme.Default().TCellStyle())
 		e.screen.Show()
 		return
 	}

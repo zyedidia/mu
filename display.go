@@ -115,12 +115,21 @@ func (b *Buffer) RenderForward(tracker RenderTracker, vis *Visualizer, width, he
 		y++
 	}
 
+	// Syntax groups arrive in runs; memoizing the last resolved style
+	// skips the per-character theme lookup for nearly every cell.
+	var lastGroup string
+	var lastGroupStyle Style
+
 	drawRune := func(off int, c rune, combc []rune, rwidth, bx, by int, style Style) {
 		if tracker.Draw != nil {
 			// Syntax highlighting: override default style with syntax group.
 			if th != nil && style == th.Default() {
 				if group := b.SyntaxGroup(off); group != "" {
-					style = th.Style(group)
+					if group != lastGroup {
+						lastGroup = group
+						lastGroupStyle = th.Style(group)
+					}
+					style = lastGroupStyle
 				}
 			}
 			// Selection overlay.

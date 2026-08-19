@@ -451,8 +451,28 @@ func (b *Buffer) HighlightRange(off, end int) {
 	relEnd := end - ss.hlStart
 
 	if ss.matches == nil || ss.minvalid || !ss.matches.InRange(relOff) || !ss.matches.InRange(relEnd-1) {
+		// When the recompute is caused by scrolling out of the cached
+		// range (not by an edit), compute a margin beyond the requested
+		// range: the InRange checks above then satisfy the next several
+		// screenfuls from the cached matches instead of re-running the
+		// match VM every frame. Edits recompute just the viewport — they
+		// invalidate on every keystroke, so a margin would multiply the
+		// per-keystroke cost for nothing.
+		margin := 0
+		if !ss.minvalid {
+			const matchMargin = 16 * 1024
+			margin = matchMargin
+		}
+		lo := relOff - margin
+		if lo < 0 {
+			lo = 0
+		}
+		hi := relEnd + margin
+		if end := ss.hlEnd - ss.hlStart; hi > end {
+			hi = end
+		}
 		r := io.NewSectionReader(b, int64(ss.hlStart), int64(ss.hlEnd-ss.hlStart))
-		ss.matches = ss.highlighter.HighlightMatches(r, ss.syntbl, &vm.Interval{Low: relOff, High: relEnd})
+		ss.matches = ss.highlighter.HighlightMatches(r, ss.syntbl, &vm.Interval{Low: lo, High: hi})
 		ss.minvalid = false
 	}
 }
