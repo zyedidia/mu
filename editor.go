@@ -836,6 +836,9 @@ func (e *Editor) configureView(buf *Buffer, path string) *View {
 			e.screen.PostEvent(tcell.NewEventInterrupt(nil))
 		}
 	}
+	buf.beforeSave = func(b *Buffer) {
+		e.applyFormatOnSave(b)
+	}
 	buf.StartWatcher()
 
 	if ft != "" {
@@ -1134,6 +1137,8 @@ func (e *Editor) Display() {
 		line, _ := v.buf.LineColAt(v.buf.Cursor().Pos)
 		if d, ok := v.buf.GetDiagnosticAt(line); ok {
 			e.infobar.Message(fmt.Sprintf("[%s] %s", d.Type.String(), d.Text))
+		} else if h, ok := v.buf.GetInlayHintAt(line); ok {
+			e.infobar.Message(h.Text)
 		}
 	}
 

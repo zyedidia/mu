@@ -46,6 +46,7 @@ type Buffer struct {
 	// Keep the original protocol diagnostics as well as the display-friendly
 	// projection above; code-action requests must echo relevant diagnostics.
 	lspDiagnostics []lsp.Diagnostic
+	inlayHints     []InlayHintMark
 	syntax         *SyntaxState
 
 	lspServer  *LspServer
@@ -57,6 +58,7 @@ type Buffer struct {
 	watchDone   chan struct{} // closed to stop the file watcher
 	onReload    func(*Buffer) // called from watcher when auto-reloaded
 	onHighlight func()        // called when background highlighting finishes
+	beforeSave  func(*Buffer) // called before the buffer is written to disk (e.g. format-on-save)
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting

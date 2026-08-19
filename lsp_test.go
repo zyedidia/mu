@@ -24,9 +24,19 @@ type fakeLspServer struct {
 	complDelay  time.Duration
 	symbolsFlat bool // reply to documentSymbol with the legacy SymbolInformation shape
 
-	mu       sync.Mutex
-	received []string                // method order as received
-	replies  map[int]json.RawMessage // client replies to server requests, by id
+	mu         sync.Mutex
+	received   []string                   // method order as received
+	replies    map[int]json.RawMessage    // client replies to server requests, by id
+	lastParams map[string]json.RawMessage // last params received per method
+}
+
+// paramsFor returns the params of the most recent request for method, if
+// one has arrived.
+func (f *fakeLspServer) paramsFor(method string) (json.RawMessage, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.lastParams[method]
+	return p, ok
 }
 
 func (f *fakeLspServer) methods() []string {
@@ -105,8 +115,19 @@ func (f *fakeLspServer) run() {
 			f.mu.Unlock()
 			continue
 		}
+		var withParams struct {
+			Params json.RawMessage `json:"params"`
+		}
+		json.Unmarshal(buf, &withParams)
+
 		f.mu.Lock()
 		f.received = append(f.received, msg.Method)
+		if withParams.Params != nil {
+			if f.lastParams == nil {
+				f.lastParams = make(map[string]json.RawMessage)
+			}
+			f.lastParams[msg.Method] = withParams.Params
+		}
 		f.mu.Unlock()
 
 		switch msg.Method {
@@ -117,13 +138,18 @@ func (f *fakeLspServer) run() {
 				"id":      *msg.ID,
 				"result": map[string]any{
 					"capabilities": map[string]any{
-						"hoverProvider":          true,
-						"completionProvider":     map[string]any{},
-						"codeActionProvider":     true,
-						"signatureHelpProvider":  map[string]any{},
-						"referencesProvider":     true,
-						"documentSymbolProvider": true,
-						"renameProvider":         true,
+						"hoverProvider":                   true,
+						"completionProvider":              map[string]any{},
+						"codeActionProvider":              true,
+						"signatureHelpProvider":           map[string]any{},
+						"referencesProvider":              true,
+						"documentSymbolProvider":          true,
+						"renameProvider":                  true,
+						"workspaceSymbolProvider":         true,
+						"callHierarchyProvider":           true,
+						"inlayHintProvider":               true,
+						"documentFormattingProvider":      true,
+						"documentRangeFormattingProvider": true,
 					},
 				},
 			})
@@ -140,6 +166,18 @@ func (f *fakeLspServer) run() {
 				"jsonrpc": "2.0",
 				"id":      *msg.ID,
 				"result":  []map[string]any{{"label": "foobar"}},
+			})
+		case "textDocument/formatting":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 3},
+					},
+					"newText": "fmt",
+				}},
 			})
 		case "textDocument/codeAction":
 			f.write(map[string]any{
@@ -224,6 +262,109 @@ func (f *fakeLspServer) run() {
 						},
 						"newText": "renamed",
 					}},
+				}},
+			})
+		case "workspace/symbol":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"name": "fooSymbol",
+					"kind": 12, // Function
+					"location": map[string]any{
+						"uri": "file:///tmp/x.go",
+						"range": map[string]any{
+							"start": map[string]any{"line": 0, "character": 0},
+							"end":   map[string]any{"line": 0, "character": 3},
+						},
+					},
+				}},
+			})
+		case "textDocument/prepareCallHierarchy":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"name": "target",
+					"kind": 12, // Function
+					"uri":  "file:///tmp/x.go",
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 6},
+					},
+					"selectionRange": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 6},
+					},
+				}},
+			})
+		case "callHierarchy/incomingCalls":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"from": map[string]any{
+						"name": "caller",
+						"kind": 12,
+						"uri":  "file:///tmp/x.go",
+						"range": map[string]any{
+							"start": map[string]any{"line": 1, "character": 0},
+							"end":   map[string]any{"line": 1, "character": 6},
+						},
+						"selectionRange": map[string]any{
+							"start": map[string]any{"line": 1, "character": 0},
+							"end":   map[string]any{"line": 1, "character": 6},
+						},
+					},
+					"fromRanges": []map[string]any{{
+						"start": map[string]any{"line": 1, "character": 1},
+						"end":   map[string]any{"line": 1, "character": 7},
+					}},
+				}},
+			})
+		case "callHierarchy/outgoingCalls":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"to": map[string]any{
+						"name": "callee",
+						"kind": 12,
+						"uri":  "file:///tmp/x.go",
+						"range": map[string]any{
+							"start": map[string]any{"line": 2, "character": 0},
+							"end":   map[string]any{"line": 2, "character": 6},
+						},
+						"selectionRange": map[string]any{
+							"start": map[string]any{"line": 2, "character": 0},
+							"end":   map[string]any{"line": 2, "character": 6},
+						},
+					},
+					"fromRanges": []map[string]any{{
+						"start": map[string]any{"line": 0, "character": 1},
+						"end":   map[string]any{"line": 0, "character": 7},
+					}},
+				}},
+			})
+		case "textDocument/rangeFormatting":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"range": map[string]any{
+						"start": map[string]any{"line": 0, "character": 0},
+						"end":   map[string]any{"line": 0, "character": 2},
+					},
+					"newText": "hi",
+				}},
+			})
+		case "textDocument/inlayHint":
+			f.write(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      *msg.ID,
+				"result": []map[string]any{{
+					"position": map[string]any{"line": 0, "character": 2},
+					"label":    ": int",
 				}},
 			})
 		case "shutdown":
@@ -814,5 +955,98 @@ func TestLspRenameRequest(t *testing.T) {
 	edits, ok := edit.Changes["file:///tmp/x.go"]
 	if !ok || len(edits) != 1 || edits[0].NewText != "renamed" {
 		t.Fatalf("rename edit: got %+v", edit)
+	}
+}
+
+func TestLspFormatRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	edits, err := s.Format("/tmp/x.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(edits) != 1 || edits[0].NewText != "fmt" {
+		t.Fatalf("format: got %+v", edits)
+	}
+}
+
+func TestLspRangeFormattingRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	edits, err := s.RangeFormatting("/tmp/x.go", lsp.Range{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(edits) != 1 || edits[0].NewText != "hi" {
+		t.Fatalf("range formatting: got %+v", edits)
+	}
+}
+
+func TestLspWorkspaceSymbolsRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	syms, err := s.WorkspaceSymbols("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(syms) != 1 || syms[0].Name != "fooSymbol" {
+		t.Fatalf("workspace symbols: got %+v", syms)
+	}
+}
+
+func TestLspCallHierarchyRequests(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	items, err := s.PrepareCallHierarchy("/tmp/x.go", lsp.Position{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Name != "target" {
+		t.Fatalf("prepare call hierarchy: got %+v", items)
+	}
+
+	incoming, err := s.IncomingCalls(items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(incoming) != 1 || incoming[0].From.Name != "caller" {
+		t.Fatalf("incoming calls: got %+v", incoming)
+	}
+
+	outgoing, err := s.OutgoingCalls(items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outgoing) != 1 || outgoing[0].To.Name != "callee" {
+		t.Fatalf("outgoing calls: got %+v", outgoing)
+	}
+}
+
+// The wire-only inlay hint types must decode both a plain-string label and
+// the array-of-parts label form.
+func TestInlayHintLabelText(t *testing.T) {
+	if got := inlayHintLabelText(json.RawMessage(`": int"`)); got != ": int" {
+		t.Fatalf("string label: got %q", got)
+	}
+	parts := json.RawMessage(`[{"value":": "},{"value":"int"}]`)
+	if got := inlayHintLabelText(parts); got != ": int" {
+		t.Fatalf("parts label: got %q", got)
+	}
+}
+
+func TestLspInlayHintsRequest(t *testing.T) {
+	s, _ := startFakeLsp(0, nil)
+	waitReady(t, s)
+
+	hints, err := s.InlayHints("/tmp/x.go", lsp.Position{Line: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hints) != 1 || inlayHintLabelText(hints[0].Label) != ": int" {
+		t.Fatalf("inlay hints: got %+v", hints)
 	}
 }

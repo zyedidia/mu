@@ -129,6 +129,39 @@ func TestViewDiagnosticGutter(t *testing.T) {
 	}
 }
 
+// An inlay hint draws an 'i' gutter marker, but a diagnostic on the same
+// line takes precedence over it.
+func TestViewInlayHintGutter(t *testing.T) {
+	b := NewEmptyBuffer()
+	b.Insert(0, []byte("line1\nline2\nline3\n"))
+	b.SetInlayHints([]InlayHintMark{{Line: 0, Text: ": int"}, {Line: 1, Text: ": string"}})
+	b.AddDiagnostic(1, 0, "test error", DiagError)
+
+	v := NewView(b, 4)
+	v.Resize(40, 5)
+	v.GutterWidth = 1
+
+	var line0, line1 rune
+	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {
+		if x != 0 {
+			return
+		}
+		switch y {
+		case 0:
+			line0 = mainc
+		case 1:
+			line1 = mainc
+		}
+	}, func(x, y int, main bool) {}, DefaultTheme)
+
+	if line0 != 'i' {
+		t.Fatalf("line 0 (inlay hint only): got %q, want 'i'", line0)
+	}
+	if line1 != '>' {
+		t.Fatalf("line 1 (diagnostic + inlay hint): got %q, want '>' (diagnostic takes precedence)", line1)
+	}
+}
+
 func TestVisualizerTab(t *testing.T) {
 	vis := Visualizer{TabSize: 4, CharMap: make(map[rune]string)}
 

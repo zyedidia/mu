@@ -27,7 +27,7 @@ type Palette struct {
 func init() {
 	editorCommands = append(editorCommands, CommandDef{
 		"palette", cmdPalette,
-		"palette [files|text|buffers|commands|actions|references|symbols|diagnostics]: open the searchable palette",
+		"palette [files|text|buffers|commands|actions|references|symbols|diagnostics|workspace-symbols|incoming-calls|outgoing-calls]: open the searchable palette",
 	})
 }
 
@@ -72,6 +72,15 @@ func (e *Editor) startPalette(mode string) error {
 	case "diagnostics", "diagnostic", "diag":
 		prompt = "Diagnostics> "
 		filter = filterPaletteItems(e.diagnosticItems())
+	case "workspace-symbols", "workspace-symbol", "wsymbols":
+		e.lspWorkspaceSymbols()
+		return nil
+	case "incoming-calls", "incoming":
+		e.lspCallHierarchy(true)
+		return nil
+	case "outgoing-calls", "outgoing":
+		e.lspCallHierarchy(false)
+		return nil
 	default:
 		return fmt.Errorf("palette: unknown mode %q", mode)
 	}
@@ -102,6 +111,9 @@ func (e *Editor) paletteModes(query string) []paletteItem {
 		{"References — find references to symbol under cursor", "references"},
 		{"Symbols — jump to a symbol in this document", "symbols"},
 		{"Diagnostics — jump to a diagnostic", "diagnostics"},
+		{"Workspace Symbols — fuzzy search symbols across the workspace", "workspace-symbols"},
+		{"Incoming Calls — functions that call the symbol under cursor", "incoming-calls"},
+		{"Outgoing Calls — functions called by the symbol under cursor", "outgoing-calls"},
 	}
 	items := make([]paletteItem, 0, len(modes))
 	for _, m := range modes {

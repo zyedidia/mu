@@ -30,6 +30,10 @@ func (b *Buffer) SaveTo(path string) error {
 // check is skipped: the atomic temp-and-rename write succeeds for a
 // read-only file in a writable directory (vim :w!).
 func (b *Buffer) saveTo(path string, force bool) error {
+	if b.beforeSave != nil {
+		b.beforeSave(b)
+	}
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
@@ -228,6 +232,10 @@ func fileExists(path string) bool {
 // directly. It writes to a temp file, suspends the screen (so sudo can
 // prompt for a password), then copies the temp file to the target path.
 func (e *Editor) saveWithSudo(b *Buffer, path string) error {
+	if b.beforeSave != nil {
+		b.beforeSave(b)
+	}
+
 	sudoCmd := findSudoCmd()
 	if sudoCmd == "" {
 		return fmt.Errorf("neither sudo nor doas found")

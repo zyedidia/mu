@@ -119,8 +119,15 @@ func (e *Editor) initBufferLsp(buf *Buffer, ft string) {
 	buf.lspFt = ft
 }
 
-// registerLspBindings adds gd, K, gr, ]d, [d keybindings and LSP commands.
+// registerLspBindings adds gd, K, gr, ]d, [d, = keybindings and LSP commands.
 func (e *Editor) registerLspBindings() {
+	// =: format operator (=motion, ==, visual mode), backed by
+	// textDocument/rangeFormatting. Named opLspFormat to avoid colliding
+	// with format.go's opFormat (the gq reflow operator).
+	registerOperator(e.ks, "=", func(ks *KeyState, b *Buffer, start, end int) {
+		e.lspFormatRange(b, start, end)
+	})
+
 	// gd: go to definition
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.lspGotoDefinition()
@@ -347,6 +354,80 @@ func cmdLspFormat(e *Editor, args []string) error {
 		e.infobar.Message("Formatted")
 	})
 	return nil
+}
+
+// applyFormatOnSave runs textDocument/formatting synchronously and applies
+// the resulting edits before b is written to disk, when the buffer's
+// resolved "autoformat" option is on (off by default, see
+// embed/options.toml) and its LSP server supports formatting. This is
+// called from Buffer.beforeSave (set in configureView), which every save
+// path (:w, :wa, ZZ, sudo save) already runs through.
+//
+// Formatting here blocks the caller until the request finishes (bounded by
+// lspRequestTimeout), unlike :lsp-format's async version — deliberately, so
+// the file that lands on disk always reflects the formatted content and a
+// compound command like :wq still saves before quitting. A slow or hung
+// formatter delays that one save; it never corrupts it, and any failure
+// (other than the server simply not supporting formatting) is reported but
+// does not block the save itself.
+func (e *Editor) applyFormatOnSave(b *Buffer) {
+	if b.lspServer == nil {
+		return
+	}
+	opts := e.config.BufferOptions(b.Path, b.Filetype)
+	if on, _ := GetOptBool(opts, "autoformat"); !on {
+		return
+	}
+	absPath, _ := filepath.Abs(b.Path)
+	edits, err := b.lspServer.Format(absPath)
+	if err != nil {
+		if err != ErrLspNotSupported {
+			e.infobar.Error(fmt.Sprintf("format on save: %v", err))
+		}
+		return
+	}
+	b.UndoBarrier()
+	applyTextEdits(b, edits)
+}
+
+// lspFormatRange formats the byte-offset range [start, end) via
+// textDocument/rangeFormatting; the = operator's function (see
+// registerLspBindings). Multiple concurrent calls (multi-cursor =, or ==
+// fired several times in quick succession) each snapshot lspVersion
+// independently, so only the first response to land applies cleanly — later
+// ones see a bumped version and are rejected, same as a plain edit racing
+// :lsp-format.
+func (e *Editor) lspFormatRange(b *Buffer, start, end int) {
+	if b.lspServer == nil {
+		e.infobar.Error("No LSP server")
+		return
+	}
+	s := b.lspServer
+	absPath, _ := filepath.Abs(b.Path)
+	version := b.lspVersion
+	sl, sc := b.LineColAt(start)
+	el, ec := b.LineColAt(end)
+	rng := lsp.Range{Start: b.LspPosition(sl, sc), End: b.LspPosition(el, ec)}
+
+	lspAsync(e, func() ([]lsp.TextEdit, error) {
+		return s.RangeFormatting(absPath, rng)
+	}, func(edits []lsp.TextEdit, err error) {
+		if !e.hasBuffer(b) || b.lspVersion != version {
+			e.infobar.Error("format: buffer changed, not applied")
+			return
+		}
+		if err != nil {
+			if err == ErrLspNotSupported {
+				e.infobar.Error("Range formatting not supported")
+			} else {
+				e.infobar.Error(fmt.Sprintf("format: %v", err))
+			}
+			return
+		}
+		b.UndoBarrier()
+		applyTextEdits(b, edits)
+		e.infobar.Message("Formatted")
+	})
 }
 
 // applyTextEdits applies LSP text edits to a buffer. Edits are applied

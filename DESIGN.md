@@ -365,6 +365,7 @@ built into flare; `include` directives inside a grammar resolve the same way.
 ```toml
 # Global options
 autoindent = true
+autoformat = false         # format via LSP before every save
 cursor = "block"           # block, bar, underline
 theme = "monokai"
 syntax = true
