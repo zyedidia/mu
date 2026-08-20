@@ -80,6 +80,7 @@ mixes scenarios.
 | `FrameLongLine` | Pathological softwrap: one ~2MB line (think minified JSON) |
 | `FrameMultiCursor` | 8 cursors spread through a 1MB file |
 | `Relocate`, `ViewDisplay` | The two halves of a redraw, isolated |
+| `HighlightWindow` | Full syntax-window parse (flare+gpeg, fresh memo table): the delay before colors appear after a long jump |
 | `LineColAt`, `VisualCol` | Per-call cost of the buffer position primitives |
 
 Content is realistic Go-like code (tabs, keywords, strings, comments) so tab
@@ -151,3 +152,13 @@ Remaining known costs, in likely-impact order:
 
 Healthy: syntax adds only 0.05–0.2ms (windowed memoization works), softwrap
 is nearly free, and frame time is viewport-bound, not file-bound.
+
+Note: profiles collected with `-cpuprofile` include benchmark *setup* — for
+the syntax scenarios that is a full window parse (several seconds of gpeg
+on slow machines). Prune with `-ignore 'HighlightFunc'` or profile
+`HighlightWindow` separately when frames are the question.
+
+The gpeg VM itself was optimized in tandem (see reference/gpeg and the
+go.mod replace directive): in-place stack pushes, pre-decoded instructions,
+a span fast path, inlinable memo-shift checks, and a zero-alloc checker
+slice. Window parse: 115.6 → 82.4 ms and 500k → 10.8k allocs/op on x86.

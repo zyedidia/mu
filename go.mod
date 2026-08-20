@@ -17,11 +17,11 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.3.4 // indirect
-	github.com/zyedidia/flare v0.1.1-0.20260818225046-2efd367eda22 // indirect
+	github.com/zyedidia/flare v0.1.1-0.20260820060455-4d2344e3fcce // indirect
 	github.com/zyedidia/ftdetect v0.1.0 // indirect
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 // indirect
 	github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 // indirect
-	github.com/zyedidia/gpeg v0.0.0-20250206232340-241e478b8934 // indirect
+	github.com/zyedidia/gpeg v0.0.0-20260819234325-d601f967c6a3 // indirect
 	github.com/zyedidia/uniseg v0.0.0-20251129005654-86e2b7b42bb6 // indirect
 	go.lsp.dev/jsonrpc2 v0.10.0 // indirect
 	go.lsp.dev/pkg v0.0.0-20210717090340-384b27a52fb2 // indirect
@@ -35,3 +35,5 @@ require (
 	golang.org/x/term v0.37.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/zyedidia/gpeg => ./reference/gpeg

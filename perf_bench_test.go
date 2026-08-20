@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/zyedidia/gpeg/memo"
+	"github.com/zyedidia/gpeg/vm"
 )
 
 // Realistic Go-like content: indentation, tabs, keywords, strings, and
@@ -218,5 +221,30 @@ func BenchmarkVisualCol(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.VisualCol(pos + i%32)
+	}
+}
+
+// BenchmarkHighlightWindow measures a full syntax-window parse — the
+// background pass that runs after a long jump re-centers the window. This
+// is the "how long until colors arrive" latency (flare + gpeg over the
+// window size, fresh memo table).
+func BenchmarkHighlightWindow(b *testing.B) {
+	configDirOverride = b.TempDir()
+	dataDirOverride = b.TempDir()
+	b.Cleanup(func() {
+		configDirOverride = ""
+		dataDirOverride = ""
+	})
+	cfg, _ := LoadConfig()
+	h, err := cfg.LoadHighlighter("go")
+	if err != nil {
+		b.Fatal(err)
+	}
+	data := []byte(benchText(syntaxWindowSize + syntaxOverlap))
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tbl := memo.NewTreeTable(512)
+		h.HighlightFunc(bytes.NewReader(data), tbl, nil, &vm.Interval{Low: 0, High: 0})
 	}
 }

@@ -1,0 +1,7 @@
+{
+    "name": "gomod",
+    "files": ["go.mod"],
+    "file": {
+        "regex": "^(.*[\\/])?go\\.mod$"
+    }
+}
