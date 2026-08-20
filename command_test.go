@@ -350,3 +350,15 @@ func TestColonPrompt(t *testing.T) {
 		t.Fatal("q command should quit")
 	}
 }
+
+func TestWcCommand(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("hello world\n  foo\tbar baz\n\nx\n"))
+
+	ed.RunCommand("wc")
+	want := "4 lines, 6 words, 29 bytes"
+	if ed.infobar.message != want {
+		t.Fatalf("wc: %q, want %q", ed.infobar.message, want)
+	}
+}

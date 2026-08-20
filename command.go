@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // CommandDef defines an ex command.
@@ -42,6 +45,7 @@ var editorCommands = []CommandDef{
 	{"bdelete", cmdBDelete, "bdelete [n|name]: remove a buffer from the buffer list"},
 	{"bdelete!", cmdForceBDelete, "bdelete! [n|name]: remove a buffer, discarding unsaved changes"},
 	{"jumps", cmdJumps, "jumps: list the jump list"},
+	{"wc", cmdWc, "wc: count lines, words, and bytes in the buffer"},
 	{"map", makeMapCmd(mapModeSets["map"]), "map <keys> <expansion>: map keys in normal/visual/pending modes (non-recursive)"},
 	{"nmap", makeMapCmd(mapModeSets["nmap"]), "nmap <keys> <expansion>: map keys in normal mode"},
 	{"vmap", makeMapCmd(mapModeSets["vmap"]), "vmap <keys> <expansion>: map keys in visual modes"},
@@ -608,5 +612,35 @@ func cmdGoto(e *Editor, args []string) error {
 		line = b.NumLines()
 	}
 	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(line, 0))
+	return nil
+}
+
+// cmdWc reports the buffer's line, word, and byte counts, like wc(1): a
+// word is a maximal run of non-whitespace. The buffer is streamed, not
+// copied.
+func cmdWc(e *Editor, args []string) error {
+	v := e.ActiveView()
+	if v == nil {
+		return fmt.Errorf("no buffer")
+	}
+	b := v.buf
+
+	words := 0
+	inWord := false
+	r := bufio.NewReaderSize(io.NewSectionReader(b, 0, int64(b.Len())), 32*1024)
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			break
+		}
+		if unicode.IsSpace(ch) {
+			inWord = false
+		} else if !inWord {
+			inWord = true
+			words++
+		}
+	}
+
+	e.infobar.Message(fmt.Sprintf("%d lines, %d words, %d bytes", b.NumLines(), words, b.Len()))
 	return nil
 }
