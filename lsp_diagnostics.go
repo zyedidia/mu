@@ -15,8 +15,14 @@ func (e *Editor) diagnosticItems() []paletteItem {
 			items = append(items, paletteItem{label: label, action: func() {
 				e.pushJump()
 				e.showBuffer(buf)
-				pos := buf.OffsetAt(d.Line, d.Col)
-				*buf.Cursor() = buf.Cursor().MoveTo(pos)
+				// Diagnostics go stale as the buffer is edited; clamp
+				// rather than jumping past the end of a shrunken file.
+				line := d.Line
+				if line > buf.NumLines() {
+					line = buf.NumLines()
+				}
+				pos := buf.OffsetAt(line, 0) + min(d.Col, buf.LineLen(line))
+				*buf.Cursor() = buf.Cursor().MoveTo(pos).VimClamp(buf)
 			}})
 		}
 	}

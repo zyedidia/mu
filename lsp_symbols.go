@@ -28,7 +28,8 @@ func (e *Editor) lspFindReferences() {
 	lspAsync(e, func() ([]lsp.Location, error) {
 		return s.References(absPath, pos)
 	}, func(locs []lsp.Location, err error) {
-		if av := e.ActiveView(); av == nil || av.buf != b {
+		// A late answer must not replace an active prompt with a palette.
+		if av := e.ActiveView(); av == nil || av.buf != b || e.infobar.IsActive() {
 			return
 		}
 		if err != nil {
@@ -43,10 +44,11 @@ func (e *Editor) lspFindReferences() {
 			e.infobar.Message("No references found")
 			return
 		}
+		files := make(map[string][]string)
 		items := make([]paletteItem, len(locs))
 		for i, loc := range locs {
 			loc := loc
-			items[i] = paletteItem{label: locationLabel(loc), action: func() {
+			items[i] = paletteItem{label: e.locationLabel(files, loc), action: func() {
 				e.pushJump()
 				e.jumpToLspLocation(b, loc)
 			}}
@@ -55,20 +57,37 @@ func (e *Editor) lspFindReferences() {
 	})
 }
 
-// locationLabel renders a Location as "path:line: text" for a palette,
-// reading the line text from disk (best-effort; empty on read failure).
-func locationLabel(loc lsp.Location) string {
-	path := loc.URI.Filename()
+// locationLabel renders a Location as "path:line: text" for a palette.
+// Line text comes from the open buffer when the file is loaded — LSP
+// positions refer to the in-memory (didChange-synced) document, which can
+// differ from disk — falling back to files, a per-palette cache, so each
+// file is read at most once per batch instead of once per item. Non-file
+// URIs (jdt://, deno:/) get a bare label instead of a crash.
+func (e *Editor) locationLabel(files map[string][]string, loc lsp.Location) string {
+	lineNum := int(loc.Range.Start.Line)
+	path, ok := lspFilename(loc.URI)
+	if !ok {
+		return fmt.Sprintf("%s:%d:", string(loc.URI), lineNum+1)
+	}
 	display := path
 	if wd, err := os.Getwd(); err == nil {
 		if rel, err := filepath.Rel(wd, path); err == nil && !strings.HasPrefix(rel, "..") {
 			display = rel
 		}
 	}
-	lineNum := int(loc.Range.Start.Line)
 	text := ""
-	if data, err := os.ReadFile(path); err == nil {
-		lines := strings.Split(string(data), "\n")
+	if b := e.findBuffer(path); b != nil {
+		if lineNum >= 0 && lineNum <= b.NumLines() {
+			text = strings.TrimSpace(string(b.GetLine(lineNum)))
+		}
+	} else {
+		lines, cached := files[path]
+		if !cached {
+			if data, err := os.ReadFile(path); err == nil {
+				lines = strings.Split(string(data), "\n")
+			}
+			files[path] = lines // nil on read failure: don't retry per item
+		}
 		if lineNum >= 0 && lineNum < len(lines) {
 			text = strings.TrimSpace(lines[lineNum])
 		}
@@ -93,7 +112,7 @@ func (e *Editor) lspDocumentSymbols() {
 	lspAsync(e, func() ([]lsp.DocumentSymbol, error) {
 		return s.DocumentSymbols(absPath)
 	}, func(symbols []lsp.DocumentSymbol, err error) {
-		if av := e.ActiveView(); av == nil || av.buf != b {
+		if av := e.ActiveView(); av == nil || av.buf != b || e.infobar.IsActive() {
 			return
 		}
 		if err != nil {
@@ -109,7 +128,13 @@ func (e *Editor) lspDocumentSymbols() {
 			pos := sym.SelectionRange.Start
 			label := fmt.Sprintf("%s%s  %s", strings.Repeat("  ", depth), sym.Name, sym.Kind.String())
 			items = append(items, paletteItem{label: label, action: func() {
+				// The action can fire after the user switched buffers;
+				// bring b back rather than moving a hidden cursor.
+				if !e.hasBuffer(b) {
+					return
+				}
 				e.pushJump()
+				e.showBuffer(b)
 				target := b.FromLspPosition(pos)
 				*b.Cursor() = b.Cursor().MoveTo(target)
 			}})

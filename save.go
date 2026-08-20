@@ -30,10 +30,6 @@ func (b *Buffer) SaveTo(path string) error {
 // check is skipped: the atomic temp-and-rename write succeeds for a
 // read-only file in a writable directory (vim :w!).
 func (b *Buffer) saveTo(path string, force bool) error {
-	if b.beforeSave != nil {
-		b.beforeSave(b)
-	}
-
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
@@ -67,6 +63,19 @@ func (b *Buffer) SaveAs(path string) error {
 }
 
 func (b *Buffer) saveAs(path string, force bool) error {
+	// The pre-save hook (format-on-save) runs only when the buffer is
+	// saved to its own file — never for ':w otherfile' copy writes
+	// (SaveTo), which must leave the buffer untouched — and only after
+	// the read-only check, so a rejected save doesn't modify the buffer.
+	if b.beforeSave != nil {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			absPath = path
+		}
+		if force || !isReadonly(absPath) {
+			b.beforeSave(b)
+		}
+	}
 	if err := b.saveTo(path, force); err != nil {
 		return err
 	}

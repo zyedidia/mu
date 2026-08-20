@@ -25,10 +25,14 @@ type lspSignatureInformation struct {
 	Parameters []lspParameterInformation `json:"parameters,omitempty"`
 }
 
+// ActiveParameter and ActiveSignature are int, not the spec's uint: some
+// servers (pyright among them) send -1 for "none", and a negative value
+// would fail the entire unmarshal as a uint. Negatives fall through the
+// existing bounds checks below.
 type lspSignatureHelp struct {
 	Signatures      []lspSignatureInformation `json:"signatures"`
-	ActiveParameter *uint32                   `json:"activeParameter,omitempty"`
-	ActiveSignature uint32                    `json:"activeSignature,omitempty"`
+	ActiveParameter *int                      `json:"activeParameter,omitempty"`
+	ActiveSignature int                       `json:"activeSignature,omitempty"`
 }
 
 // SignatureHelp requests parameter info for the call at pos.
@@ -62,7 +66,7 @@ func signatureHelpText(help *lspSignatureHelp) string {
 	if help == nil || len(help.Signatures) == 0 {
 		return ""
 	}
-	sigIdx := int(help.ActiveSignature)
+	sigIdx := help.ActiveSignature
 	if sigIdx < 0 || sigIdx >= len(help.Signatures) {
 		sigIdx = 0
 	}
@@ -74,7 +78,7 @@ func signatureHelpText(help *lspSignatureHelp) string {
 	if help.ActiveParameter == nil {
 		return sig.Label
 	}
-	paramIdx := int(*help.ActiveParameter)
+	paramIdx := *help.ActiveParameter
 	if paramIdx < 0 || paramIdx >= len(sig.Parameters) {
 		return sig.Label
 	}
@@ -82,10 +86,14 @@ func signatureHelpText(help *lspSignatureHelp) string {
 
 	var name string
 	if json.Unmarshal(label, &name) == nil {
-		if name == "" || !strings.Contains(sig.Label, name) {
+		p := -1
+		if name != "" {
+			p = wordIndex(sig.Label, name)
+		}
+		if p < 0 {
 			return sig.Label
 		}
-		return strings.Replace(sig.Label, name, "["+name+"]", 1)
+		return sig.Label[:p] + "[" + name + "]" + sig.Label[p+len(name):]
 	}
 	var offsets [2]int
 	if json.Unmarshal(label, &offsets) == nil {
@@ -100,6 +108,30 @@ func signatureHelpText(help *lspSignatureHelp) string {
 		return before + "[" + mid + "]" + after
 	}
 	return sig.Label
+}
+
+// wordIndex returns the byte offset of the first occurrence of name in s
+// that isn't embedded in a larger identifier ("n" must not match inside
+// "int"), or -1. Plain substring search would bracket the wrong text for
+// short parameter names.
+func wordIndex(s, name string) int {
+	isWord := func(c byte) bool {
+		return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+	}
+	for i := 0; i+len(name) <= len(s); {
+		j := strings.Index(s[i:], name)
+		if j < 0 {
+			return -1
+		}
+		p := i + j
+		beforeOK := p == 0 || !isWord(s[p-1])
+		afterOK := p+len(name) == len(s) || !isWord(s[p+len(name)])
+		if beforeOK && afterOK {
+			return p
+		}
+		i = p + 1
+	}
+	return -1
 }
 
 // lspSignatureHelpAt requests signature help at cursor and shows it in the

@@ -6,9 +6,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	lsp "go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
 )
+
+// formatOnSaveTimeout bounds the synchronous format request a save makes:
+// long enough for a real formatter, short enough that a hung server delays
+// a save noticeably less than the general request timeout would.
+const formatOnSaveTimeout = 2 * time.Second
+
+// applyEditTimeout bounds how long a server's workspace/applyEdit waits for
+// the editor goroutine to run it. A variable so tests can shorten it.
+var applyEditTimeout = 5 * time.Second
 
 // initLsp sets up the LSP manager with diagnostic and message callbacks.
 func (e *Editor) initLsp() {
@@ -17,10 +29,14 @@ func (e *Editor) initLsp() {
 		log.Printf("[lsp] load languages: %v", err)
 		langs = make(map[string]LspLanguage)
 	}
+	e.lspManager = NewLspManager(langs, e.lspCallbacks())
+}
 
-	// The callbacks run on the LSP receive goroutine; marshal the state
-	// changes onto the main event loop.
-	e.lspManager = NewLspManager(langs, lspCallbacks{
+// lspCallbacks builds the server → editor callbacks. They run on the LSP
+// receive goroutine, so each one marshals its state changes onto the main
+// event loop.
+func (e *Editor) lspCallbacks() lspCallbacks {
+	return lspCallbacks{
 		onShow: func(msg lsp.ShowMessageParams) {
 			e.postToMain(func() {
 				e.infobar.Message(msg.Message)
@@ -43,18 +59,37 @@ func (e *Editor) initLsp() {
 		onApplyEdit: func(edit lspWorkspaceEdit) lsp.ApplyWorkspaceEditResponse {
 			// workspace/applyEdit is a request, so the server needs a reply.
 			// Marshal the mutation to the editor goroutine and wait for that
-			// bounded piece of local work to finish.
+			// bounded piece of local work to finish. The wait needs a
+			// deadline: postToMain drops when the queue is full, and an
+			// undeliverable edit would otherwise hang this goroutine (and
+			// the server's request) forever. state hands the edit to
+			// exactly one side, so a late-arriving apply can't contradict
+			// an "editor busy" answer already sent.
+			var state atomic.Int32 // 0 queued, 1 editor applying, 2 abandoned
 			done := make(chan lsp.ApplyWorkspaceEditResponse, 1)
 			e.postToMain(func() {
+				if !state.CompareAndSwap(0, 1) {
+					return
+				}
 				if err := e.applyWorkspaceEdit(edit); err != nil {
 					done <- lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: err.Error()}
 				} else {
 					done <- lsp.ApplyWorkspaceEditResponse{Applied: true}
 				}
 			})
-			return <-done
+			select {
+			case r := <-done:
+				return r
+			case <-time.After(applyEditTimeout):
+				if state.CompareAndSwap(0, 2) {
+					return lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: "editor busy"}
+				}
+				// The editor claimed the edit just as the deadline
+				// passed; it is mid-apply and answers shortly.
+				return <-done
+			}
 		},
-	})
+	}
 }
 
 // lspAsync runs a blocking LSP call off the event loop and hands the result
@@ -78,27 +113,63 @@ func (e *Editor) hasBuffer(b *Buffer) bool {
 	return false
 }
 
+// lspFilename returns the local filesystem path for a file:// URI. Servers
+// can return other schemes (jdt://contents, deno:/asset) or malformed URIs,
+// for which uri.Filename panics; those report ok=false instead of crashing
+// the editor.
+func lspFilename(u uri.URI) (name string, ok bool) {
+	defer func() {
+		if recover() != nil {
+			name, ok = "", false
+		}
+	}()
+	if !strings.HasPrefix(string(u), "file://") {
+		return "", false
+	}
+	return u.Filename(), true
+}
+
+// lspFormattingOptions builds formatting options from the buffer's resolved
+// tabsize/tabstospaces settings, so servers that honor them (unlike gopls)
+// format according to the buffer's configuration rather than a hardcoded
+// 4-space indent.
+func (e *Editor) lspFormattingOptions(b *Buffer) lsp.FormattingOptions {
+	opts := e.config.BufferOptions(b.Path, b.Filetype)
+	tabsize, ok := GetOptInt(opts, "tabsize")
+	if !ok || tabsize <= 0 {
+		tabsize = 4
+	}
+	spaces, ok := GetOptBool(opts, "tabstospaces")
+	if !ok {
+		spaces = true
+	}
+	return lsp.FormattingOptions{TabSize: uint32(tabsize), InsertSpaces: spaces}
+}
+
 // handleDiagnostics receives pushed diagnostics and applies them to the
 // matching buffer.
 func (e *Editor) handleDiagnostics(params lsp.PublishDiagnosticsParams) {
-	path := params.URI.Filename()
-	// Search all tabs and panes for the matching buffer.
-	for _, t := range e.tabs {
-		for _, v := range t.panes {
-			absPath, _ := filepath.Abs(v.buf.Path)
-			if absPath == path {
-				v.buf.ClearDiagnostics()
-				v.buf.lspDiagnostics = append(v.buf.lspDiagnostics, params.Diagnostics...)
-				for _, d := range params.Diagnostics {
-					_, col8 := v.buf.Utf8Loc(int(d.Range.Start.Line), int(d.Range.Start.Character))
-					dtype := DiagWarning
-					if d.Severity == lsp.DiagnosticSeverityError {
-						dtype = DiagError
-					}
-					v.buf.AddDiagnostic(int(d.Range.Start.Line), col8, d.Message, dtype)
+	path, ok := lspFilename(params.URI)
+	if !ok {
+		return
+	}
+	// Deliver to any listed buffer, hidden ones included: the diagnostics
+	// palette surfaces every buffer's diagnostics, so hidden buffers must
+	// not be left with stale positions.
+	for _, b := range e.buffers {
+		absPath, _ := filepath.Abs(b.Path)
+		if absPath == path {
+			b.ClearDiagnostics()
+			b.lspDiagnostics = append(b.lspDiagnostics, params.Diagnostics...)
+			for _, d := range params.Diagnostics {
+				_, col8 := b.Utf8Loc(int(d.Range.Start.Line), int(d.Range.Start.Character))
+				dtype := DiagWarning
+				if d.Severity == lsp.DiagnosticSeverityError {
+					dtype = DiagError
 				}
-				return
+				b.AddDiagnostic(int(d.Range.Start.Line), col8, d.Message, dtype)
 			}
+			return
 		}
 	}
 }
@@ -131,16 +202,19 @@ func (e *Editor) registerLspBindings() {
 	// gd: go to definition
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.lspGotoDefinition()
+		ks.ResetAction()
 	}, "g", "d")
 
 	// K: hover
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.lspHover()
+		ks.ResetAction()
 	}, "K")
 
 	// gr: find references
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		e.lspFindReferences()
+		ks.ResetAction()
 	}, "g", "r")
 
 	// ]d: next diagnostic
@@ -200,10 +274,19 @@ func (e *Editor) lspGotoDefinition() {
 // jumpToLspLocation moves the cursor to loc, which is relative to origin:
 // same file moves the cursor in place, a different file is opened first.
 func (e *Editor) jumpToLspLocation(origin *Buffer, loc lsp.Location) {
-	targetPath := loc.URI.Filename()
+	targetPath, ok := lspFilename(loc.URI)
+	if !ok {
+		e.infobar.Error(fmt.Sprintf("cannot open non-file location %s", string(loc.URI)))
+		return
+	}
 	originAbsPath, _ := filepath.Abs(origin.Path)
 
-	if targetPath == originAbsPath {
+	// Moving the origin's cursor in place is only correct while the origin
+	// is what the user is looking at; a palette action can fire long after
+	// the user switched or deleted buffers, and moving a hidden buffer's
+	// cursor would silently do nothing. OpenFile dedups against the buffer
+	// list, so the fallthrough shows the existing buffer.
+	if av := e.ActiveView(); av != nil && av.buf == origin && targetPath == originAbsPath {
 		target := origin.FromLspPosition(loc.Range.Start)
 		*origin.Cursor() = origin.Cursor().MoveTo(target)
 		return
@@ -335,8 +418,9 @@ func cmdLspFormat(e *Editor, args []string) error {
 	absPath, _ := filepath.Abs(b.Path)
 	version := b.lspVersion
 
+	fopts := e.lspFormattingOptions(b)
 	lspAsync(e, func() ([]lsp.TextEdit, error) {
-		return s.Format(absPath)
+		return s.Format(absPath, fopts, lspRequestTimeout)
 	}, func(edits []lsp.TextEdit, err error) {
 		if err != nil {
 			e.infobar.Error(fmt.Sprintf("format: %v", err))
@@ -379,10 +463,16 @@ func (e *Editor) applyFormatOnSave(b *Buffer) {
 		return
 	}
 	absPath, _ := filepath.Abs(b.Path)
-	edits, err := b.lspServer.Format(absPath)
+	edits, err := b.lspServer.Format(absPath, e.lspFormattingOptions(b), formatOnSaveTimeout)
 	if err != nil {
 		if err != ErrLspNotSupported {
-			e.infobar.Error(fmt.Sprintf("format on save: %v", err))
+			// Post the error to the main queue rather than the infobar
+			// directly: the save that invoked this hook posts its own
+			// '"path" written' message afterwards in the same turn, which
+			// would overwrite (and hide) an error set here. The queued
+			// error lands after it.
+			msg := fmt.Sprintf("format on save: %v", err)
+			e.postToMain(func() { e.infobar.Error(msg) })
 		}
 		return
 	}
@@ -409,19 +499,20 @@ func (e *Editor) lspFormatRange(b *Buffer, start, end int) {
 	el, ec := b.LineColAt(end)
 	rng := lsp.Range{Start: b.LspPosition(sl, sc), End: b.LspPosition(el, ec)}
 
+	fopts := e.lspFormattingOptions(b)
 	lspAsync(e, func() ([]lsp.TextEdit, error) {
-		return s.RangeFormatting(absPath, rng)
+		return s.RangeFormatting(absPath, rng, fopts)
 	}, func(edits []lsp.TextEdit, err error) {
-		if !e.hasBuffer(b) || b.lspVersion != version {
-			e.infobar.Error("format: buffer changed, not applied")
-			return
-		}
 		if err != nil {
 			if err == ErrLspNotSupported {
 				e.infobar.Error("Range formatting not supported")
 			} else {
 				e.infobar.Error(fmt.Sprintf("format: %v", err))
 			}
+			return
+		}
+		if !e.hasBuffer(b) || b.lspVersion != version {
+			e.infobar.Error("format: buffer changed, not applied")
 			return
 		}
 		b.UndoBarrier()

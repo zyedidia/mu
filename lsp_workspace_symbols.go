@@ -24,6 +24,12 @@ func (e *Editor) lspWorkspaceSymbols() {
 		lspAsync(e, func() ([]lsp.SymbolInformation, error) {
 			return s.WorkspaceSymbols(query)
 		}, func(syms []lsp.SymbolInformation, err error) {
+			// A late answer must not replace a prompt the user has since
+			// opened. No buffer check: results are workspace-wide, and
+			// jumpToLspLocation revalidates the origin buffer itself.
+			if e.infobar.IsActive() {
+				return
+			}
 			if err != nil {
 				if err == ErrLspNotSupported {
 					e.infobar.Error("Workspace symbols not supported")
@@ -36,11 +42,12 @@ func (e *Editor) lspWorkspaceSymbols() {
 				e.infobar.Message("No symbols found")
 				return
 			}
+			files := make(map[string][]string)
 			items := make([]paletteItem, len(syms))
 			for i, sym := range syms {
 				sym := sym
 				items[i] = paletteItem{
-					label: fmt.Sprintf("%s  %s  %s", sym.Name, sym.Kind.String(), locationLabel(sym.Location)),
+					label: fmt.Sprintf("%s  %s  %s", sym.Name, sym.Kind.String(), e.locationLabel(files, sym.Location)),
 					action: func() {
 						e.pushJump()
 						e.jumpToLspLocation(b, sym.Location)

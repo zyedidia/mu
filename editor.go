@@ -800,6 +800,7 @@ func (e *Editor) applyLspOption() {
 			if b.lspServer != nil {
 				b.LspClose()
 				b.ClearDiagnostics()
+				b.ClearInlayHints()
 			}
 		} else if b.lspServer == nil && b.Filetype != "" {
 			e.initBufferLsp(b, b.Filetype)

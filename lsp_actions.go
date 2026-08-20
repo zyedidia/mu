@@ -41,7 +41,7 @@ type lspDocumentEdit struct {
 }
 
 func (s *LspServer) CodeActions(filename string, r lsp.Range, diagnostics []lsp.Diagnostic) ([]lspCodeAction, error) {
-	if s == nil || s.caps().CodeActionProvider == nil {
+	if s == nil || !capEnabled(s.caps().CodeActionProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := struct {
@@ -119,7 +119,9 @@ func (e *Editor) lspCodeActions() {
 	lspAsync(e, func() ([]lspCodeAction, error) {
 		return s.CodeActions(absPath, r, diagnostics)
 	}, func(actions []lspCodeAction, err error) {
-		if !e.hasBuffer(b) || b.lspVersion != version || b.Cursor().Pos != requestPos || e.ActiveView() == nil || e.ActiveView().buf != b {
+		// The last clause keeps a late answer from replacing an active
+		// prompt (or another palette) with the code-action palette.
+		if !e.hasBuffer(b) || b.lspVersion != version || b.Cursor().Pos != requestPos || e.ActiveView() == nil || e.ActiveView().buf != b || e.infobar.IsActive() {
 			return
 		}
 		if err != nil {
@@ -200,14 +202,22 @@ func (e *Editor) applyWorkspaceEdit(edit lspWorkspaceEdit) error {
 	}
 	var targets []target
 	for rawURI, edits := range edit.Changes {
-		targets = append(targets, target{path: uri.URI(rawURI).Filename(), edits: edits})
+		path, ok := lspFilename(uri.URI(rawURI))
+		if !ok {
+			return fmt.Errorf("unsupported workspace edit URI %s", rawURI)
+		}
+		targets = append(targets, target{path: path, edits: edits})
 	}
 	for _, raw := range edit.DocumentChanges {
 		var doc lspDocumentEdit
 		if err := json.Unmarshal(raw, &doc); err != nil || doc.TextDocument.URI == "" {
 			return fmt.Errorf("unsupported workspace resource operation")
 		}
-		targets = append(targets, target{path: uri.URI(doc.TextDocument.URI).Filename(), version: doc.TextDocument.Version, edits: doc.Edits})
+		path, ok := lspFilename(uri.URI(doc.TextDocument.URI))
+		if !ok {
+			return fmt.Errorf("unsupported workspace edit URI %s", doc.TextDocument.URI)
+		}
+		targets = append(targets, target{path: path, version: doc.TextDocument.Version, edits: doc.Edits})
 	}
 
 	// Resolve and validate every target before changing any text.

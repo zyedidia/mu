@@ -12,7 +12,7 @@ import (
 // PrepareCallHierarchy resolves the call-hierarchy item(s) at pos, the
 // required first step before requesting incoming or outgoing calls.
 func (s *LspServer) PrepareCallHierarchy(filename string, pos lsp.Position) ([]lsp.CallHierarchyItem, error) {
-	if s == nil || s.caps().CallHierarchyProvider == nil {
+	if s == nil || !capEnabled(s.caps().CallHierarchyProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.CallHierarchyPrepareParams{
@@ -123,11 +123,12 @@ func (e *Editor) lspCallHierarchy(incoming bool) {
 					e.infobar.Error(fmt.Sprintf("incoming calls: %v", err))
 					return
 				}
+				files := make(map[string][]string)
 				items := make([]paletteItem, len(calls))
 				for i, c := range calls {
 					c := c
 					items[i] = paletteItem{
-						label: fmt.Sprintf("%s  %s", c.From.Name, locationLabel(lsp.Location{URI: c.From.URI, Range: c.From.SelectionRange})),
+						label: fmt.Sprintf("%s  %s", c.From.Name, e.locationLabel(files, lsp.Location{URI: c.From.URI, Range: c.From.SelectionRange})),
 						action: func() {
 							e.pushJump()
 							e.jumpToLspLocation(b, lsp.Location{URI: c.From.URI, Range: c.From.SelectionRange})
@@ -148,11 +149,12 @@ func (e *Editor) lspCallHierarchy(incoming bool) {
 				e.infobar.Error(fmt.Sprintf("outgoing calls: %v", err))
 				return
 			}
+			files := make(map[string][]string)
 			items := make([]paletteItem, len(calls))
 			for i, c := range calls {
 				c := c
 				items[i] = paletteItem{
-					label: fmt.Sprintf("%s  %s", c.To.Name, locationLabel(lsp.Location{URI: c.To.URI, Range: c.To.SelectionRange})),
+					label: fmt.Sprintf("%s  %s", c.To.Name, e.locationLabel(files, lsp.Location{URI: c.To.URI, Range: c.To.SelectionRange})),
 					action: func() {
 						e.pushJump()
 						e.jumpToLspLocation(b, lsp.Location{URI: c.To.URI, Range: c.To.SelectionRange})
@@ -165,6 +167,11 @@ func (e *Editor) lspCallHierarchy(incoming bool) {
 }
 
 func showCallHierarchyResults(e *Editor, prompt string, items []paletteItem) {
+	// Both call-hierarchy requests answer asynchronously; don't replace a
+	// prompt the user has since opened with a palette.
+	if e.infobar.IsActive() {
+		return
+	}
 	if len(items) == 0 {
 		e.infobar.Message("No calls found")
 		return

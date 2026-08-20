@@ -158,7 +158,8 @@ the syntax scenarios that is a full window parse (several seconds of gpeg
 on slow machines). Prune with `-ignore 'HighlightFunc'` or profile
 `HighlightWindow` separately when frames are the question.
 
-The gpeg VM itself was optimized in tandem (see reference/gpeg and the
-go.mod replace directive): in-place stack pushes, pre-decoded instructions,
+The gpeg VM itself was optimized in tandem (upstreamed to
+github.com/zyedidia/gpeg; the working clone lives in reference/gpeg):
+in-place stack pushes, pre-decoded instructions,
 a span fast path, inlinable memo-shift checks, and a zero-alloc checker
 slice. Window parse: 115.6 → 82.4 ms and 500k → 10.8k allocs/op on x86.

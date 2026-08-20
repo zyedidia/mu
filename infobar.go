@@ -187,11 +187,14 @@ func (ib *InfoBar) HandleKey(key string) (redraw bool, done bool) {
 		ib.completion.reset()
 		ib.histIndex = -1
 		ib.histSaved = nil
+		// Reset the input BEFORE running the callback: a callback may open
+		// the next prompt with prefilled input (rename), which a reset
+		// afterwards would wipe.
+		ib.input = nil
+		ib.cursorPos = 0
 		if cb != nil {
 			cb(input)
 		}
-		ib.input = nil
-		ib.cursorPos = 0
 		return true, true
 	case KeyUp, "<C-p>":
 		ib.historyNav(-1)

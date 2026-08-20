@@ -195,6 +195,19 @@ func (s *LspServer) request(method string, params any, timeout time.Duration) (j
 	s.sendq <- rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}
 	select {
 	case resp := <-ch:
+		// A JSON-RPC error reply carries no result member; surface it as
+		// an error instead of letting callers decode a zero value and
+		// mistake it for success (e.g. a rejected rename reporting
+		// "Renamed").
+		var errResp struct {
+			Error *struct {
+				Code    int64  `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(resp, &errResp) == nil && errResp.Error != nil {
+			return nil, fmt.Errorf("lsp: %s: %s", method, errResp.Error.Message)
+		}
 		return resp, nil
 	case <-s.dead:
 		return nil, fmt.Errorf("lsp: server unavailable")
@@ -216,6 +229,20 @@ func (s *LspServer) caps() lsp.ServerCapabilities {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.capabilities
+}
+
+// capEnabled interprets an interface{}-typed server capability field: the
+// spec allows a boolean or an options object there, so absent (nil) and
+// JSON false both mean unsupported, while true or any options object means
+// supported.
+func capEnabled(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return true
 }
 
 // hasInlayHintProvider reports whether the server advertised inlay-hint
@@ -485,7 +512,7 @@ func (s *LspServer) Completion(filename string, pos lsp.Position) ([]lsp.Complet
 }
 
 func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
-	if s == nil || s.caps().HoverProvider == nil {
+	if s == nil || !capEnabled(s.caps().HoverProvider) {
 		return "", ErrLspNotSupported
 	}
 	params := lsp.TextDocumentPositionParams{
@@ -524,7 +551,7 @@ func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
 }
 
 func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Location, error) {
-	if s == nil || s.caps().DefinitionProvider == nil {
+	if s == nil || !capEnabled(s.caps().DefinitionProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DefinitionParams{
@@ -546,18 +573,15 @@ func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Locatio
 	return locs.Result, nil
 }
 
-func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
-	if s == nil || s.caps().DocumentFormattingProvider == nil {
+func (s *LspServer) Format(filename string, opts lsp.FormattingOptions, timeout time.Duration) ([]lsp.TextEdit, error) {
+	if s == nil || !capEnabled(s.caps().DocumentFormattingProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DocumentFormattingParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
-		Options: lsp.FormattingOptions{
-			TabSize:      4,
-			InsertSpaces: true,
-		},
+		Options:      opts,
 	}
-	resp, err := s.request(lsp.MethodTextDocumentFormatting, params, lspRequestTimeout)
+	resp, err := s.request(lsp.MethodTextDocumentFormatting, params, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -572,17 +596,14 @@ func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
 
 // RangeFormatting requests formatting for just the given range, for the =
 // operator (see registerLspFormatOperator).
-func (s *LspServer) RangeFormatting(filename string, rng lsp.Range) ([]lsp.TextEdit, error) {
-	if s == nil || s.caps().DocumentRangeFormattingProvider == nil {
+func (s *LspServer) RangeFormatting(filename string, rng lsp.Range, opts lsp.FormattingOptions) ([]lsp.TextEdit, error) {
+	if s == nil || !capEnabled(s.caps().DocumentRangeFormattingProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DocumentRangeFormattingParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
 		Range:        rng,
-		Options: lsp.FormattingOptions{
-			TabSize:      4,
-			InsertSpaces: true,
-		},
+		Options:      opts,
 	}
 	resp, err := s.request(lsp.MethodTextDocumentRangeFormatting, params, lspRequestTimeout)
 	if err != nil {
@@ -598,7 +619,7 @@ func (s *LspServer) RangeFormatting(filename string, rng lsp.Range) ([]lsp.TextE
 }
 
 func (s *LspServer) References(filename string, pos lsp.Position) ([]lsp.Location, error) {
-	if s == nil || s.caps().ReferencesProvider == nil {
+	if s == nil || !capEnabled(s.caps().ReferencesProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.ReferenceParams{
@@ -626,7 +647,7 @@ func (s *LspServer) References(filename string, pos lsp.Position) ([]lsp.Locatio
 // SymbolInformation form; both are normalized to DocumentSymbol, using each
 // SymbolInformation's location as both range and selection range.
 func (s *LspServer) DocumentSymbols(filename string) ([]lsp.DocumentSymbol, error) {
-	if s == nil || s.caps().DocumentSymbolProvider == nil {
+	if s == nil || !capEnabled(s.caps().DocumentSymbolProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DocumentSymbolParams{
@@ -677,7 +698,7 @@ func (s *LspServer) DocumentSymbols(filename string) ([]lsp.DocumentSymbol, erro
 // WorkspaceSymbols requests symbols matching query across every file in the
 // workspace, not just the currently open document.
 func (s *LspServer) WorkspaceSymbols(query string) ([]lsp.SymbolInformation, error) {
-	if s == nil || s.caps().WorkspaceSymbolProvider == nil {
+	if s == nil || !capEnabled(s.caps().WorkspaceSymbolProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.WorkspaceSymbolParams{Query: query}
@@ -821,7 +842,16 @@ func (s *LspServer) receiveLoop(cb lspCallbacks) {
 				if cb.onApplyEdit == nil {
 					s.reply(*header.ID, lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: "client cannot apply workspace edits"})
 				} else {
-					s.reply(*header.ID, cb.onApplyEdit(m.Params.Edit))
+					// Reply from a goroutine: onApplyEdit blocks on the
+					// main loop, and blocking the receive loop here
+					// deadlocks against any synchronous request the main
+					// loop is waiting on (format-on-save). Out-of-order
+					// replies are legal in JSON-RPC.
+					id := *header.ID
+					edit := m.Params.Edit
+					go func() {
+						s.reply(id, cb.onApplyEdit(edit))
+					}()
 				}
 			}
 		case "workspace/workspaceFolders":

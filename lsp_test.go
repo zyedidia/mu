@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	lsp "go.lsp.dev/protocol"
+	"go.lsp.dev/uri"
 )
 
 // fakeLspServer speaks just enough JSON-RPC to test the client transport.
@@ -23,6 +26,9 @@ type fakeLspServer struct {
 	hoverDelay  time.Duration
 	complDelay  time.Duration
 	symbolsFlat bool // reply to documentSymbol with the legacy SymbolInformation shape
+
+	capsOverride map[string]any    // replaces the default initialize capabilities
+	errFor       map[string]string // methods answered with a JSON-RPC error instead
 
 	mu         sync.Mutex
 	received   []string                   // method order as received
@@ -130,28 +136,41 @@ func (f *fakeLspServer) run() {
 		}
 		f.mu.Unlock()
 
+		if msg.ID != nil && msg.Method != "initialize" {
+			if emsg, bad := f.errFor[msg.Method]; bad {
+				f.write(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      *msg.ID,
+					"error":   map[string]any{"code": -32603, "message": emsg},
+				})
+				continue
+			}
+		}
+
 		switch msg.Method {
 		case "initialize":
 			time.Sleep(f.initDelay)
+			caps := f.capsOverride
+			if caps == nil {
+				caps = map[string]any{
+					"hoverProvider":                   true,
+					"completionProvider":              map[string]any{},
+					"codeActionProvider":              true,
+					"signatureHelpProvider":           map[string]any{},
+					"referencesProvider":              true,
+					"documentSymbolProvider":          true,
+					"renameProvider":                  true,
+					"workspaceSymbolProvider":         true,
+					"callHierarchyProvider":           true,
+					"inlayHintProvider":               true,
+					"documentFormattingProvider":      true,
+					"documentRangeFormattingProvider": true,
+				}
+			}
 			f.write(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      *msg.ID,
-				"result": map[string]any{
-					"capabilities": map[string]any{
-						"hoverProvider":                   true,
-						"completionProvider":              map[string]any{},
-						"codeActionProvider":              true,
-						"signatureHelpProvider":           map[string]any{},
-						"referencesProvider":              true,
-						"documentSymbolProvider":          true,
-						"renameProvider":                  true,
-						"workspaceSymbolProvider":         true,
-						"callHierarchyProvider":           true,
-						"inlayHintProvider":               true,
-						"documentFormattingProvider":      true,
-						"documentRangeFormattingProvider": true,
-					},
-				},
+				"result":  map[string]any{"capabilities": caps},
 			})
 		case "textDocument/hover":
 			time.Sleep(f.hoverDelay)
@@ -518,6 +537,58 @@ func TestLspConcurrentTraffic(t *testing.T) {
 	close(stop)
 }
 
+// A JSON-RPC error reply must surface as an error, not decode as an empty
+// (and therefore silently successful) result.
+func TestJsonRpcErrorSurfaced(t *testing.T) {
+	fake := &fakeLspServer{errFor: map[string]string{
+		"textDocument/hover": "hover exploded",
+	}}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	_, err := s.Hover("/tmp/x.go", lsp.Position{})
+	if err == nil || !strings.Contains(err.Error(), "hover exploded") {
+		t.Fatalf("error reply not surfaced: %v", err)
+	}
+}
+
+func TestCapEnabled(t *testing.T) {
+	if capEnabled(nil) {
+		t.Fatal("nil capability treated as enabled")
+	}
+	if capEnabled(false) {
+		t.Fatal("false capability treated as enabled")
+	}
+	if !capEnabled(true) {
+		t.Fatal("true capability treated as disabled")
+	}
+	if !capEnabled(map[string]any{"workDoneProgress": true}) {
+		t.Fatal("options-object capability treated as disabled")
+	}
+}
+
+// A server advertising a capability as literal false must be treated like a
+// missing capability, and an options object like true.
+func TestCapabilityFalseDisables(t *testing.T) {
+	fake := &fakeLspServer{capsOverride: map[string]any{
+		"hoverProvider":      false,
+		"referencesProvider": false,
+		"renameProvider":     map[string]any{"prepareProvider": true},
+	}}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	if _, err := s.Hover("/tmp/x.go", lsp.Position{}); err != ErrLspNotSupported {
+		t.Fatalf("hover with false capability: got %v, want ErrLspNotSupported", err)
+	}
+	if _, err := s.References("/tmp/x.go", lsp.Position{}); err != ErrLspNotSupported {
+		t.Fatalf("references with false capability: got %v, want ErrLspNotSupported", err)
+	}
+	if _, err := s.Rename("/tmp/x.go", lsp.Position{}, "nn"); err != nil {
+		t.Fatalf("rename with options-object capability: %v", err)
+	}
+}
+
 // Buffer-word completion fallback actually inserts the candidate.
 func TestBufferWordCompletionApplies(t *testing.T) {
 	ed := newTestEditor()
@@ -770,6 +841,41 @@ func mustReply(t *testing.T, fake *fakeLspServer, id int) json.RawMessage {
 	return r
 }
 
+// A workspace/applyEdit the editor never runs (main queue full) must still
+// get an answer instead of hanging the request forever.
+func TestApplyEditAnswersWhenEditorBusy(t *testing.T) {
+	ed := newTestEditor()
+	// Fill the main queue so postToMain drops the applyEdit closure.
+	for {
+		select {
+		case ed.mainq <- func() {}:
+			continue
+		default:
+		}
+		break
+	}
+
+	saved := applyEditTimeout
+	applyEditTimeout = 50 * time.Millisecond
+	defer func() { applyEditTimeout = saved }()
+
+	cb := ed.lspCallbacks()
+	done := make(chan lsp.ApplyWorkspaceEditResponse, 1)
+	go func() { done <- cb.onApplyEdit(lspWorkspaceEdit{}) }()
+	select {
+	case resp := <-done:
+		if resp.Applied {
+			t.Fatal("dropped edit reported as applied")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("applyEdit never answered: the request would hang forever")
+	}
+
+	// The abandoned edit must not be applied later behind the answer's
+	// back: draining the queue now runs the closure, which must no-op.
+	ed.drainMain()
+}
+
 func TestLookupSettings(t *testing.T) {
 	settings := map[string]any{
 		"gopls": map[string]any{
@@ -887,14 +993,63 @@ func TestSignatureHelpTextOffsetLabel(t *testing.T) {
 				{Label: json.RawMessage(`[7,12]`)},
 			},
 		}},
-		ActiveParameter: uint32Ptr(1),
+		ActiveParameter: intPtr(1),
 	}
 	if got := signatureHelpText(help); got != "foo(a, [b int])" {
 		t.Fatalf("offset label: got %q, want %q", got, "foo(a, [b int])")
 	}
 }
 
-func uint32Ptr(v uint32) *uint32 { return &v }
+// Some servers send -1 for activeSignature/activeParameter ("none"); that
+// must decode (it fails wholesale into a uint) and fall back to the plain
+// label.
+func TestSignatureHelpNegativeActives(t *testing.T) {
+	data := []byte(`{"signatures":[{"label":"foo(a)","parameters":[{"label":"a"}]}],"activeSignature":-1,"activeParameter":-1}`)
+	var help lspSignatureHelp
+	if err := json.Unmarshal(data, &help); err != nil {
+		t.Fatalf("negative actives failed to decode: %v", err)
+	}
+	if got := signatureHelpText(&help); got != "foo(a)" {
+		t.Fatalf("negative actives: got %q, want %q", got, "foo(a)")
+	}
+}
+
+// Bracketing the active parameter must not match inside a longer
+// identifier: parameter "n" in "count(n int)" is at the paren, not inside
+// "count".
+func TestSignatureBracketWordBoundary(t *testing.T) {
+	help := &lspSignatureHelp{
+		Signatures: []lspSignatureInformation{{
+			Label:      "count(n int)",
+			Parameters: []lspParameterInformation{{Label: json.RawMessage(`"n"`)}},
+		}},
+		ActiveParameter: intPtr(0),
+	}
+	if got := signatureHelpText(help); got != "count([n] int)" {
+		t.Fatalf("bracketing: got %q, want %q", got, "count([n] int)")
+	}
+}
+
+func TestWordIndex(t *testing.T) {
+	tests := []struct {
+		s, name string
+		want    int
+	}{
+		{"count(n int)", "n", 6},
+		{"foo(bar, b)", "b", 9},
+		{"foo(a)", "a", 4},
+		{"foo(a)", "z", -1},
+		{"aaa", "aa", -1},
+		{"x_n n", "n", 4},
+	}
+	for _, tt := range tests {
+		if got := wordIndex(tt.s, tt.name); got != tt.want {
+			t.Errorf("wordIndex(%q, %q) = %d, want %d", tt.s, tt.name, got, tt.want)
+		}
+	}
+}
+
+func intPtr(v int) *int { return &v }
 
 func TestLspReferencesRequest(t *testing.T) {
 	s, _ := startFakeLsp(0, nil)
@@ -906,6 +1061,89 @@ func TestLspReferencesRequest(t *testing.T) {
 	}
 	if len(locs) != 1 || locs[0].URI.Filename() != "/tmp/x.go" {
 		t.Fatalf("references: got %v", locs)
+	}
+}
+
+// Palette labels prefer the open buffer's (didChange-synced) text over the
+// file on disk, tolerate non-file URIs, and read each unopened file at most
+// once per palette.
+func TestLocationLabel(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.Path = "/tmp/mu-lbl-test.go"
+	b.text.Insert(0, []byte("alpha\nbeta in buffer\n"))
+
+	files := make(map[string][]string)
+	loc := lsp.Location{URI: uri.File("/tmp/mu-lbl-test.go"), Range: lsp.Range{Start: lsp.Position{Line: 1}}}
+	if got := ed.locationLabel(files, loc); !strings.Contains(got, "beta in buffer") {
+		t.Fatalf("buffer-backed label missing line text: %q", got)
+	}
+
+	weird := lsp.Location{URI: uri.URI("jdt://contents/Foo.class"), Range: lsp.Range{Start: lsp.Position{Line: 2}}}
+	if got := ed.locationLabel(files, weird); !strings.Contains(got, "jdt://contents/Foo.class:3:") {
+		t.Fatalf("non-file URI label: %q", got)
+	}
+
+	p := filepath.Join(t.TempDir(), "disk.go")
+	if err := os.WriteFile(p, []byte("one\ntwo from disk\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dloc := lsp.Location{URI: uri.File(p), Range: lsp.Range{Start: lsp.Position{Line: 1}}}
+	if got := ed.locationLabel(files, dloc); !strings.Contains(got, "two from disk") {
+		t.Fatalf("disk-backed label missing line text: %q", got)
+	}
+	ed.locationLabel(files, dloc)
+	if len(files) != 1 {
+		t.Fatalf("per-palette file cache holds %d entries, want 1", len(files))
+	}
+}
+
+// An answer arriving while the user is typing in a prompt must not replace
+// the prompt with a palette — for every request that opens one.
+func TestReferencesResponseDoesNotStompPrompt(t *testing.T) {
+	assertNoPaletteOverPrompt(t, "textDocument/references",
+		func(e *Editor) { e.lspFindReferences() })
+}
+
+func TestCodeActionsResponseDoesNotStompPrompt(t *testing.T) {
+	assertNoPaletteOverPrompt(t, "textDocument/codeAction",
+		func(e *Editor) { e.lspCodeActions() })
+}
+
+// assertNoPaletteOverPrompt runs start (a request that opens a palette),
+// opens a prompt before the answer lands, and fails if the palette replaces
+// it. method is the request the fake server must have seen before the wait.
+func assertNoPaletteOverPrompt(t *testing.T, method string, start func(*Editor)) {
+	t.Helper()
+	fake := &fakeLspServer{}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.Path = "/tmp/x.go"
+	b.text.Insert(0, []byte("hi\nthere\n"))
+	b.lspServer = s
+
+	start(ed)
+	ed.infobar.StartPrompt("Cmd> ", func(string) {})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := fake.paramsFor(method); ok {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	for i := 0; i < 50; i++ {
+		ed.drainMain()
+		if ed.palette.active {
+			t.Fatalf("%s palette opened over an active prompt", method)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !ed.infobar.IsActive() {
+		t.Fatal("prompt no longer active")
 	}
 }
 
@@ -958,11 +1196,43 @@ func TestLspRenameRequest(t *testing.T) {
 	}
 }
 
+// A server that refuses a rename must have its reason reported, not be
+// relabeled "buffer changed" because the user typed while waiting.
+func TestRenameServerErrorReported(t *testing.T) {
+	fake := &fakeLspServer{errFor: map[string]string{
+		"textDocument/rename": "cannot rename this symbol",
+	}}
+	s := startFakeLspServer(fake, lspCallbacks{}, nil)
+	waitReady(t, s)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.Path = "/tmp/x.go"
+	b.text.Insert(0, []byte("foo\n"))
+	b.lspServer = s
+
+	ed.lspRename()
+	for _, ch := range "bar" {
+		ed.infobar.HandleKey(string(ch))
+	}
+	ed.infobar.HandleKey(KeyEnter)
+	// Type into the buffer while the request is in flight, so the version
+	// check would fire if it were tested first.
+	b.lspVersion++
+
+	drainUntil(t, ed, "rename error", func() bool {
+		return strings.Contains(ed.infobar.message, "rename")
+	})
+	if !strings.Contains(ed.infobar.message, "cannot rename this symbol") {
+		t.Fatalf("rename error: got %q, want the server's reason", ed.infobar.message)
+	}
+}
+
 func TestLspFormatRequest(t *testing.T) {
 	s, _ := startFakeLsp(0, nil)
 	waitReady(t, s)
 
-	edits, err := s.Format("/tmp/x.go")
+	edits, err := s.Format("/tmp/x.go", lsp.FormattingOptions{TabSize: 4, InsertSpaces: true}, lspRequestTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -975,7 +1245,7 @@ func TestLspRangeFormattingRequest(t *testing.T) {
 	s, _ := startFakeLsp(0, nil)
 	waitReady(t, s)
 
-	edits, err := s.RangeFormatting("/tmp/x.go", lsp.Range{})
+	edits, err := s.RangeFormatting("/tmp/x.go", lsp.Range{}, lsp.FormattingOptions{TabSize: 4, InsertSpaces: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1048,5 +1318,105 @@ func TestLspInlayHintsRequest(t *testing.T) {
 	}
 	if len(hints) != 1 || inlayHintLabelText(hints[0].Label) != ": int" {
 		t.Fatalf("inlay hints: got %+v", hints)
+	}
+}
+
+// Editor-side behavior the LSP features depend on: stale diagnostic
+// positions, the format-on-save hook, and prompt prefilling.
+
+// Diagnostics go stale as the buffer is edited; jumping to one must land
+// inside the buffer, on the diagnostic's own line. Unclamped, a stale
+// column runs the offset straight past the end of the text (a 40-column
+// diagnostic on a 5-character line yields offset 40 in a 12-byte buffer).
+func TestDiagnosticJumpClamped(t *testing.T) {
+	cases := []struct {
+		name      string
+		line, col int
+		wantLine  int
+	}{
+		{"stale column", 0, 40, 0},
+		{"line past EOF", 9, 40, 2},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			ed := newTestEditor()
+			b := ed.ActiveView().buf
+			b.text.Insert(0, []byte("hello\nworld\n"))
+			b.AddDiagnostic(tt.line, tt.col, "stale diagnostic", DiagError)
+
+			items := ed.diagnosticItems()
+			if len(items) != 1 {
+				t.Fatalf("diagnostic items: %d, want 1", len(items))
+			}
+			items[0].action()
+			pos := b.Cursor().Pos
+			if pos < 0 || pos > b.Len() {
+				t.Fatalf("cursor at %d, outside a %d-byte buffer", pos, b.Len())
+			}
+			if line, _ := b.LineColAt(pos); line != tt.wantLine {
+				t.Fatalf("jumped to line %d, want %d", line, tt.wantLine)
+			}
+		})
+	}
+}
+
+// The pre-save hook (format-on-save) runs for own-file saves only — not
+// for ':w otherfile' copy writes, and not before a save that the read-only
+// check is about to reject.
+func TestBeforeSaveHookScope(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	dir := t.TempDir()
+	own := filepath.Join(dir, "own.txt")
+	b.Path = own
+	b.text.Insert(0, []byte("content\n"))
+	calls := 0
+	b.beforeSave = func(*Buffer) { calls++ }
+
+	if err := b.SaveTo(filepath.Join(dir, "copy.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 0 {
+		t.Fatal("hook ran for a copy write")
+	}
+
+	if err := b.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("hook ran %d times for an own-file save, want 1", calls)
+	}
+
+	if os.Getuid() != 0 {
+		os.Chmod(own, 0444)
+		if err := b.Save(); err == nil {
+			t.Fatal("read-only save unexpectedly succeeded")
+		}
+		if calls != 1 {
+			t.Fatal("hook ran before a save the read-only check rejected")
+		}
+	}
+}
+
+// A prompt callback may open the next prompt with prefilled input (rename
+// from the command prompt); the Enter handler's own input reset must not
+// wipe it.
+func TestPromptPrefillSurvivesCallback(t *testing.T) {
+	ib := NewInfoBar()
+	ib.StartPrompt("cmd> ", func(string) {
+		ib.StartPrompt("New name: ", func(string) {})
+		ib.input = []rune("oldname")
+		ib.cursorPos = len(ib.input)
+	})
+	for _, ch := range "lsp-rename" {
+		ib.HandleKey(string(ch))
+	}
+	ib.HandleKey(KeyEnter)
+
+	if !ib.IsActive() {
+		t.Fatal("second prompt not active")
+	}
+	if got := string(ib.input); got != "oldname" {
+		t.Fatalf("prefill wiped: input %q, want %q", got, "oldname")
 	}
 }

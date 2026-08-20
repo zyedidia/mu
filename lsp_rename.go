@@ -11,7 +11,7 @@ import (
 
 // Rename requests a workspace-wide rename of the symbol at pos to newName.
 func (s *LspServer) Rename(filename string, pos lsp.Position, newName string) (lspWorkspaceEdit, error) {
-	if s == nil || s.caps().RenameProvider == nil {
+	if s == nil || !capEnabled(s.caps().RenameProvider) {
 		return lspWorkspaceEdit{}, ErrLspNotSupported
 	}
 	params := lsp.RenameParams{
@@ -56,16 +56,19 @@ func (e *Editor) lspRename() {
 		lspAsync(e, func() (lspWorkspaceEdit, error) {
 			return s.Rename(absPath, pos, newName)
 		}, func(edit lspWorkspaceEdit, err error) {
-			if !e.hasBuffer(b) || b.lspVersion != version {
-				e.infobar.Error("rename: buffer changed, not applied")
-				return
-			}
+			// Report a server refusal ("can't rename this symbol") as
+			// itself: checking the buffer first would relabel every such
+			// answer "buffer changed" whenever the user typed meanwhile.
 			if err != nil {
 				if err == ErrLspNotSupported {
 					e.infobar.Error("Rename not supported")
 				} else {
 					e.infobar.Error(fmt.Sprintf("rename: %v", err))
 				}
+				return
+			}
+			if !e.hasBuffer(b) || b.lspVersion != version {
+				e.infobar.Error("rename: buffer changed, not applied")
 				return
 			}
 			if err := e.applyWorkspaceEdit(edit); err != nil {
