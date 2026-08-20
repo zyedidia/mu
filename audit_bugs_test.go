@@ -575,6 +575,36 @@ error:
 	}
 }
 
+func TestInlayHintGutterThemeGroups(t *testing.T) {
+	th, err := LoadThemeYAML([]byte(`
+default:
+  fg: white
+comment:
+  fg: gray
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := inlayHintGutterStyle(th); got != th.Style("comment") {
+		t.Fatalf("inlay hint gutter style should fall back to comment group")
+	}
+
+	th2, err := LoadThemeYAML([]byte(`
+default:
+  fg: white
+gutter-hint:
+  fg: cyan
+comment:
+  fg: gray
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := inlayHintGutterStyle(th2); got != th2.Style("gutter-hint") {
+		t.Fatalf("inlay hint gutter style not taken from gutter-hint group")
+	}
+}
+
 // --- Tab bar ---
 
 // The active tab must always be within the drawn range of the tab bar.

@@ -63,6 +63,19 @@ func (b *Buffer) SaveAs(path string) error {
 }
 
 func (b *Buffer) saveAs(path string, force bool) error {
+	// The pre-save hook (format-on-save) runs only when the buffer is
+	// saved to its own file — never for ':w otherfile' copy writes
+	// (SaveTo), which must leave the buffer untouched — and only after
+	// the read-only check, so a rejected save doesn't modify the buffer.
+	if b.beforeSave != nil {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			absPath = path
+		}
+		if force || !isReadonly(absPath) {
+			b.beforeSave(b)
+		}
+	}
 	if err := b.saveTo(path, force); err != nil {
 		return err
 	}
@@ -228,6 +241,10 @@ func fileExists(path string) bool {
 // directly. It writes to a temp file, suspends the screen (so sudo can
 // prompt for a password), then copies the temp file to the target path.
 func (e *Editor) saveWithSudo(b *Buffer, path string) error {
+	if b.beforeSave != nil {
+		b.beforeSave(b)
+	}
+
 	sudoCmd := findSudoCmd()
 	if sudoCmd == "" {
 		return fmt.Errorf("neither sudo nor doas found")

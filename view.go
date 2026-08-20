@@ -511,6 +511,15 @@ func diagGutterStyle(th *Theme, t DiagnosticType) Style {
 	return th.Style(t.String())
 }
 
+// inlayHintGutterStyle returns the theme style for the inlay-hint gutter
+// marker: gutter-hint when defined, falling back to the comment style.
+func inlayHintGutterStyle(th *Theme) Style {
+	if th.HasStyle("gutter-hint") {
+		return th.Style("gutter-hint")
+	}
+	return th.Style("comment")
+}
+
 // --- Rendering ---
 
 // Display renders the view by calling draw for each cell and showCursor for
@@ -736,6 +745,9 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			if d, ok := v.buf.GetDiagnosticAt(l - 1); ok {
 				ch = '>'
 				style = diagGutterStyle(th, d.Type).Add(AttrReverse)
+			} else if _, ok := v.buf.GetInlayHintAt(l - 1); ok {
+				ch = 'i'
+				style = inlayHintGutterStyle(th)
 			}
 			for x := 0; x < v.GutterWidth; x++ {
 				draw(x, i, ch, nil, style)

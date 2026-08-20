@@ -60,6 +60,10 @@ type LspServer struct {
 	nextID       int
 	responses    map[int]chan json.RawMessage
 	capabilities lsp.ServerCapabilities
+	// inlayHintProvider mirrors capabilities.InlayHintProvider, which the
+	// vendored protocol package (predating LSP 3.17) has no field for; it is
+	// probed from the raw initialize response instead. See lsp_inlayhints.go.
+	inlayHintProvider bool
 
 	wlock sync.Mutex    // serializes writes to stdin
 	sendq chan any      // outgoing messages, drained after initialization
@@ -191,6 +195,19 @@ func (s *LspServer) request(method string, params any, timeout time.Duration) (j
 	s.sendq <- rpcRequest{JSONRPC: "2.0", ID: id, Method: method, Params: params}
 	select {
 	case resp := <-ch:
+		// A JSON-RPC error reply carries no result member; surface it as
+		// an error instead of letting callers decode a zero value and
+		// mistake it for success (e.g. a rejected rename reporting
+		// "Renamed").
+		var errResp struct {
+			Error *struct {
+				Code    int64  `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(resp, &errResp) == nil && errResp.Error != nil {
+			return nil, fmt.Errorf("lsp: %s: %s", method, errResp.Error.Message)
+		}
 		return resp, nil
 	case <-s.dead:
 		return nil, fmt.Errorf("lsp: server unavailable")
@@ -214,6 +231,28 @@ func (s *LspServer) caps() lsp.ServerCapabilities {
 	return s.capabilities
 }
 
+// capEnabled interprets an interface{}-typed server capability field: the
+// spec allows a boolean or an options object there, so absent (nil) and
+// JSON false both mean unsupported, while true or any options object means
+// supported.
+func capEnabled(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return true
+}
+
+// hasInlayHintProvider reports whether the server advertised inlay-hint
+// support (see the inlayHintProvider field comment).
+func (s *LspServer) hasInlayHintProvider() bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.inlayHintProvider
+}
+
 // Initialize performs the LSP initialization handshake.
 func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 	s.rootDir = dir
@@ -231,15 +270,26 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 				Hover: &lsp.HoverTextDocumentClientCapabilities{
 					ContentFormat: []lsp.MarkupKind{lsp.PlainText},
 				},
-				Definition:     &lsp.DefinitionTextDocumentClientCapabilities{},
-				Implementation: &lsp.ImplementationTextDocumentClientCapabilities{},
-				Formatting:     &lsp.DocumentFormattingClientCapabilities{},
+				Definition:      &lsp.DefinitionTextDocumentClientCapabilities{},
+				Implementation:  &lsp.ImplementationTextDocumentClientCapabilities{},
+				Formatting:      &lsp.DocumentFormattingClientCapabilities{},
+				RangeFormatting: &lsp.DocumentRangeFormattingClientCapabilities{},
+				SignatureHelp:   &lsp.SignatureHelpTextDocumentClientCapabilities{},
+				References:      &lsp.ReferencesTextDocumentClientCapabilities{},
+				DocumentSymbol: &lsp.DocumentSymbolClientCapabilities{
+					HierarchicalDocumentSymbolSupport: true,
+				},
+				Rename: &lsp.RenameClientCapabilities{
+					PrepareSupport: true,
+				},
+				CallHierarchy: &lsp.CallHierarchyClientCapabilities{},
 			},
 			Window: &lsp.WindowClientCapabilities{
 				WorkDoneProgress: true,
 			},
 			Workspace: &lsp.WorkspaceClientCapabilities{
 				Configuration: true,
+				Symbol:        &lsp.WorkspaceSymbolClientCapabilities{},
 			},
 		},
 	}
@@ -258,6 +308,9 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 				},
 			},
 		}
+		// InlayHint has no typed capability in the vendored protocol package
+		// (it predates LSP 3.17); advertise minimal support via raw JSON.
+		textDocument["inlayHint"] = map[string]any{}
 		workspace := caps["workspace"].(map[string]any)
 		workspace["applyEdit"] = true
 		workspace["workspaceEdit"] = map[string]any{"documentChanges": true}
@@ -296,8 +349,22 @@ func (s *LspServer) Initialize(dir string, cb lspCallbacks) {
 			Result lsp.InitializeResult `json:"result"`
 		}
 		json.Unmarshal(resp, &init)
+		// Also probe for inlayHintProvider, which lsp.ServerCapabilities has
+		// no field for (see the inlayHintProvider field comment); any
+		// non-false value (bool true or an options object) counts as support.
+		var inlayProbe struct {
+			Result struct {
+				Capabilities struct {
+					InlayHintProvider json.RawMessage `json:"inlayHintProvider"`
+				} `json:"capabilities"`
+			} `json:"result"`
+		}
+		json.Unmarshal(resp, &inlayProbe)
+		rawInlay := strings.TrimSpace(string(inlayProbe.Result.Capabilities.InlayHintProvider))
+
 		s.lock.Lock()
 		s.capabilities = init.Result.Capabilities
+		s.inlayHintProvider = rawInlay != "" && rawInlay != "false" && rawInlay != "null"
 		s.lock.Unlock()
 
 		s.writeMessage(rpcNotification{JSONRPC: "2.0", Method: lsp.MethodInitialized, Params: struct{}{}})
@@ -445,7 +512,7 @@ func (s *LspServer) Completion(filename string, pos lsp.Position) ([]lsp.Complet
 }
 
 func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
-	if s == nil || s.caps().HoverProvider == nil {
+	if s == nil || !capEnabled(s.caps().HoverProvider) {
 		return "", ErrLspNotSupported
 	}
 	params := lsp.TextDocumentPositionParams{
@@ -484,7 +551,7 @@ func (s *LspServer) Hover(filename string, pos lsp.Position) (string, error) {
 }
 
 func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Location, error) {
-	if s == nil || s.caps().DefinitionProvider == nil {
+	if s == nil || !capEnabled(s.caps().DefinitionProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DefinitionParams{
@@ -506,18 +573,15 @@ func (s *LspServer) Definition(filename string, pos lsp.Position) ([]lsp.Locatio
 	return locs.Result, nil
 }
 
-func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
-	if s == nil || s.caps().DocumentFormattingProvider == nil {
+func (s *LspServer) Format(filename string, opts lsp.FormattingOptions, timeout time.Duration) ([]lsp.TextEdit, error) {
+	if s == nil || !capEnabled(s.caps().DocumentFormattingProvider) {
 		return nil, ErrLspNotSupported
 	}
 	params := lsp.DocumentFormattingParams{
 		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
-		Options: lsp.FormattingOptions{
-			TabSize:      4,
-			InsertSpaces: true,
-		},
+		Options:      opts,
 	}
-	resp, err := s.request(lsp.MethodTextDocumentFormatting, params, lspRequestTimeout)
+	resp, err := s.request(lsp.MethodTextDocumentFormatting, params, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -528,6 +592,127 @@ func (s *LspServer) Format(filename string) ([]lsp.TextEdit, error) {
 		return nil, err
 	}
 	return edits.Result, nil
+}
+
+// RangeFormatting requests formatting for just the given range, for the =
+// operator (see registerLspFormatOperator).
+func (s *LspServer) RangeFormatting(filename string, rng lsp.Range, opts lsp.FormattingOptions) ([]lsp.TextEdit, error) {
+	if s == nil || !capEnabled(s.caps().DocumentRangeFormattingProvider) {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.DocumentRangeFormattingParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
+		Range:        rng,
+		Options:      opts,
+	}
+	resp, err := s.request(lsp.MethodTextDocumentRangeFormatting, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var edits struct {
+		Result []lsp.TextEdit `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &edits); err != nil {
+		return nil, err
+	}
+	return edits.Result, nil
+}
+
+func (s *LspServer) References(filename string, pos lsp.Position) ([]lsp.Location, error) {
+	if s == nil || !capEnabled(s.caps().ReferencesProvider) {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.ReferenceParams{
+		TextDocumentPositionParams: lsp.TextDocumentPositionParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
+			Position:     pos,
+		},
+		Context: lsp.ReferenceContext{IncludeDeclaration: true},
+	}
+	resp, err := s.request(lsp.MethodTextDocumentReferences, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var locs struct {
+		Result []lsp.Location `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &locs); err != nil {
+		return nil, err
+	}
+	return locs.Result, nil
+}
+
+// DocumentSymbols requests the symbol outline of filename. Servers may
+// answer with the hierarchical DocumentSymbol form or the flat legacy
+// SymbolInformation form; both are normalized to DocumentSymbol, using each
+// SymbolInformation's location as both range and selection range.
+func (s *LspServer) DocumentSymbols(filename string) ([]lsp.DocumentSymbol, error) {
+	if s == nil || !capEnabled(s.caps().DocumentSymbolProvider) {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.DocumentSymbolParams{
+		TextDocument: lsp.TextDocumentIdentifier{URI: uri.File(filename)},
+	}
+	resp, err := s.request(lsp.MethodTextDocumentDocumentSymbol, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		Result []json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.Result) == 0 {
+		return nil, nil
+	}
+	// Distinguish the two shapes by a field only one of them has.
+	var probe struct {
+		Location *lsp.Location `json:"location"`
+	}
+	json.Unmarshal(raw.Result[0], &probe)
+	out := make([]lsp.DocumentSymbol, len(raw.Result))
+	if probe.Location != nil {
+		for i, r := range raw.Result {
+			var si lsp.SymbolInformation
+			if err := json.Unmarshal(r, &si); err != nil {
+				return nil, err
+			}
+			out[i] = lsp.DocumentSymbol{
+				Name:           si.Name,
+				Kind:           si.Kind,
+				Range:          si.Location.Range,
+				SelectionRange: si.Location.Range,
+			}
+		}
+		return out, nil
+	}
+	for i, r := range raw.Result {
+		if err := json.Unmarshal(r, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// WorkspaceSymbols requests symbols matching query across every file in the
+// workspace, not just the currently open document.
+func (s *LspServer) WorkspaceSymbols(query string) ([]lsp.SymbolInformation, error) {
+	if s == nil || !capEnabled(s.caps().WorkspaceSymbolProvider) {
+		return nil, ErrLspNotSupported
+	}
+	params := lsp.WorkspaceSymbolParams{Query: query}
+	resp, err := s.request(lsp.MethodWorkspaceSymbol, params, lspRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	var syms struct {
+		Result []lsp.SymbolInformation `json:"result"`
+	}
+	if err := json.Unmarshal(resp, &syms); err != nil {
+		return nil, err
+	}
+	return syms.Result, nil
 }
 
 // --- JSON-RPC transport ---
@@ -657,7 +842,16 @@ func (s *LspServer) receiveLoop(cb lspCallbacks) {
 				if cb.onApplyEdit == nil {
 					s.reply(*header.ID, lsp.ApplyWorkspaceEditResponse{Applied: false, FailureReason: "client cannot apply workspace edits"})
 				} else {
-					s.reply(*header.ID, cb.onApplyEdit(m.Params.Edit))
+					// Reply from a goroutine: onApplyEdit blocks on the
+					// main loop, and blocking the receive loop here
+					// deadlocks against any synchronous request the main
+					// loop is waiting on (format-on-save). Out-of-order
+					// replies are legal in JSON-RPC.
+					id := *header.ID
+					edit := m.Params.Edit
+					go func() {
+						s.reply(id, cb.onApplyEdit(edit))
+					}()
 				}
 			}
 		case "workspace/workspaceFolders":
