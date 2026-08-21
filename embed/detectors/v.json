@@ -1,4 +1,8 @@
 {
     "name": "v",
-    "exts": [".v"]
+    "exts": [".v"],
+    "header": {
+        "regex": "^\\s*(pub\\s+)?fn\\s"
+    },
+    "priority": 1
 }
