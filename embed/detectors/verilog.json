@@ -1,4 +1,7 @@
 {
     "name": "verilog",
-    "exts": [".v", ".vh"]
+    "exts": [".v", ".vh"],
+    "file": {
+        "regex": "\\.vh?$"
+    }
 }

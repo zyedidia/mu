@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,11 +106,12 @@ func TestDetectorUserDisplacesEmbeddedExtension(t *testing.T) {
 }
 
 func TestDetectorUserDisplacesContestedExtension(t *testing.T) {
-	// .h is claimed by two embedded detectors, so it resolves to nothing on
-	// its own. A user detector claiming it displaces both and wins outright.
+	// .h is claimed by two embedded detectors (c and objective-c), which
+	// resolve it between themselves. A user detector claiming it displaces
+	// both and wins outright.
 	cfg := userConfig(t, nil)
-	if got := DetectFiletype(cfg, "a.h", nil); got != "" {
-		t.Logf("note: embedded .h resolves to %q", got)
+	if got := DetectFiletype(cfg, "a.h", nil); got != "c" {
+		t.Errorf("embedded a.h = %q, want c", got)
 	}
 
 	cfg = userConfig(t, map[string]string{
@@ -117,6 +119,85 @@ func TestDetectorUserDisplacesContestedExtension(t *testing.T) {
 	})
 	if got := DetectFiletype(cfg, "a.h", nil); got != "chdr" {
 		t.Errorf("a.h = %q, want chdr", got)
+	}
+}
+
+// An extension claimed by two detectors is resolved by the pair: the common
+// language wins on the filename alone, and the other takes over when the
+// first line proves it. Before these detectors carried regexes, ftdetect
+// could pick neither and .h files got no filetype at all — and so no
+// highlighting, no LSP, and no filetype options.
+func TestDetectorContestedExtensionsResolve(t *testing.T) {
+	cfg := userConfig(t, nil)
+	tests := []struct {
+		name, first, want string
+	}{
+		{"a.h", "", "c"},
+		{"a.h", "#include <stdio.h>", "c"},
+		{"a.h", "#import <Foundation/Foundation.h>", "objective-c"},
+		{"a.h", "@interface Foo : NSObject", "objective-c"},
+		{"a.H", "", "c"},
+		{"a.c", "", "c"},
+
+		{"a.m", "", "objective-c"},
+		{"a.m", "#import \"Foo.h\"", "objective-c"},
+		{"a.m", "function y = f(x)", "octave"},
+		{"a.m", "% a comment", "octave"},
+		{"a.m", "1;", "octave"},
+
+		{"a.mm", "", "objective-c"},
+		{"a.mm", "@implementation Foo", "objective-c"},
+		{"a.mm", ".PH \"title\"", "groff"},
+		{"a.me", "", "groff"},
+		{"a.ms", "", "groff"},
+		{"an.tmac", "", "groff"},
+
+		{"a.fs", "", "fsharp"},
+		{"a.fs", "module Foo", "fsharp"},
+		{"a.fs", "\\ a forth comment", "forth"},
+		{"a.fs", ": square dup * ;", "forth"},
+		{"a.forth", "", "forth"},
+
+		{"a.v", "", "verilog"},
+		{"a.v", "module counter(input clk);", "verilog"},
+		{"a.v", "fn main() {", "v"},
+		{"a.v", "pub fn add(a int) int {", "v"},
+		{"a.vh", "", "verilog"},
+	}
+	for _, tt := range tests {
+		if got := DetectFiletype(cfg, tt.name, []byte(tt.first)); got != tt.want {
+			t.Errorf("%s with first line %q = %q, want %q", tt.name, tt.first, got, tt.want)
+		}
+	}
+}
+
+// Structural guard for the whole embedded set: ftdetect returns a detector
+// for an uncontested key outright, but a key claimed by several detectors is
+// resolved only by a file or header regex match, and a detector with neither
+// can never win. A contested key where nobody can win silently detects
+// nothing, so every one of them must still name a filetype from the
+// filename alone.
+func TestDetectorNoUnresolvableCollisions(t *testing.T) {
+	cfg := userConfig(t, nil)
+	for key, claimants := range loadDetectors(cfg) {
+		if len(claimants) < 2 || key == "" {
+			// The empty key holds the extensionless and regex-only
+			// detectors, which are meant to need a header to match.
+			continue
+		}
+		probe := key
+		if strings.HasPrefix(key, ".") {
+			probe = "sample" + key
+		}
+		if got := DetectFiletype(cfg, probe, nil); got == "" {
+			var names []string
+			for _, d := range claimants {
+				names = append(names, d.Name)
+			}
+			t.Errorf("%q is claimed by %v but detects nothing: give one of them "+
+				"a file regex that matches it (see embed/detectors/c.json)",
+				key, names)
+		}
 	}
 }
 

@@ -1,4 +1,7 @@
 {
     "name": "fsharp",
-    "exts": [".fs"]
+    "exts": [".fs"],
+    "file": {
+        "regex": "\\.fs$"
+    }
 }

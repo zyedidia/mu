@@ -1,4 +1,8 @@
 {
     "name": "forth",
-    "exts": [".forth", ".4th", ".fs", ".fs8", ".ft", ".fth", ".frt"]
+    "exts": [".forth", ".4th", ".fs", ".fs8", ".ft", ".fth", ".frt"],
+    "header": {
+        "regex": "^\\s*(\\\\\\s|:\\s|\\(\\s)"
+    },
+    "priority": 1
 }

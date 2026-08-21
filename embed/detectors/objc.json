@@ -1,4 +1,11 @@
 {
     "name": "objective-c",
-    "exts": [".m", ".mm", ".h"]
+    "exts": [".m", ".mm", ".h"],
+    "file": {
+        "regex": "\\.mm?$"
+    },
+    "header": {
+        "regex": "^\\s*(#import\\b|@(interface|implementation|protocol|property)\\b|NS_ASSUME_NONNULL_BEGIN\\b)"
+    },
+    "priority": 1
 }

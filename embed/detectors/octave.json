@@ -1,4 +1,8 @@
 {
     "name": "octave",
-    "exts": [".m"]
+    "exts": [".m"],
+    "header": {
+        "regex": "^\\s*(function\\b|1;|%[%! ]|#!.*octave)"
+    },
+    "priority": 2
 }
