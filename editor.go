@@ -564,6 +564,29 @@ func (e *Editor) makeNewView(args []string) *View {
 
 // --- Opening files ---
 
+// expandTilde replaces a leading "~" or "~/" with the user's home directory,
+// the way a shell would, so a path typed in the command bar (":e ~/notes")
+// reaches the same file as one typed in a shell. Only the bare form is
+// expanded: "~user" and a tilde anywhere but the front are left alone, and
+// so is everything else when the home directory can't be determined.
+func expandTilde(path string) string {
+	if path == "" || path[0] != '~' {
+		return path
+	}
+	rest := path[1:]
+	if rest != "" && rest[0] != '/' && rest[0] != filepath.Separator {
+		return path // ~user
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	if rest == "" {
+		return home
+	}
+	return filepath.Join(home, rest[1:])
+}
+
 // samePath reports whether two paths refer to the same file, compared
 // absolutely.
 func samePath(a, b string) bool {
@@ -589,6 +612,7 @@ func (e *Editor) findBuffer(path string) *Buffer {
 // buffer when the file is open somewhere, otherwise a freshly configured
 // buffer read from disk.
 func (e *Editor) viewForFile(path string) (*View, error) {
+	path = expandTilde(path)
 	if b := e.findBuffer(path); b != nil {
 		v := e.newViewWithOptions(b)
 		v.savedCursor = *b.Cursor()

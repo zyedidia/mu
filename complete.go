@@ -113,13 +113,10 @@ func completeCommandArg(e *Editor, cmd, argStr string) []string {
 
 // completeFilePath returns filesystem path completions.
 func completeFilePath(prefix string) []string {
-	// Expand ~ to home directory.
-	expanded := prefix
-	if strings.HasPrefix(expanded, "~") {
-		if home, err := os.UserHomeDir(); err == nil {
-			expanded = filepath.Join(home, expanded[1:])
-		}
-	}
+	// Expand ~ to the home directory, the same way the commands that
+	// consume these paths do.
+	expanded := expandTilde(prefix)
+	tilde := expanded != prefix
 
 	dir := filepath.Dir(expanded)
 	base := filepath.Base(expanded)
@@ -143,7 +140,7 @@ func completeFilePath(prefix string) []string {
 		}
 		full := filepath.Join(dir, name)
 		// Use the original prefix form for ~ paths.
-		if strings.HasPrefix(prefix, "~") {
+		if tilde {
 			if home, err := os.UserHomeDir(); err == nil {
 				full = "~" + strings.TrimPrefix(full, home)
 			}

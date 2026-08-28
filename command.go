@@ -117,6 +117,19 @@ func (e *Editor) RunCommand(input string) {
 	}
 }
 
+// expandPathArg expands a leading ~ in a command's file-name argument. The
+// commands that open or write a file compare that argument against buffer
+// and disk paths before handing it on, so the expansion has to happen
+// before they look at it rather than at the point the file is opened.
+func expandPathArg(args []string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	out := append([]string(nil), args...)
+	out[0] = expandTilde(out[0])
+	return out
+}
+
 // expandAlias expands vim command aliases. For compound commands (e.g.
 // "wq" → "write; quit"), only the alias is expanded; trailing args are
 // appended to the first command.
@@ -188,6 +201,7 @@ func writeCmd(e *Editor, args []string, force bool) error {
 	if v == nil {
 		return fmt.Errorf("no buffer")
 	}
+	args = expandPathArg(args)
 	b := v.buf
 
 	// :w <path> naming a different file writes a copy there; the buffer
@@ -295,6 +309,7 @@ func cmdForceEdit(e *Editor, args []string) error {
 
 func editCmd(e *Editor, args []string, force bool) error {
 	v := e.ActiveView()
+	args = expandPathArg(args)
 	// :e with no filename, or naming the file already shown in this pane,
 	// reloads it from disk (vim), refusing to drop unsaved changes unless
 	// forced.
@@ -466,6 +481,7 @@ func cmdTabPrev(e *Editor, args []string) error {
 // a buffer number, "#" for the alternate buffer, or a unique substring of
 // a buffer's path.
 func (e *Editor) resolveBuffer(arg string) (*Buffer, error) {
+	arg = expandTilde(arg)
 	if arg == "#" {
 		if e.altBuf == nil {
 			return nil, fmt.Errorf("no alternate buffer")

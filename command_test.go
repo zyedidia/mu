@@ -362,3 +362,135 @@ func TestWcCommand(t *testing.T) {
 		t.Fatalf("wc: %q, want %q", ed.infobar.message, want)
 	}
 }
+
+// --- ~ expansion ---
+
+func TestExpandTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tests := []struct{ in, want string }{
+		{"~", home},
+		{"~/", home},
+		{"~/notes.txt", filepath.Join(home, "notes.txt")},
+		{"~/a/b/c.txt", filepath.Join(home, "a/b/c.txt")},
+		{"~root/x", "~root/x"}, // ~user is not expanded
+		{"~notatilde", "~notatilde"},
+		{"/abs/~/x", "/abs/~/x"}, // only a leading tilde counts
+		{"rel/~", "rel/~"},
+		{"", ""},
+		{"plain.txt", "plain.txt"},
+	}
+	for _, tt := range tests {
+		if got := expandTilde(tt.in); got != tt.want {
+			t.Errorf("expandTilde(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// :e ~/file opens the file under the home directory, not a literal "~" one.
+func TestCmdEditExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	target := filepath.Join(home, "XXX")
+	if err := os.WriteFile(target, []byte("from home\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ed := newTestEditor()
+	ed.RunCommand("e ~/XXX")
+
+	b := ed.ActiveView().buf
+	if b.Path != target {
+		t.Fatalf("path = %q, want %q (infobar: %q)", b.Path, target, ed.infobar.message)
+	}
+	if got := string(b.text.Slice(0, b.Len())); got != "from home\n" {
+		t.Errorf("contents = %q, want %q", got, "from home\n")
+	}
+}
+
+// The expansion has to happen before :e decides between reloading the
+// current file and opening another one, or ":e ~/current" would re-show the
+// buffer instead of rereading it from disk.
+func TestCmdEditTildeRereadsCurrentFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	target := filepath.Join(home, "XXX")
+	os.WriteFile(target, []byte("one\n"), 0644)
+
+	ed := newTestEditor()
+	ed.RunCommand("e ~/XXX")
+	before := len(ed.buffers)
+
+	os.WriteFile(target, []byte("two\n"), 0644)
+	ed.RunCommand("e ~/XXX")
+
+	if len(ed.buffers) != before {
+		t.Errorf("buffer count %d -> %d: reopened instead of reloading", before, len(ed.buffers))
+	}
+	b := ed.ActiveView().buf
+	if got := string(b.text.Slice(0, b.Len())); got != "two\n" {
+		t.Errorf("contents = %q, want the reloaded %q", got, "two\n")
+	}
+}
+
+func TestCmdWriteExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("saved\n"))
+	ed.RunCommand("w ~/out.txt")
+
+	data, err := os.ReadFile(filepath.Join(home, "out.txt"))
+	if err != nil {
+		t.Fatalf("write to ~/out.txt: %v (infobar: %q)", err, ed.infobar.message)
+	}
+	if string(data) != "saved\n" {
+		t.Errorf("wrote %q, want %q", data, "saved\n")
+	}
+}
+
+// The other commands that take a file name expand it too.
+func TestTildeExpandsForSplitTabAndBuffer(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	target := filepath.Join(home, "XXX")
+	os.WriteFile(target, []byte("x\n"), 0644)
+
+	for _, cmd := range []string{"vs ~/XXX", "sp ~/XXX", "tabe ~/XXX"} {
+		ed := newTestEditor()
+		ed.RunCommand(cmd)
+		if got := ed.ActiveView().buf.Path; got != target {
+			t.Errorf("%q opened %q, want %q (infobar: %q)", cmd, got, target, ed.infobar.message)
+		}
+	}
+
+	// :b matches an open buffer by path, which also has to be expanded.
+	ed := newTestEditor()
+	ed.RunCommand("e ~/XXX")
+	ed.RunCommand("e other.txt")
+	ed.RunCommand("b ~/XXX")
+	if got := ed.ActiveView().buf.Path; got != target {
+		t.Errorf(":b ~/XXX showed %q, want %q (infobar: %q)", got, target, ed.infobar.message)
+	}
+}
+
+// Completion offers ~ paths in the form they were typed.
+func TestCompleteFilePathTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.WriteFile(filepath.Join(home, "zzz-note.txt"), nil, 0644)
+	os.MkdirAll(filepath.Join(home, "zzz-dir"), 0755)
+
+	got := completeFilePath("~/zzz-")
+	want := []string{"~/zzz-dir" + string(filepath.Separator), "~/zzz-note.txt"}
+	if len(got) != len(want) {
+		t.Fatalf("completions = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("completions = %v, want %v", got, want)
+		}
+	}
+}
