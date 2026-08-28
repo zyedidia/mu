@@ -866,13 +866,18 @@ func RegisterOperators(ks *KeyState) {
 		ks.ResetAction()
 	}, "V")
 
-	// Escape in visual modes: back to normal, collapsing any multi-cursor
-	// selection down to the primary cursor.
+	// Escape in visual modes: back to normal mode, clearing the selections
+	// but keeping the cursors. A multi-cursor session built up with <C-n>
+	// exists to be typed at from normal mode, so leaving visual mode is a
+	// stage of the exit, not the whole of it: a second Escape (or <C-c>),
+	// now in normal mode, collapses to the primary cursor. With a single
+	// cursor the two are indistinguishable.
 	for _, mode := range []ModeID{ModeVisual, ModeVisualLine, ModeVisualBlock} {
 		ks.modes[mode].Bindings.Bind(func(ks *KeyState) {
+			// The pattern does not survive: <C-n> on a later selection
+			// must adopt that selection rather than this stale one.
 			ks.mcPattern = ""
 			b := ks.Buf()
-			b.RemoveCursors()
 			for i := range b.cursors {
 				b.cursors[i].HasSel = false
 			}

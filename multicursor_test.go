@@ -92,35 +92,6 @@ func TestMCPop(t *testing.T) {
 	}
 }
 
-func TestMCEscapeCollapses(t *testing.T) {
-	ks := newVimState("foo bar foo\n")
-
-	// Escape from the visual flow collapses to one cursor.
-	feedSpecial(ks, "<C-n>", "<C-n>")
-	feedSpecial(ks, KeyEscape)
-	b := ks.Buf()
-	if b.NumCursors() != 1 || ks.ModeID() != ModeNormal {
-		t.Fatalf("after escape: %d cursors, mode %v", b.NumCursors(), ks.ModeID())
-	}
-	if b.Cursor().HasSel {
-		t.Fatal("selection should be cleared")
-	}
-	if ks.mcPattern != "" {
-		t.Fatal("pattern should be cleared")
-	}
-
-	// Escape in normal mode collapses cursors left over from an edit.
-	feedSpecial(ks, "<C-n>", "<C-n>")
-	feedKeys(ks, "d") // back to normal with 2 cursors
-	if b.NumCursors() != 2 {
-		t.Fatalf("cursors after d = %d, want 2", b.NumCursors())
-	}
-	feedSpecial(ks, KeyEscape)
-	if b.NumCursors() != 1 {
-		t.Fatalf("cursors after normal-mode escape = %d, want 1", b.NumCursors())
-	}
-}
-
 func TestMCChangeAll(t *testing.T) {
 	// The flagship flow: select occurrences, change them all at once.
 	ks := newVimState("foo bar foo\n")
@@ -224,28 +195,6 @@ func TestMCInsertAtCursors(t *testing.T) {
 	}
 }
 
-func TestMCCtrlCCollapses(t *testing.T) {
-	ks := newVimState("foo bar foo\n")
-
-	// <C-c> from the visual flow collapses like Escape.
-	feedSpecial(ks, "<C-n>", "<C-n>", "<C-c>")
-	b := ks.Buf()
-	if b.NumCursors() != 1 || ks.ModeID() != ModeNormal {
-		t.Fatalf("after C-c: %d cursors, mode %v", b.NumCursors(), ks.ModeID())
-	}
-
-	// <C-c> in normal mode collapses cursors left over from an edit.
-	feedSpecial(ks, "<C-n>", "<C-n>")
-	feedKeys(ks, "y") // back to normal with 2 cursors
-	if b.NumCursors() != 2 {
-		t.Fatalf("cursors after y = %d, want 2", b.NumCursors())
-	}
-	feedSpecial(ks, "<C-c>")
-	if b.NumCursors() != 1 {
-		t.Fatalf("cursors after normal-mode C-c = %d, want 1", b.NumCursors())
-	}
-}
-
 func TestMCAppendAll(t *testing.T) {
 	// a moves every cursor right, not just the primary.
 	ks := newVimState("foo bar foo\n")
@@ -338,5 +287,96 @@ func TestReplaceModeCtrlC(t *testing.T) {
 	feedSpecial(ks, "<C-c>")
 	if ks.ModeID() != ModeNormal {
 		t.Fatalf("mode after C-c = %v, want normal", ks.ModeID())
+	}
+}
+
+// Leaving the multi-cursor visual flow is a two-stage exit, for Escape and
+// <C-c> alike: the first press leaves visual mode with the cursors intact,
+// so they can be typed at in normal mode, and only a second press collapses
+// them to the primary cursor.
+func TestMCExitKeysTwoStage(t *testing.T) {
+	for _, key := range []string{KeyEscape, "<C-c>"} {
+		t.Run(key, func(t *testing.T) {
+			ks := newVimState("foo bar foo baz foo\n")
+			feedSpecial(ks, "<C-n>", "<C-n>", "<C-n>")
+			b := ks.Buf()
+			if b.NumCursors() != 3 || ks.ModeID() != ModeVisual {
+				t.Fatalf("setup: %d cursors, mode %v", b.NumCursors(), ks.ModeID())
+			}
+
+			feedSpecial(ks, key)
+			if ks.ModeID() != ModeNormal {
+				t.Fatalf("first press: mode %v, want normal", ks.ModeID())
+			}
+			if b.NumCursors() != 3 {
+				t.Fatalf("first press: %d cursors, want the 3 to survive", b.NumCursors())
+			}
+			for i := 0; i < b.NumCursors(); i++ {
+				if b.cursors[i].HasSel {
+					t.Errorf("cursor %d still has a selection", i)
+				}
+			}
+			// The pattern is dropped, so a later <C-n> adopts the new
+			// selection rather than continuing this one.
+			if ks.mcPattern != "" {
+				t.Errorf("pattern = %q, want it cleared", ks.mcPattern)
+			}
+
+			// The surviving cursors are usable: an edit hits all three.
+			feedKeys(ks, "x")
+			if got := bufText(ks); got != "fo bar fo baz fo\n" {
+				t.Fatalf("x after exit = %q, want %q", got, "fo bar fo baz fo\n")
+			}
+
+			feedSpecial(ks, key)
+			if b.NumCursors() != 1 || ks.ModeID() != ModeNormal {
+				t.Fatalf("second press: %d cursors, mode %v", b.NumCursors(), ks.ModeID())
+			}
+		})
+	}
+}
+
+// Cursors left over from an operator that ended in normal mode collapse on
+// a single press, since there is no visual mode to leave first.
+func TestMCExitKeysCollapseLeftoverCursors(t *testing.T) {
+	for _, key := range []string{KeyEscape, "<C-c>"} {
+		t.Run(key, func(t *testing.T) {
+			ks := newVimState("foo bar foo\n")
+			feedSpecial(ks, "<C-n>", "<C-n>")
+			feedKeys(ks, "y") // yank returns to normal with 2 cursors
+			b := ks.Buf()
+			if b.NumCursors() != 2 {
+				t.Fatalf("cursors after y = %d, want 2", b.NumCursors())
+			}
+			feedSpecial(ks, key)
+			if b.NumCursors() != 1 {
+				t.Fatalf("cursors after exit = %d, want 1", b.NumCursors())
+			}
+			if ks.mcPattern != "" {
+				t.Errorf("pattern = %q, want it cleared", ks.mcPattern)
+			}
+		})
+	}
+}
+
+// An ordinary single-cursor visual selection is unaffected: one press is
+// still the whole exit, since there are no extra cursors to keep.
+func TestExitKeysFromPlainVisual(t *testing.T) {
+	for _, key := range []string{KeyEscape, "<C-c>"} {
+		for _, enter := range []string{"v", "V", "<C-v>"} {
+			ks := newVimState("hello world\n")
+			if enter == "<C-v>" {
+				feedSpecial(ks, "<C-v>")
+			} else {
+				feedKeys(ks, enter)
+			}
+			feedKeys(ks, "ll")
+			feedSpecial(ks, key)
+			b := ks.Buf()
+			if ks.ModeID() != ModeNormal || b.NumCursors() != 1 || b.Cursor().HasSel {
+				t.Errorf("%s then %s: mode %v, %d cursors, hassel %v",
+					enter, key, ks.ModeID(), b.NumCursors(), b.Cursor().HasSel)
+			}
+		}
 	}
 }

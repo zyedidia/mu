@@ -13,7 +13,8 @@ import (
 //	<C-x>  visual mode: skip this occurrence — move the newest selection
 //	       to the next occurrence instead of adding one
 //	<C-p>  visual mode: remove the most recently added cursor
-//	<Esc>  collapse to the primary cursor
+//	<Esc>  (and <C-c>) visual mode: leave visual mode with the cursors
+//	       intact; normal mode: collapse to the primary cursor
 //
 // Once cursors exist, everything else already applies to all of them:
 // operators, motions, and insert-mode typing.
