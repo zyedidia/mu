@@ -469,6 +469,29 @@ type Color struct {
 `Theme.Style("string.escape")` looks up `string.escape`, then falls back to
 `string`, then to `default`.
 
+The status bar is drawn in three shades, lightline-style: the mode and the
+cursor position sit at the ends in `statusline`, the file name and file
+information one shade in, and the gap between them in the darkest shade, so
+the bar reads as a gradient toward its middle. The two inner shades are
+mixed from `statusline` and `default`, so every theme gets them without
+being edited. Their text is the lighter of the theme's two foregrounds —
+light text on a dark section — and the mix goes as far as it takes for that
+text to read; on a light theme, with no lighter foreground to switch to, the
+bar keeps its own and shades only as far as that stays readable. A theme
+that wants specific colors sets them itself:
+
+```yaml
+statusline:        # the ends: mode, line:col
+  fg: black
+  bg: white
+statusline.info:   # file name, filetype
+  fg: white
+  bg: '#626262'
+statusline.fill:   # the gap between them
+  fg: white
+  bg: '#3a3a3a'
+```
+
 ## LSP
 
 Minimal LSP client communicating via JSON-RPC 2.0 over stdin/stdout.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Tab represents one editor tab containing a split tree of view panes.
@@ -205,10 +206,107 @@ func (t *Tab) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, modeName 
 	t.drawDividers(draw, th)
 }
 
+// statusSegment is one run of the status bar drawn in a single style.
+type statusSegment struct {
+	text  string
+	style Style
+}
+
+// statusShades returns the status bar's section styles from the outer edges
+// inward: the bar keeps the theme's statusline color at its ends and darkens
+// toward the editor background as it approaches the middle, the way
+// lightline shades its sections. A theme that wants specific colors can set
+// the inner two itself as "statusline.info" and "statusline.fill";
+// otherwise they are derived from the two colors the theme already has, so
+// every theme gets the shading without being edited.
+func statusShades(th *Theme) (outer, info, fill Style) {
+	outer = th.Style("statusline")
+	info, fill = deriveStatusShades(outer, th.Default())
+	if th.HasStyle("statusline.info") {
+		info = th.Style("statusline.info")
+	}
+	if th.HasStyle("statusline.fill") {
+		fill = th.Style("statusline.fill")
+	}
+	return outer, info, fill
+}
+
+// How far the inner sections are mixed toward the editor background, how
+// much darker the fill goes than the section beside it, and the contrast
+// text on a section will not go below.
+const (
+	statusInfoShade   = 30
+	statusFillStep    = 20
+	statusMaxShade    = 85
+	statusMinContrast = 3.5
+)
+
+// deriveStatusShades builds the two inner sections by mixing the status bar
+// toward the editor background. Their text is the lighter of the two
+// foregrounds the theme has, since a section dark enough to read as shaded
+// is usually too dark for the dark text a light status bar is written in —
+// so the mix goes as far as it takes for that light text to read, and the
+// fill a step further. A theme whose editor background is itself light has
+// no light text to switch to; there the bar keeps its own foreground and
+// shades only as far as that foreground's contrast allows.
+func deriveStatusShades(outer, base Style) (info, fill Style) {
+	if light, ok := lighterColor(outer.Fg, base.Fg); ok {
+		for pct := statusInfoShade; pct <= statusMaxShade; pct += 5 {
+			info = outer.BlendBg(base, pct)
+			info.Fg = light
+			if info.ContrastRatio() < statusMinContrast {
+				continue
+			}
+			fill = outer.BlendBg(base, min(pct+statusFillStep, statusMaxShade))
+			fill.Fg = light
+			return info, fill
+		}
+	}
+	return shadeReadable(outer, base, statusInfoShade),
+		shadeReadable(outer, base, statusInfoShade+statusFillStep)
+}
+
+// lighterColor returns whichever color is lighter, and whether the two could
+// be compared at all (a color the terminal picks for itself cannot be).
+func lighterColor(a, b Color) (Color, bool) {
+	al, ok1 := relativeLuminance(a)
+	bl, ok2 := relativeLuminance(b)
+	if !ok1 || !ok2 {
+		return a, false
+	}
+	if bl > al {
+		return b, true
+	}
+	return a, true
+}
+
+// shadeReadable blends toward dst by at most pct, backing off in small
+// steps while the text drawn on the result would lose too much contrast
+// against it. A theme whose status bar is already below the floor keeps
+// whatever contrast it has rather than being pushed further down.
+func shadeReadable(base, dst Style, pct int) Style {
+	floor := statusMinContrast
+	if r := base.ContrastRatio(); r < floor {
+		floor = r
+	}
+	for ; pct > 0; pct -= 5 {
+		if s := base.BlendBg(dst, pct); s.ContrastRatio() >= floor {
+			return s
+		}
+	}
+	return base
+}
+
 // drawPaneStatusBar renders a status bar at the bottom row of a leaf node.
+// It is drawn as lightline draws its own: the mode and the cursor position
+// sit at the ends in the brightest shade, the file name and file
+// information one shade in, and the gap between them in the darkest, so the
+// bar reads as a gradient toward its middle. The shading carries the
+// grouping that separator characters would otherwise have to, so there are
+// none between sections — only inside them.
 func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeName string, isCurrent bool) {
 	y := leaf.Y + leaf.H - 1
-	style := th.Style("statusline")
+	outer, info, fill := statusShades(th)
 
 	b := v.buf
 	name := b.Path
@@ -223,21 +321,21 @@ func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeN
 		flags += " [RO]"
 	}
 
-	// Left: mode | filename [flags]
-	left := fmt.Sprintf(" %s%s ", name, flags)
+	// Left: [mode] [filename [flags]]
+	var left []statusSegment
 	if isCurrent {
-		left = fmt.Sprintf(" %s | %s%s ", modeName, name, flags)
+		left = append(left, statusSegment{fmt.Sprintf(" %s ", modeName), outer})
 	}
+	left = append(left, statusSegment{fmt.Sprintf(" %s%s ", name, flags), info})
 
-	// Right: filetype | endings | line:col | pct
+	// Right: [filetype | endings] [line:col pct]
 	line, col := b.LineColAt(b.Cursor().Pos)
-	endings := ""
-	if b.Text().Opts.Endings != nil {
-		endings = b.Text().Opts.Endings.String() + " | "
-	}
-	ft := ""
+	var fileinfo []string
 	if b.Filetype != "" {
-		ft = b.Filetype + " | "
+		fileinfo = append(fileinfo, b.Filetype)
+	}
+	if b.Text().Opts.Endings != nil {
+		fileinfo = append(fileinfo, b.Text().Opts.Endings.String())
 	}
 	numLines := b.NumLines() + 1
 	pct := "Top"
@@ -250,31 +348,39 @@ func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeN
 	} else {
 		pct = fmt.Sprintf("%d%%", (line+1)*100/numLines)
 	}
-	right := fmt.Sprintf(" %s%s%d:%d %s ", ft, endings, line+1, col+1, pct)
+	var right []statusSegment
+	if len(fileinfo) > 0 {
+		right = append(right, statusSegment{" " + strings.Join(fileinfo, " | ") + " ", info})
+	}
+	right = append(right, statusSegment{fmt.Sprintf(" %d:%d %s ", line+1, col+1, pct), outer})
 
 	x := 0
-	for _, r := range left {
-		if x >= leaf.W {
-			break
+	drawSegments := func(segs []statusSegment) {
+		for _, seg := range segs {
+			for _, r := range seg.text {
+				if x >= leaf.W {
+					return
+				}
+				draw(leaf.X+x, y, r, nil, seg.style)
+				x++
+			}
 		}
-		draw(leaf.X+x, y, r, nil, style)
-		x++
 	}
-	rightStart := leaf.W - len([]rune(right))
+
+	drawSegments(left)
+	rightWidth := 0
+	for _, seg := range right {
+		rightWidth += len([]rune(seg.text))
+	}
+	rightStart := leaf.W - rightWidth
 	if rightStart < x {
 		rightStart = x
 	}
 	for x < rightStart {
-		draw(leaf.X+x, y, ' ', nil, style)
+		draw(leaf.X+x, y, ' ', nil, fill)
 		x++
 	}
-	for _, r := range right {
-		if x >= leaf.W {
-			break
-		}
-		draw(leaf.X+x, y, r, nil, style)
-		x++
-	}
+	drawSegments(right)
 }
 
 // drawDividers renders vertical dividers between vertically-split panes.

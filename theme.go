@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -242,6 +243,65 @@ func (t *Theme) Default() Style {
 func (t *Theme) HasStyle(group string) bool {
 	_, ok := t.rules[group]
 	return ok
+}
+
+// BlendBg mixes a style's background pct percent of the way toward dst's,
+// leaving the foreground and attributes alone: the foreground was chosen to
+// read against this style's own background, and mixing it too would eat the
+// contrast the theme picked. A background the terminal picks for itself has
+// no value to mix, so such a style is returned unchanged rather than
+// guessed at.
+func (s Style) BlendBg(dst Style, pct int) Style {
+	bg, ok := blendColor(s.Bg, dst.Bg, pct)
+	if !ok {
+		return s
+	}
+	s.Bg = bg
+	return s
+}
+
+// blendColor mixes two colors in RGB. Palette colors mix through their RGB
+// values and come back as true color, which tcell maps to the nearest
+// palette entry on terminals that need it.
+func blendColor(a, b Color, pct int) (Color, bool) {
+	ar, ag, ab := a.TCellColor().RGB()
+	br, bg, bb := b.TCellColor().RGB()
+	if ar < 0 || br < 0 {
+		return a, false
+	}
+	mix := func(x, y int32) int32 { return x + (y-x)*int32(pct)/100 }
+	return Color{tcell.NewRGBColor(mix(ar, br), mix(ag, bg), mix(ab, bb))}, true
+}
+
+// ContrastRatio returns the WCAG contrast ratio between a style's
+// foreground and background, from 1 (identical) to 21 (black on white). A
+// style using a color the terminal picks for itself reports 1, since there
+// is nothing to measure.
+func (s Style) ContrastRatio() float64 {
+	fl, ok1 := relativeLuminance(s.Fg)
+	bl, ok2 := relativeLuminance(s.Bg)
+	if !ok1 || !ok2 {
+		return 1
+	}
+	if fl < bl {
+		fl, bl = bl, fl
+	}
+	return (fl + 0.05) / (bl + 0.05)
+}
+
+func relativeLuminance(c Color) (float64, bool) {
+	r, g, b := c.TCellColor().RGB()
+	if r < 0 {
+		return 0, false
+	}
+	lin := func(v int32) float64 {
+		f := float64(v) / 255
+		if f <= 0.03928 {
+			return f / 12.92
+		}
+		return math.Pow((f+0.055)/1.055, 2.4)
+	}
+	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b), true
 }
 
 // ColorSegment is a styled piece of text, used for status line rendering.
