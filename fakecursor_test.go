@@ -124,16 +124,40 @@ func TestFakeCursorsEndOfBuffer(t *testing.T) {
 		t.Fatalf("EOF cell = %v %q, want reverse blank", cells[[2]int{0, 1}], runes[[2]int{0, 1}])
 	}
 }
-
-func TestFakeCursorsPinnedEdge(t *testing.T) {
+func TestFakeCursorsWrappedEdge(t *testing.T) {
 	// A cursor one past an exactly-full softwrapped row (insert mode at
-	// end of line) is pinned to the last column; the glyph under it is
-	// preserved.
-	b, v, _ := newFakeCursorView("abcde\nx\n")
+	// the end of such a line) is drawn at the start of the row below,
+	// keeping the glyph already there under it, and leaves the full row's
+	// last column alone.
+	b, v, _ := newFakeCursorView("abcde\nxy\n")
 	v.SoftWrap = true
 	v.Resize(5, 5)
 	b.cursors[0].Pos = 5 // on the newline of the exactly-full line
-	b.SpawnCursor(6)     // on 'x'
+	b.SpawnCursor(7)     // on 'y'
+
+	def := DefaultTheme.Default()
+	rev := def.Add(AttrReverse)
+	cells, runes := renderCells(v, DefaultTheme, true)
+
+	if cells[[2]int{0, 1}] != rev || runes[[2]int{0, 1}] != 'x' {
+		t.Fatalf("wrapped cell = %v %q, want reverse 'x'", cells[[2]int{0, 1}], runes[[2]int{0, 1}])
+	}
+	if cells[[2]int{4, 0}] != def || runes[[2]int{4, 0}] != 'e' {
+		t.Fatalf("full row's last column = %v %q, want a plain 'e'", cells[[2]int{4, 0}], runes[[2]int{4, 0}])
+	}
+	if cells[[2]int{1, 1}] != rev || runes[[2]int{1, 1}] != 'y' {
+		t.Fatalf("second cursor cell = %v %q, want reverse 'y'", cells[[2]int{1, 1}], runes[[2]int{1, 1}])
+	}
+}
+
+func TestFakeCursorsPinnedEdgeNoRowBelow(t *testing.T) {
+	// With no row below on screen there is nowhere to wrap onto, so the
+	// cursor is pinned to the last column, over the glyph there.
+	b, v, _ := newFakeCursorView("abcde\nx\n")
+	v.SoftWrap = true
+	v.Resize(5, 1)
+	b.cursors[0].Pos = 5
+	b.SpawnCursor(0)
 
 	def := DefaultTheme.Default()
 	rev := def.Add(AttrReverse)
@@ -141,9 +165,6 @@ func TestFakeCursorsPinnedEdge(t *testing.T) {
 
 	if cells[[2]int{4, 0}] != rev || runes[[2]int{4, 0}] != 'e' {
 		t.Fatalf("pinned cell = %v %q, want reverse 'e'", cells[[2]int{4, 0}], runes[[2]int{4, 0}])
-	}
-	if cells[[2]int{0, 1}] != rev || runes[[2]int{0, 1}] != 'x' {
-		t.Fatalf("second cursor cell = %v %q, want reverse 'x'", cells[[2]int{0, 1}], runes[[2]int{0, 1}])
 	}
 }
 

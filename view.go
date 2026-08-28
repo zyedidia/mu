@@ -20,11 +20,14 @@ type overlayCell struct {
 }
 
 // fakeCursorCell is a screen cell where a fake cursor must appear. clipped
-// marks a cursor whose true position is one past the right edge (pinned to
-// the last column).
+// marks a cursor pinned to the last column because its true position is one
+// past the right edge; wrapped marks one moved to the start of the row below
+// (see the cursor placement in Display). Both draw over a cell the walk
+// already painted, so the glyph under them is captured and redrawn.
 type fakeCursorCell struct {
 	x, y, off int
 	clipped   bool
+	wrapped   bool
 }
 
 // View manages the visible window into a Buffer: scrolling, viewport
@@ -581,7 +584,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		return base
 	}
 	var cursorAt, cursorDrawn map[int]bool
-	var edgeCells []overlayCell
+	var edgeCells, firstCells []overlayCell
 	var fakeCursors []fakeCursorCell
 	if fake {
 		cursorAt = make(map[int]bool)
@@ -590,6 +593,7 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			cursorAt[c.Pos] = true
 		}
 		edgeCells = make([]overlayCell, v.height)
+		firstCells = make([]overlayCell, v.height)
 	}
 
 	var curOff int
@@ -625,8 +629,13 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 				if cursorAt[curOff] && !cursorDrawn[curOff] {
 					cursorDrawn[curOff] = true
 					style = cursorStyle(style)
-				} else if sx == v.width-1 {
-					edgeCells[vy] = overlayCell{mainc, combc, style, true}
+				} else {
+					if sx == v.width-1 {
+						edgeCells[vy] = overlayCell{mainc, combc, style, true}
+					}
+					if sx == gutter && !firstCells[vy].ok {
+						firstCells[vy] = overlayCell{mainc, combc, style, true}
+					}
 				}
 			}
 			draw(sx, vy, mainc, combc, style)
@@ -641,16 +650,28 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 			sx := gutter + vx - v.stcol
 			for i, c := range v.buf.Cursors() {
 				if c.Pos == off && sx >= gutter {
-					s := sx
-					// A cursor one past an exactly-full row (insert mode
-					// at end of line) is pinned to the last cell rather
-					// than left stale off-screen.
+					s, sy := sx, vy
+					clipped, wrapped := false, false
 					if s >= v.width {
-						s = v.width - 1
+						// The cursor sits one past the last cell of an
+						// exactly-full row (insert mode at the end of
+						// such a line). Softwrapped, that is where the
+						// next character typed goes, so the cursor
+						// belongs at the start of the row below rather
+						// than on top of the line's last character.
+						// Without softwrap there is no row below to
+						// wrap onto, and on the last row there is none
+						// on screen: pin to the last cell rather than
+						// leave the cursor stale off-screen.
+						if v.SoftWrap && vy+1 < v.height {
+							s, sy, wrapped = gutter, vy+1, true
+						} else {
+							s, clipped = v.width-1, true
+						}
 					}
-					showCursor(s, vy, i == 0)
+					showCursor(s, sy, i == 0)
 					if fake {
-						fakeCursors = append(fakeCursors, fakeCursorCell{s, vy, off, sx >= v.width})
+						fakeCursors = append(fakeCursors, fakeCursorCell{s, sy, off, clipped, wrapped})
 					}
 				}
 			}
@@ -679,10 +700,10 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 	}
 
 	// Fake cursors whose cell produced no drawn glyph — a cursor at the
-	// end of the buffer, or pinned to the last column of an exactly-full
-	// row — get an overlay cell drawn directly (for the pinned case, the
-	// captured content of that column, so the glyph under the cursor is
-	// preserved).
+	// end of the buffer, or one moved off an exactly-full row (wrapped to
+	// the row below, or pinned to the last column) — get an overlay cell
+	// drawn directly, reusing the captured content of the column they land
+	// on so the glyph under the cursor is preserved.
 	for _, fc := range fakeCursors {
 		if cursorDrawn[fc.off] {
 			continue
@@ -690,6 +711,8 @@ func (v *View) Display(draw DrawFunc, showCursor CursorFunc, th *Theme, active .
 		cell := overlayCell{r: ' ', style: th.Default()}
 		if fc.clipped && edgeCells[fc.y].ok {
 			cell = edgeCells[fc.y]
+		} else if fc.wrapped && firstCells[fc.y].ok {
+			cell = firstCells[fc.y]
 		}
 		draw(fc.x, fc.y, cell.r, cell.combc, cursorStyle(cell.style))
 	}
