@@ -124,17 +124,76 @@ func TestCommentMixedRegion(t *testing.T) {
 }
 
 func TestCommentBlankLines(t *testing.T) {
-	// Blank lines are neither commented nor counted when deciding whether
-	// a region is fully commented.
+	// Blank lines are commented with the rest of the block, with a bare
+	// prefix so the line does not end in whitespace, and come back empty.
 	ks := newCommentState("a\n\nb\n")
 
 	feedDisplay(ks, "V", "jj", "gc")
-	if bufText(ks) != "// a\n\n// b\n" {
+	if bufText(ks) != "// a\n//\n// b\n" {
 		t.Fatalf("gc with blank line: got %q", bufText(ks))
 	}
 	feedDisplay(ks, "gg", "V", "jj", "gc")
 	if bufText(ks) != "a\n\nb\n" {
 		t.Fatalf("gc toggle back with blank line: got %q", bufText(ks))
+	}
+}
+
+// gcc on a blank line comments just that line, and toggles back.
+func TestCommentBlankLineAlone(t *testing.T) {
+	ks := newCommentState("\n")
+
+	feedKeys(ks, "gcc")
+	if bufText(ks) != "//\n" {
+		t.Fatalf("gcc on empty line: got %q", bufText(ks))
+	}
+	feedKeys(ks, "gcc")
+	if bufText(ks) != "\n" {
+		t.Fatalf("gcc toggle back: got %q", bufText(ks))
+	}
+}
+
+// A blank line takes the alignment indent of the block, in whatever mix of
+// tabs and spaces the block itself uses, and a whitespace-only line is
+// normalized to that same form rather than keeping its stray whitespace.
+func TestCommentBlankLineIndent(t *testing.T) {
+	tests := []struct {
+		name, in, commented, back string
+	}{
+		{"tabs", "\tx := 1\n\n\ty := 2\n",
+			"\t// x := 1\n\t//\n\t// y := 2\n", "\tx := 1\n\n\ty := 2\n"},
+		{"spaces", "    a\n\n    b\n",
+			"    // a\n    //\n    // b\n", "    a\n\n    b\n"},
+		{"deeper line keeps its indent", "\tx := 1\n\n\t\ty := 2\n",
+			"\t// x := 1\n\t//\n\t// \ty := 2\n", "\tx := 1\n\n\t\ty := 2\n"},
+		{"whitespace-only line", "\tx := 1\n   \n\ty := 2\n",
+			"\t// x := 1\n\t//\n\t// y := 2\n", "\tx := 1\n\n\ty := 2\n"},
+		{"leading blank", "\na\n", "//\n// a\n", "\na\n"},
+		{"all blank", "\n\n", "//\n//\n", "\n\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ks := newCommentState(tt.in)
+			feedDisplay(ks, "V", "jj", "gc")
+			if got := bufText(ks); got != tt.commented {
+				t.Fatalf("gc: got %q, want %q", got, tt.commented)
+			}
+			feedDisplay(ks, "gg", "V", "jj", "gc")
+			if got := bufText(ks); got != tt.back {
+				t.Fatalf("gc back: got %q, want %q", got, tt.back)
+			}
+		})
+	}
+}
+
+// A blank line still does not vote on comment-vs-uncomment: an uncommented
+// one between two commented paragraphs must not turn the uncomment into a
+// second round of commenting.
+func TestCommentBlankLineDoesNotBlockUncomment(t *testing.T) {
+	ks := newCommentState("// a\n\n// b\n")
+
+	feedDisplay(ks, "V", "jj", "gc")
+	if got := bufText(ks); got != "a\n\nb\n" {
+		t.Fatalf("uncomment across a blank line: got %q", got)
 	}
 }
 
@@ -244,11 +303,12 @@ func TestCommentAlignedTabOvershoot(t *testing.T) {
 }
 
 func TestCommentAlignedIgnoresBlankLines(t *testing.T) {
-	// A blank line must not drag the alignment column to zero.
+	// A blank line must not drag the alignment column to zero: it is
+	// commented at the block's indent, not at column 0.
 	ks := newCommentState("\ta\n\n\tb\n")
 
 	feedDisplay(ks, "V", "jj", "gc")
-	if bufText(ks) != "\t// a\n\n\t// b\n" {
+	if bufText(ks) != "\t// a\n\t//\n\t// b\n" {
 		t.Fatalf("blank line alignment: got %q", bufText(ks))
 	}
 }

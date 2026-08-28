@@ -56,9 +56,13 @@ func indentCol(ws []byte, target, ts int) int {
 }
 
 // toggleComment comments the lines covered by [start, end) with prefix, or
-// uncomments them if every non-blank line is already commented. Blank lines
-// are left alone. Comments are aligned at the block's lowest indentation
-// (tcomment-style): deeper lines keep their extra indent after the prefix.
+// uncomments them if every non-blank line is already commented. Comments are
+// aligned at the block's lowest indentation (tcomment-style): deeper lines
+// keep their extra indent after the prefix. Blank lines are commented along
+// with the rest, so a commented block reads as one run, but they do not vote
+// on the comment/uncomment decision: an uncommented blank line separating two
+// commented paragraphs must not turn an uncomment into a second round of
+// commenting.
 func toggleComment(b *Buffer, prefix string, start, end, ts int) {
 	pre := []byte(prefix)
 	sl, _ := b.LineColAt(start)
@@ -95,21 +99,38 @@ func toggleComment(b *Buffer, prefix string, start, end, ts int) {
 			if len(rest) > n && rest[n] == ' ' {
 				n++
 			}
+			// Decided before the edit, while rest is still valid: a line
+			// holding nothing but the comment goes back to being empty
+			// rather than keeping the indentation the prefix was aligned
+			// with, so commenting and uncommenting a blank line leaves it
+			// exactly as it was.
+			blank := len(bytes.TrimLeft(rest[n:], " \t")) == 0
 			off := b.OffsetAt(l, len(ws))
 			b.Remove(off, off+n)
+			if blank && len(ws) > 0 {
+				lineStart := b.OffsetAt(l, 0)
+				b.Remove(lineStart, lineStart+len(ws))
+			}
 		}
 		return
 	}
 
-	// Align all comments at the lowest indentation in the block.
+	// Align all comments at the lowest indentation in the block. Blank
+	// lines have no indentation to speak of and must not drag the block
+	// out to column zero, so they sit this out; the indent of the line
+	// that sets the alignment is kept verbatim to pad them with, which
+	// carries over the file's mix of tabs and spaces for free.
 	minW := -1
+	var pad []byte
 	for l := sl; l <= el; l++ {
 		line := b.GetLine(l)
 		if len(bytes.TrimLeft(line, " \t")) == 0 {
 			continue
 		}
-		if w := indentWidth(leadingWS(line), ts); minW < 0 || w < minW {
+		ws := leadingWS(line)
+		if w := indentWidth(ws, ts); minW < 0 || w < minW {
 			minW = w
+			pad = append(pad[:0], ws...)
 		}
 	}
 
@@ -117,7 +138,17 @@ func toggleComment(b *Buffer, prefix string, start, end, ts int) {
 	for l := el; l >= sl; l-- {
 		line := b.GetLine(l)
 		if len(bytes.TrimLeft(line, " \t")) == 0 {
-			continue // don't comment blank lines
+			// A blank line gets the bare prefix: the trailing space the
+			// other lines separate their code with would just be
+			// whitespace at the end of the line. Whatever whitespace the
+			// line held is replaced rather than kept, since it is
+			// invisible and would push the prefix out of alignment.
+			off := b.OffsetAt(l, 0)
+			if len(line) > 0 {
+				b.Remove(off, off+len(line))
+			}
+			b.Insert(off, append(append([]byte{}, pad...), pre...))
+			continue
 		}
 		col := indentCol(leadingWS(line), minW, ts)
 		b.Insert(b.OffsetAt(l, col), ins)
