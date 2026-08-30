@@ -163,11 +163,9 @@ func (v *View) LoadCursorPos() {
 		// phantom state (highlighted regions, edits applied at old spots).
 		c := sv.Cursors[0]
 		c.Num = 0
-		c.HasSel = false
+		c.ClearSelection()
 		c.Sel = [2]int{}
 		c.Orig = [2]int{}
-		c.BlockSel = false
-		c.BlockEOL = false
 		if c.Pos > b.Len() {
 			c.Pos = b.Len()
 		}

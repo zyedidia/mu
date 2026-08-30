@@ -486,3 +486,115 @@ func TestBlockRenderHighlight(t *testing.T) {
 		}
 	}
 }
+
+// selectedCells renders the view and returns the cells drawn as selected.
+func selectedCells(v *View) map[[2]int]bool {
+	selStyle := DefaultTheme.Default().Add(AttrReverse)
+	selected := make(map[[2]int]bool)
+	v.Display(func(x, y int, mainc rune, combc []rune, style Style) {
+		if style == selStyle {
+			selected[[2]int{x, y}] = true
+		}
+	}, func(x, y int, main bool) {}, DefaultTheme)
+	return selected
+}
+
+func blockRenderState(t *testing.T, text string) (*Buffer, *View, *KeyState) {
+	t.Helper()
+	b := NewEmptyBuffer()
+	b.text.Insert(0, []byte(text))
+	v := NewView(b, 4)
+	v.Resize(20, 5)
+	v.LineNums = false
+	v.GutterWidth = 0
+	v.CursorLine = false
+	ks := NewKeyState(b, NewRegisterSet())
+	SetupBindings(ks)
+	return b, v, ks
+}
+
+// The block-rectangle flags describe a visual-block selection and must not
+// outlive it: left set after block mode, they made the next charwise or
+// linewise selection render as a rectangle — a whole-line selection showed
+// up as a single character.
+func TestSelectionAfterBlockModeRendersWhole(t *testing.T) {
+	exits := []struct {
+		name string
+		keys []string
+	}{
+		{"escape", []string{KeyEscape}},
+		{"ctrl-c", []string{"<C-c>"}},
+		{"ctrl-v toggle", []string{"<C-v>"}},
+		{"operator", []string{"y"}},
+	}
+	for _, exit := range exits {
+		t.Run(exit.name, func(t *testing.T) {
+			b, v, ks := blockRenderState(t, "abcd\nefgh\nijkl\n")
+
+			// Use block mode, then leave it by this route.
+			feedDisplay(ks, "l", "<C-v>", "jl")
+			feedDisplay(ks, exit.keys...)
+			if c := b.Cursor(); c.BlockSel || c.BlockEOL {
+				t.Fatalf("block flags outlived the selection: BlockSel=%v BlockEOL=%v", c.BlockSel, c.BlockEOL)
+			}
+
+			// A whole line, selected linewise, is highlighted whole.
+			*b.Cursor() = b.Cursor().MoveTo(0)
+			feedDisplay(ks, "V")
+			selected := selectedCells(v)
+			for x := 0; x < 4; x++ {
+				if !selected[[2]int{x, 0}] {
+					t.Fatalf("linewise selection is missing cell %d; got %v", x, selected)
+				}
+			}
+		})
+	}
+}
+
+// The same leak made a charwise selection spanning two lines render as the
+// rectangle between its corners instead of the run of text between them.
+func TestCharwiseSelectionAfterBlockMode(t *testing.T) {
+	b, v, ks := blockRenderState(t, "abcd\nefgh\nijkl\n")
+
+	// The shape a fresh charwise selection renders with.
+	feedDisplay(ks, "v", "jl")
+	want := selectedCells(v)
+	feedDisplay(ks, KeyEscape)
+	if len(want) == 0 {
+		t.Fatal("nothing selected")
+	}
+
+	// The same selection, made after a block-mode session.
+	*b.Cursor() = b.Cursor().MoveTo(0)
+	feedDisplay(ks, "<C-v>", "jl", KeyEscape)
+	*b.Cursor() = b.Cursor().MoveTo(0)
+	feedDisplay(ks, "v", "jl")
+	got := selectedCells(v)
+
+	if len(got) != len(want) {
+		t.Fatalf("charwise selection after block mode covers %d cells, want %d (%v vs %v)",
+			len(got), len(want), got, want)
+	}
+	for cell := range want {
+		if !got[cell] {
+			t.Fatalf("cell %v not highlighted after block mode; got %v", cell, got)
+		}
+	}
+}
+
+// ClearSelection is what enforces the invariant, wherever a selection ends.
+func TestClearSelectionDropsBlockFlags(t *testing.T) {
+	c := Cursor{HasSel: true, BlockSel: true, BlockEOL: true, Sel: [2]int{0, 4}}
+	c.ClearSelection()
+	if c.HasSel || c.BlockSel || c.BlockEOL {
+		t.Fatalf("ClearSelection left %+v", c)
+	}
+
+	moved := Cursor{Pos: 0, HasSel: true, BlockSel: true, BlockEOL: true}.MoveTo(3)
+	if moved.HasSel || moved.BlockSel || moved.BlockEOL {
+		t.Fatalf("MoveTo left a block selection: %+v", moved)
+	}
+	if moved.Pos != 3 {
+		t.Fatalf("MoveTo went to %d, want 3", moved.Pos)
+	}
+}

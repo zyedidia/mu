@@ -547,7 +547,7 @@ func RegisterVisualBlock(ks *KeyState) {
 	ks.modes[ModeVisualBlock].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		for i := range b.cursors {
-			b.cursors[i].HasSel = false
+			b.cursors[i].ClearSelection()
 		}
 		ks.SetMode(ModeNormal)
 		ks.ResetAction()

@@ -281,7 +281,7 @@ func (b *Buffer) Undo() {
 	c, ok := b.undo.PrevState()
 	b.undo.Undo()
 	if ok {
-		c.HasSel = false
+		c.ClearSelection()
 		b.PutCursor(c)
 	}
 }
@@ -291,7 +291,7 @@ func (b *Buffer) Redo() {
 	b.undo.Barrier()
 	if ep, ok := b.undo.MostRecent(); ok {
 		c := b.undo.NextState(ep)
-		c.HasSel = false
+		c.ClearSelection()
 		b.PutCursor(c)
 		b.undo.Redo(ep)
 	}

@@ -75,7 +75,7 @@ func (e *Editor) pasteText(text string) {
 			if c.HasSelection() && !c.BlockSel {
 				b.Remove(c.Sel[0], c.Sel[1])
 			}
-			b.cursors[i].HasSel = false
+			b.cursors[i].ClearSelection()
 		}
 		ks.SetMode(ModeNormal)
 	}

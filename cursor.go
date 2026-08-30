@@ -46,9 +46,19 @@ func (c Cursor) Selection(b *Buffer) []byte {
 	return b.Slice(c.Sel[0], c.Sel[1])
 }
 
+// ClearSelection drops the cursor's selection, block rectangle included.
+// The block flags describe a selection made in visual-block mode and mean
+// nothing without one: left set, they make the next charwise or linewise
+// selection render (and operate) as a rectangle.
+func (c *Cursor) ClearSelection() {
+	c.HasSel = false
+	c.BlockSel = false
+	c.BlockEOL = false
+}
+
 // MoveTo moves the cursor to pos and clears the selection.
 func (c Cursor) MoveTo(pos int) Cursor {
-	c.HasSel = false
+	c.ClearSelection()
 	c.Pos = pos
 	return c
 }

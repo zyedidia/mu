@@ -173,7 +173,7 @@ func RegisterMacros(ks *KeyState) {
 					}
 				}
 				for i := range b.cursors {
-					b.cursors[i].HasSel = false
+					b.cursors[i].ClearSelection()
 				}
 				ks.SetMode(ModeNormal)
 				if reg == 0 || sl < 0 {

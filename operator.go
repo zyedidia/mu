@@ -387,7 +387,7 @@ func execVisualOp(ks *KeyState, key string, opFn func(*KeyState, *Buffer, int, i
 			start = linewiseEOFAdjust(b, start, end)
 		}
 		opFn(ks, b, start, end)
-		b.cursors[i].HasSel = false
+		b.cursors[i].ClearSelection()
 	}
 	ks.forceLinewise = false
 	if ks.ModeID() != ModeInsert {
@@ -454,7 +454,7 @@ func execVisualJoin(ks *KeyState) {
 		if pos >= 0 {
 			b.cursors[i] = b.cursors[i].MoveTo(pos).VimClamp(b)
 		} else {
-			b.cursors[i].HasSel = false
+			b.cursors[i].ClearSelection()
 		}
 	}
 	ks.SetMode(ModeNormal)
@@ -799,6 +799,7 @@ func RegisterOperators(ks *KeyState) {
 		b := ks.Buf()
 		c := b.Cursor()
 		_, _, sz := b.DecodeGraphemeAt(c.Pos)
+		c.ClearSelection() // a charwise selection is never a rectangle
 		c.HasSel = true
 		c.Orig = [2]int{c.Pos, c.Pos + sz}
 		c.Sel = [2]int{c.Pos, c.Pos + sz}
@@ -811,6 +812,7 @@ func RegisterOperators(ks *KeyState) {
 		c := b.Cursor()
 		// Anchor at cursor position (not line start) so that switching
 		// to charwise visual mode preserves the original column.
+		c.ClearSelection() // a linewise selection is never a rectangle
 		c.Orig = [2]int{c.Pos, c.Pos}
 		c.Sel = [2]int{c.Pos, c.Pos}
 		c.HasSel = true
@@ -852,7 +854,7 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeVisual].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		for i := range b.cursors {
-			b.cursors[i].HasSel = false
+			b.cursors[i].ClearSelection()
 		}
 		ks.SetMode(ModeNormal)
 		ks.ResetAction()
@@ -860,7 +862,7 @@ func RegisterOperators(ks *KeyState) {
 	ks.modes[ModeVisualLine].Bindings.Bind(func(ks *KeyState) {
 		b := ks.Buf()
 		for i := range b.cursors {
-			b.cursors[i].HasSel = false
+			b.cursors[i].ClearSelection()
 		}
 		ks.SetMode(ModeNormal)
 		ks.ResetAction()
@@ -879,7 +881,7 @@ func RegisterOperators(ks *KeyState) {
 			ks.mcPattern = ""
 			b := ks.Buf()
 			for i := range b.cursors {
-				b.cursors[i].HasSel = false
+				b.cursors[i].ClearSelection()
 			}
 			ks.SetMode(ModeNormal)
 			ks.ResetAction()
