@@ -76,21 +76,13 @@ func TestDisplayMotionDownUp(t *testing.T) {
 	if cursorPos(ks) != 18 {
 		t.Fatalf("gj to last row: pos=%d, want 18", cursorPos(ks))
 	}
-	// Like j, gj can reach the empty line after the trailing newline...
+	// The trailing newline ends the last line rather than starting one
+	// after it, so there is nowhere further down to go.
 	feedDisplay(ks, "gj")
-	if cursorPos(ks) != 22 {
-		t.Fatalf("gj to trailing line: pos=%d, want 22", cursorPos(ks))
-	}
-	// ...and does not move past it.
-	feedDisplay(ks, "gj")
-	if cursorPos(ks) != 22 {
-		t.Fatalf("gj at last row: pos=%d, want 22", cursorPos(ks))
+	if cursorPos(ks) != 18 {
+		t.Fatalf("gj at last row: pos=%d, want 18", cursorPos(ks))
 	}
 
-	feedDisplay(ks, "gk")
-	if cursorPos(ks) != 18 {
-		t.Fatalf("gk: pos=%d, want 18", cursorPos(ks))
-	}
 	feedDisplay(ks, "gk", "gk", "gk")
 	if cursorPos(ks) != 2 {
 		t.Fatalf("gk back to start: pos=%d, want 2", cursorPos(ks))

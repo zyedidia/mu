@@ -106,6 +106,20 @@ func (b *Buffer) Len() int { return b.text.Len() }
 // NumLines returns the number of lines in the buffer.
 func (b *Buffer) NumLines() int { return b.text.NumLines() }
 
+// LastLine returns the index of the buffer's last line. A file's final
+// newline terminates the line it ends rather than starting an empty one
+// after it, as in vim: "a\nb\n" and "a\nb" are both two lines, and neither
+// has a third for the cursor to reach. NumLines counts newlines, so it is
+// one past the last line for a buffer that ends in one — this is the index
+// to bound lines by.
+func (b *Buffer) LastLine() int {
+	n := b.NumLines()
+	if n > 0 && b.Len() > 0 && b.ByteAt(b.Len()-1) == '\n' {
+		return n - 1
+	}
+	return n
+}
+
 // Slice returns the bytes in range [start:end).
 func (b *Buffer) Slice(start, end int) []byte { return b.text.Slice(start, end) }
 

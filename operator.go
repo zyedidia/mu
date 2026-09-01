@@ -68,7 +68,7 @@ func opChange(ks *KeyState, b *Buffer, start, end int) {
 			var refLine int
 			if line > 0 {
 				refLine = line - 1
-			} else if line < b.NumLines() {
+			} else if line < b.LastLine() {
 				refLine = line + 1
 			} else {
 				refLine = -1
@@ -425,7 +425,7 @@ func execLineChange(ks *KeyState) {
 			refLine := -1
 			if line > 0 {
 				refLine = line - 1
-			} else if line+1 <= b.NumLines() {
+			} else if line+1 <= b.LastLine() {
 				refLine = line + 1
 			}
 			if refLine >= 0 {
@@ -1285,7 +1285,7 @@ func RegisterOperators(ks *KeyState) {
 			ks.RecordJump()
 			b := v.buf
 			tl, tr := v.topRow()
-			ll, lr := b.NumLines(), v.displayRows(b.NumLines())-1
+			ll, lr := b.LastLine(), v.displayRows(b.LastLine())-1
 			var l, r int
 			if v.rowsBetween(tl, tr, ll, lr, v.height) <= v.height-1 {
 				// The buffer end is on screen: L goes to the last row.

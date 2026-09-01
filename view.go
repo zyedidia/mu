@@ -119,7 +119,7 @@ func (v *View) lineNumWidth() int {
 	if !v.LineNums {
 		return 0
 	}
-	return len(strconv.Itoa(v.buf.NumLines()+1)) + 1
+	return len(strconv.Itoa(v.buf.LastLine()+1)) + 1
 }
 
 // gutterTotalWidth returns the total gutter width (diagnostic + line numbers).
@@ -274,8 +274,8 @@ func (v *View) rowStartCol(line, row int) int {
 // position (which may be the line's newline; callers VimClamp as needed).
 func (v *View) displayPos(line, row, wantX int) int {
 	b := v.buf
-	if line > b.NumLines() {
-		line = b.NumLines()
+	if line > b.LastLine() {
+		line = b.LastLine()
 	}
 	pos := b.OffsetAt(line, 0)
 	starts := v.rowStarts(line)
@@ -361,8 +361,8 @@ func (v *View) topRow() (int, int) {
 	if v.topline < 0 {
 		return 0, 0
 	}
-	if v.topline > v.buf.NumLines() {
-		return v.buf.NumLines(), 0
+	if v.topline > v.buf.LastLine() {
+		return v.buf.LastLine(), 0
 	}
 	if !v.SoftWrap || v.topcol <= 0 || v.topcol >= v.buf.LineLen(v.topline) {
 		return v.topline, 0
@@ -388,7 +388,7 @@ func (v *View) stepRows(line, row, n int) (int, int) {
 		if row+n < rows {
 			return line, row + n
 		}
-		if line >= v.buf.NumLines() {
+		if line >= v.buf.LastLine() {
 			return line, rows - 1
 		}
 		n -= rows - row
@@ -441,7 +441,7 @@ func (v *View) rowsBetween(fromLine, fromRow, toLine, toRow, limit int) int {
 // maxTopRow returns the lowest viewport start that keeps the window full:
 // the buffer's last visual row sits on the bottom screen row.
 func (v *View) maxTopRow() (int, int) {
-	last := v.buf.NumLines()
+	last := v.buf.LastLine()
 	return v.stepRows(last, v.displayRows(last)-1, -(v.height - 1))
 }
 
@@ -467,7 +467,7 @@ func (v *View) Relocate() {
 	// remain below the top; the cheap line-count check skips the precise
 	// (row-walking) maxTopRow computation whenever the window is
 	// obviously full.
-	if topLine > v.buf.NumLines()-v.height {
+	if topLine > v.buf.LastLine()-v.height {
 		if ml, mr := v.maxTopRow(); topLine > ml || (topLine == ml && topRow > mr) {
 			topLine, topRow = ml, mr
 			v.setTopRow(ml, mr)

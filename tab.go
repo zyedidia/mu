@@ -337,7 +337,7 @@ func drawPaneStatusBar(draw DrawFunc, v *View, leaf *SplitNode, th *Theme, modeN
 	if b.Text().Opts.Endings != nil {
 		fileinfo = append(fileinfo, b.Text().Opts.Endings.String())
 	}
-	numLines := b.NumLines() + 1
+	numLines := b.LastLine() + 1
 	pct := "Top"
 	if numLines <= 1 {
 		pct = "All"

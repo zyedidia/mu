@@ -77,7 +77,7 @@ func (e *Editor) locationLabel(files map[string][]string, loc lsp.Location) stri
 	}
 	text := ""
 	if b := e.findBuffer(path); b != nil {
-		if lineNum >= 0 && lineNum <= b.NumLines() {
+		if lineNum >= 0 && lineNum <= b.LastLine() {
 			text = strings.TrimSpace(string(b.GetLine(lineNum)))
 		}
 	} else {

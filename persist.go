@@ -183,8 +183,8 @@ func (v *View) LoadCursorPos() {
 	if sv.TopLine < 0 {
 		sv.TopLine = 0
 	}
-	if sv.TopLine > b.NumLines() {
-		sv.TopLine = b.NumLines()
+	if sv.TopLine > b.LastLine() {
+		sv.TopLine = b.LastLine()
 	}
 	if sv.TopCol < 0 || sv.TopCol >= b.LineLen(sv.TopLine) {
 		sv.TopCol = 0

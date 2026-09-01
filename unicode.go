@@ -71,7 +71,7 @@ func (b *Buffer) VisualCol(pos int) int {
 // for tab width and wide characters. For lines longer than maxVisualWalk bytes
 // it falls back to using the column as a byte offset for efficiency.
 func (b *Buffer) VisualLoc(line, vcol int) int {
-	if line >= b.NumLines() {
+	if line > b.LastLine() {
 		return b.Len()
 	}
 	if b.vis == nil || b.LineLen(line) > maxVisualWalk {

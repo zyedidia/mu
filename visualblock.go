@@ -431,7 +431,7 @@ func insertBlockAt(b *Buffer, line, vcol int, reg Register, count int) int {
 	for j, row := range rows {
 		text := repeatBlockRow(row, reg.BlockWidth, count)
 		tl := line + j
-		for tl > b.NumLines() {
+		for tl > b.LastLine() {
 			b.Insert(b.Len(), []byte("\n"))
 		}
 		off := b.VisualLoc(tl, vcol)

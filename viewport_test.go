@@ -105,10 +105,11 @@ func TestRelocateEOFBottomAligned(t *testing.T) {
 	if row := cursorScreenRow(v); row != 3 {
 		t.Fatalf("cursor screen row after G = %d, want 3", row)
 	}
-	// maxTop: the buffer's last visual row sits on the bottom screen row
-	// (rows 3-6 of 7: second row of line 1 through the trailing line).
-	if v.topline != 1 || v.topcol != 5 {
-		t.Fatalf("top = (%d,%d), want (1,5)", v.topline, v.topcol)
+	// The last line's first row sits on the bottom screen row: rows 1-4
+	// of the 6 the three wrapped lines occupy. The file's final newline
+	// adds no row of its own.
+	if v.topline != 0 || v.topcol != 5 {
+		t.Fatalf("top = (%d,%d), want (0,5)", v.topline, v.topcol)
 	}
 	_ = b
 }
@@ -354,13 +355,14 @@ func TestRelocateClampsUnderfullViewport(t *testing.T) {
 	b := ks.Buf()
 
 	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(98, 0))
-	v.topline = 93 // only 8 rows of file remain for a 10-row window
+	v.topline = 93 // only 7 rows of file remain for a 10-row window
 
-	if row := cursorScreenRow(v); row != 7 {
-		t.Fatalf("cursor screen row = %d, want 7", row)
+	if row := cursorScreenRow(v); row != 8 {
+		t.Fatalf("cursor screen row = %d, want 8", row)
 	}
-	if v.topline != 91 {
-		t.Fatalf("topline = %d, want 91 (last line on the bottom row)", v.topline)
+	// Lines 90-99 fill the window, the last of them on the bottom row.
+	if v.topline != 90 {
+		t.Fatalf("topline = %d, want 90 (last line on the bottom row)", v.topline)
 	}
 }
 
@@ -394,12 +396,12 @@ func TestRelocateWrappedUnderfullClamp(t *testing.T) {
 		t.Fatalf("full wrapped window moved: top = (%d,%d), want (2,0)", v.topline, v.topcol)
 	}
 
-	// Top at line 3: only 3 rows remain - clamped to (line 2, row 1).
+	// Top at line 3: only 2 rows remain - clamped to (line 2, row 0).
 	*b.Cursor() = b.Cursor().MoveTo(33) // line 3
 	v.topline = 3
 	v.Relocate()
-	if v.topline != 2 || v.topcol != 5 {
-		t.Fatalf("underfull wrapped window: top = (%d,%d), want (2,5)", v.topline, v.topcol)
+	if v.topline != 2 || v.topcol != 0 {
+		t.Fatalf("underfull wrapped window: top = (%d,%d), want (2,0)", v.topline, v.topcol)
 	}
 }
 

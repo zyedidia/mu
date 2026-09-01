@@ -89,14 +89,14 @@ func (ks *KeyState) runMacroLines(reg RegisterID, sl, el int) {
 	// The whole per-line application is one undo step.
 	b.BeginUndoGroup()
 	defer b.EndUndoGroup()
-	total := b.NumLines()
+	total := b.LastLine()
 	for l := sl; l <= el; l++ {
-		if l > b.NumLines() {
+		if l > b.LastLine() {
 			break
 		}
 		*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(l, 0))
 		ks.runMacro(reg, 1)
-		nt := b.NumLines()
+		nt := b.LastLine()
 		el += nt - total
 		total = nt
 	}

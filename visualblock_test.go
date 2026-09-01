@@ -162,7 +162,9 @@ func TestBlockPasteCreatesLines(t *testing.T) {
 
 	ks.regs.SetDefaultBlock([]byte("a\nb\nc"), 1, false)
 	feedDisplay(ks, "p")
-	if bufText(ks) != "xay\n b\n c" {
+	// The lines the paste adds are real lines, so the file keeps the
+	// final newline it had.
+	if bufText(ks) != "xay\n b\n c\n" {
 		t.Fatalf("block paste past EOF: got %q", bufText(ks))
 	}
 }

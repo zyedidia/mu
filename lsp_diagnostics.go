@@ -18,8 +18,8 @@ func (e *Editor) diagnosticItems() []paletteItem {
 				// Diagnostics go stale as the buffer is edited; clamp
 				// rather than jumping past the end of a shrunken file.
 				line := d.Line
-				if line > buf.NumLines() {
-					line = buf.NumLines()
+				if line > buf.LastLine() {
+					line = buf.LastLine()
 				}
 				pos := buf.OffsetAt(line, 0) + min(d.Col, buf.LineLen(line))
 				*buf.Cursor() = buf.Cursor().MoveTo(pos).VimClamp(buf)

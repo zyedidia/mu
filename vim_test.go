@@ -92,9 +92,11 @@ func TestVimMotionWordAndLineEnds(t *testing.T) {
 func TestVimMotionGG(t *testing.T) {
 	ks := newVimState("line1\nline2\nline3\n")
 
+	// G goes to the last line, which the file's final newline ends rather
+	// than starting an empty line after.
 	feedKeys(ks, "G")
-	if cursorPos(ks) != ks.Buf().Len() {
-		t.Fatalf("G: pos=%d, want %d", cursorPos(ks), ks.Buf().Len())
+	if want := ks.Buf().OffsetAt(ks.Buf().LastLine(), 0); cursorPos(ks) != want {
+		t.Fatalf("G: pos=%d, want %d (start of the last line)", cursorPos(ks), want)
 	}
 	feedKeys(ks, "g")
 	feedKeys(ks, "g")

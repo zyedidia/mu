@@ -29,7 +29,7 @@ const indentScanLines = 400
 // configured default stands.
 func detectIndent(b *Buffer) indentStyle {
 	tabs, spaces := 0, 0
-	for line := 0; line <= b.NumLines() && line < indentScanLines; line++ {
+	for line := 0; line <= b.LastLine() && line < indentScanLines; line++ {
 		text := b.GetLine(line)
 		if len(text) == 0 {
 			continue

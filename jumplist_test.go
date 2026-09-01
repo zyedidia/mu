@@ -40,16 +40,16 @@ func TestJumpListBackForward(t *testing.T) {
 	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(10, 0))
 
 	feedDisplay(ed.ks, "G")
-	if curLine(ed) != 30 {
-		t.Fatalf("G: line %d, want 30", curLine(ed))
+	if curLine(ed) != 29 {
+		t.Fatalf("G: line %d, want 29 (the last of 30 lines)", curLine(ed))
 	}
 	feedSpecial(ed.ks, "<C-o>")
 	if curLine(ed) != 10 {
 		t.Fatalf("<C-o>: line %d, want 10", curLine(ed))
 	}
 	feedSpecial(ed.ks, KeyTab)
-	if curLine(ed) != 30 {
-		t.Fatalf("<C-i>: line %d, want 30", curLine(ed))
+	if curLine(ed) != 29 {
+		t.Fatalf("<C-i>: line %d, want 29", curLine(ed))
 	}
 }
 
@@ -66,10 +66,10 @@ func TestJumpListChain(t *testing.T) {
 		t.Fatalf("gg: line %d, want 0", curLine(ed))
 	}
 
-	// Walk back through the chain: 30 (before gg), 14 (before G), 0.
+	// Walk back through the chain: 29 (before gg), 14 (before G), 0.
 	feedSpecial(ed.ks, "<C-o>")
-	if curLine(ed) != 30 {
-		t.Fatalf("first <C-o>: line %d, want 30", curLine(ed))
+	if curLine(ed) != 29 {
+		t.Fatalf("first <C-o>: line %d, want 29", curLine(ed))
 	}
 	feedSpecial(ed.ks, "<C-o>")
 	if curLine(ed) != 14 {
@@ -134,8 +134,8 @@ func TestJumpListMark(t *testing.T) {
 		t.Fatalf("'a: line %d, want 0", curLine(ed))
 	}
 	feedSpecial(ed.ks, "<C-o>")
-	if curLine(ed) != 30 {
-		t.Fatalf("<C-o> after mark jump: line %d, want 30", curLine(ed))
+	if curLine(ed) != 29 {
+		t.Fatalf("<C-o> after mark jump: line %d, want 29", curLine(ed))
 	}
 }
 

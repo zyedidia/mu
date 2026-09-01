@@ -632,8 +632,8 @@ func cmdGoto(e *Editor, args []string) error {
 	if line < 0 {
 		line = 0
 	}
-	if line > b.NumLines() {
-		line = b.NumLines()
+	if line > b.LastLine() {
+		line = b.LastLine()
 	}
 	*b.Cursor() = b.Cursor().MoveTo(b.OffsetAt(line, 0))
 	return nil

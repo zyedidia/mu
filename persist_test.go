@@ -111,8 +111,9 @@ func TestPersistViewportClamped(t *testing.T) {
 	b2, _ := NewBuffer([]byte("ab\ncd\n"), path)
 	v2 := NewView(b2, 4)
 	v2.LoadCursorPos()
-	if v2.topline != 2 {
-		t.Fatalf("topline: got %d, want 2 (clamped)", v2.topline)
+	// "ab\ncd\n" is two lines; the trailing newline adds none.
+	if v2.topline != 1 {
+		t.Fatalf("topline: got %d, want 1 (clamped)", v2.topline)
 	}
 	if v2.topcol != 0 {
 		t.Fatalf("topcol: got %d, want 0 (invalid for clamped line)", v2.topcol)

@@ -347,7 +347,7 @@ func toInnerParagraph(b *Buffer, pos int, _ int) (int, int) {
 	}
 	// Find end of paragraph (first blank line below).
 	el := line
-	for el < b.NumLines() && b.LineLen(el) > 0 {
+	for el < b.LastLine() && b.LineLen(el) > 0 {
 		el++
 	}
 	start := b.OffsetAt(sl, 0)
@@ -363,7 +363,7 @@ func toAroundParagraph(b *Buffer, pos int, count int) (int, int) {
 	// Include trailing blank lines.
 	for {
 		el, _ := b.LineColAt(end)
-		if el >= b.NumLines() || b.LineLen(el) > 0 {
+		if el >= b.LastLine() || b.LineLen(el) > 0 {
 			break
 		}
 		end = b.OffsetAt(el+1, 0)

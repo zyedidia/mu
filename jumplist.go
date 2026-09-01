@@ -141,8 +141,8 @@ func (e *Editor) gotoJump(p jumpPos) {
 	}
 	b := p.buf
 	line := p.line
-	if line > b.NumLines() {
-		line = b.NumLines()
+	if line > b.LastLine() {
+		line = b.LastLine()
 	}
 	col := p.col
 	if ll := b.LineLen(line); col > ll {

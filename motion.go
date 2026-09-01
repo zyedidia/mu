@@ -324,8 +324,8 @@ func motionDown(b *Buffer, c Cursor, count int) int {
 	}
 	line, _ := b.LineColAt(c.Pos)
 	target := line + count
-	if target > b.NumLines() {
-		target = b.NumLines()
+	if target > b.LastLine() {
+		target = b.LastLine()
 	}
 	if target == line {
 		return -1 // already at the last line (vim: dj there does nothing)
@@ -375,8 +375,8 @@ func motionEOL(b *Buffer, c Cursor, _ int) int {
 func motionFileTop(b *Buffer, _ Cursor, count int) int {
 	if count > 0 {
 		line := count - 1
-		if line > b.NumLines() {
-			line = b.NumLines()
+		if line > b.LastLine() {
+			line = b.LastLine()
 		}
 		return b.OffsetAt(line, 0)
 	}
@@ -384,14 +384,14 @@ func motionFileTop(b *Buffer, _ Cursor, count int) int {
 }
 
 func motionFileBottom(b *Buffer, _ Cursor, count int) int {
+	line := b.LastLine()
 	if count > 0 {
-		line := count - 1
-		if line > b.NumLines() {
-			line = b.NumLines()
+		line = count - 1
+		if line > b.LastLine() {
+			line = b.LastLine()
 		}
-		return b.OffsetAt(line, 0)
 	}
-	return b.Len()
+	return b.OffsetAt(line, 0)
 }
 
 func motionWordRight(b *Buffer, c Cursor, count int) int {
@@ -537,7 +537,7 @@ func motionParaDown(b *Buffer, c Cursor, count int) int {
 		count = 1
 	}
 	line, _ := b.LineColAt(c.Pos)
-	numLines := b.NumLines()
+	numLines := b.LastLine()
 	for i := 0; i < count; i++ {
 		for line < numLines && b.LineLen(line) == 0 {
 			line++

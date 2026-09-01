@@ -44,7 +44,8 @@ func TestStatusBarShadedSections(t *testing.T) {
 	}
 
 	got := text.String()
-	for _, want := range []string{"NORMAL", "main.go", "go", "1:1", "Top"} {
+	// "All": the whole one-line file fits on screen.
+	for _, want := range []string{"NORMAL", "main.go", "go", "1:1", "All"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status bar %q is missing %q", got, want)
 		}

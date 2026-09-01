@@ -110,7 +110,19 @@ func clamp(a, lo, hi int) int {
 // VimClamp ensures the cursor is not on a newline in normal mode.
 // If the cursor is on a '\n' and the previous character is not '\n'
 // (i.e., the line is not empty), it moves back one character.
+//
+// The position past a final newline is clamped too: that newline ends the
+// last line rather than starting one after it (vim), so there is no line
+// there to sit on.
 func (c Cursor) VimClamp(b *Buffer) Cursor {
+	if c.Pos > 0 && c.Pos >= b.Len() && b.ByteAt(b.Len()-1) == '\n' {
+		c.Pos = b.OffsetAt(b.LastLine(), 0)
+		if ll := b.LineLen(b.LastLine()); ll > 0 {
+			_, _, sz := b.DecodeGraphemeBefore(c.Pos + ll)
+			c.Pos += ll - sz
+		}
+		return c
+	}
 	r, sz := b.DecodeRuneAt(c.Pos)
 	if r != '\n' || sz == 0 {
 		return c

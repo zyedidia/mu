@@ -1335,7 +1335,7 @@ func TestDiagnosticJumpClamped(t *testing.T) {
 		wantLine  int
 	}{
 		{"stale column", 0, 40, 0},
-		{"line past EOF", 9, 40, 2},
+		{"line past EOF", 9, 40, 1}, // the last line of "hello\nworld\n"
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
