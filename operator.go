@@ -114,6 +114,23 @@ func indentBytes(ks *KeyState) []byte {
 	return []byte("\t")
 }
 
+// stepLeftOffInsert moves every cursor one character left, off the position
+// it was inserting or overwriting at, the way leaving insert or replace mode
+// does in vim. A cursor at the start of a line stays put: there is no
+// character of its own line to step back onto.
+func stepLeftOffInsert(b *Buffer) {
+	for i := 0; i < b.NumCursors(); i++ {
+		c := b.cursors[i]
+		if c.Pos == 0 {
+			continue
+		}
+		_, _, sz := b.DecodeGraphemeBefore(c.Pos)
+		if r, _ := b.DecodeRuneAt(c.Pos - sz); r != '\n' {
+			b.cursors[i] = c.MoveTo(c.Pos - sz)
+		}
+	}
+}
+
 // indentBackspace returns how many bytes before pos a backspace should
 // delete to take out a whole level of indentation, or 0 for an ordinary
 // one-character backspace. Vim (with softtabstop or smarttab) removes
@@ -962,17 +979,7 @@ func RegisterOperators(ks *KeyState) {
 			ks.blockInsert = false
 			b.RemoveCursors()
 		}
-		// Every cursor steps left off the insert position, as in vim.
-		for i := 0; i < b.NumCursors(); i++ {
-			c := b.cursors[i]
-			if c.Pos > 0 {
-				_, _, sz := b.DecodeGraphemeBefore(c.Pos)
-				r, _ := b.DecodeRuneAt(c.Pos - sz)
-				if r != '\n' {
-					b.cursors[i] = c.MoveTo(c.Pos - sz)
-				}
-			}
-		}
+		stepLeftOffInsert(b)
 		ks.SetMode(ModeNormal)
 	}, KeyEscape)
 	ks.modes[ModeInsert].Bindings.Bind(ks.modes[ModeInsert].Bindings.root.children[KeyEscape].action, "<C-c>")
@@ -1096,8 +1103,13 @@ func RegisterOperators(ks *KeyState) {
 		}
 	}
 
-	// Replace mode Escape
+	// Replace mode Escape: back to normal with the cursor on the last
+	// character replaced, not past it — leaving replace mode places the
+	// cursor exactly as leaving insert mode does (vim).
 	ks.modes[ModeReplace].Bindings.Bind(func(ks *KeyState) {
+		b := ks.Buf()
+		b.UndoBarrier()
+		stepLeftOffInsert(b)
 		ks.SetMode(ModeNormal)
 	}, KeyEscape)
 	ks.modes[ModeReplace].Bindings.Bind(ks.modes[ModeReplace].Bindings.root.children[KeyEscape].action, "<C-c>")

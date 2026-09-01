@@ -89,6 +89,21 @@ func (e *Editor) drainMain() {
 	}
 }
 
+// cursorStyleForMode is the terminal cursor shape a mode is shown with: a
+// bar while inserting, since the cursor sits between two characters; an
+// underline under the character replace mode is about to overwrite, and
+// likewise while an operator or a visual selection waits on a key; a block
+// otherwise.
+func cursorStyleForMode(mode ModeID) tcell.CursorStyle {
+	switch mode {
+	case ModeInsert:
+		return tcell.CursorStyleSteadyBar
+	case ModeReplace, ModeOperatorPending, ModeVisual, ModeVisualLine, ModeVisualBlock:
+		return tcell.CursorStyleSteadyUnderline
+	}
+	return tcell.CursorStyleSteadyBlock
+}
+
 // NewEditor creates a new editor with the given screen, config, and theme.
 func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 	w, h := screen.Size()
@@ -126,16 +141,7 @@ func NewEditor(screen tcell.Screen, cfg *Config, th *Theme) *Editor {
 		if ed.screen == nil {
 			return
 		}
-		switch mode {
-		case ModeInsert, ModeReplace:
-			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBar)
-		case ModeOperatorPending:
-			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
-		case ModeVisual, ModeVisualLine, ModeVisualBlock:
-			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyUnderline)
-		default:
-			ed.screen.SetCursorStyle(tcell.CursorStyleSteadyBlock)
-		}
+		ed.screen.SetCursorStyle(cursorStyleForMode(mode))
 	}
 	ks.onCursorStyle = func(waiting bool) {
 		if ed.screen == nil {

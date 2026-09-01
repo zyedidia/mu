@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 // Tests in this file were written to capture bugs found during an audit of the
@@ -363,5 +365,91 @@ func TestVimReplaceCharWithEnter(t *testing.T) {
 	feedSpecial(ks, KeyEnter)
 	if bufText(ks) != "a\n\n" {
 		t.Fatalf("r<CR>: got %q, want %q", bufText(ks), "a\n\n")
+	}
+}
+
+// Leaving replace mode puts the cursor on the last character replaced, not
+// past it, exactly as leaving insert mode does (vim).
+func TestReplaceModeExitStepsLeft(t *testing.T) {
+	tests := []struct {
+		name    string
+		text    string
+		start   int
+		typed   string
+		wantBuf string
+		wantPos int
+	}{
+		{"after replacing", "abcdef\n", 0, "xyz", "xyzdef\n", 2},
+		{"one character", "abcdef\n", 2, "X", "abXdef\n", 2},
+		{"nothing typed", "abcdef\n", 3, "", "abcdef\n", 2},
+		{"replacing to the end", "abc\n", 0, "XYZ", "XYZ\n", 2},
+		{"past the end of the line", "abc\n", 0, "XYZW", "XYZW\n", 3},
+		// No character of its own line to step back onto.
+		{"at the start of a line", "abc\n", 0, "", "abc\n", 0},
+		{"on an empty line", "\nabc\n", 0, "", "\nabc\n", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ks := newVimState(tt.text)
+			b := ks.Buf()
+			*b.Cursor() = b.Cursor().MoveTo(tt.start)
+
+			feedKeys(ks, "R")
+			if ks.ModeID() != ModeReplace {
+				t.Fatalf("R did not enter replace mode: %v", ks.ModeID())
+			}
+			if tt.typed != "" {
+				feedKeys(ks, tt.typed)
+			}
+			feedSpecial(ks, KeyEscape)
+
+			if ks.ModeID() != ModeNormal {
+				t.Fatalf("mode after escape = %v, want normal", ks.ModeID())
+			}
+			if got := string(b.text.Slice(0, b.Len())); got != tt.wantBuf {
+				t.Fatalf("text = %q, want %q", got, tt.wantBuf)
+			}
+			if got := b.Cursor().Pos; got != tt.wantPos {
+				t.Fatalf("cursor at %d, want %d", got, tt.wantPos)
+			}
+		})
+	}
+}
+
+// <C-c> leaves replace mode the same way Escape does, cursor included.
+func TestReplaceModeCtrlCStepsLeft(t *testing.T) {
+	ks := newVimState("abcdef\n")
+	feedKeys(ks, "R")
+	feedKeys(ks, "xy")
+	feedSpecial(ks, "<C-c>")
+
+	b := ks.Buf()
+	if got := string(b.text.Slice(0, b.Len())); got != "xycdef\n" {
+		t.Fatalf("text = %q, want %q", got, "xycdef\n")
+	}
+	if got := b.Cursor().Pos; got != 1 {
+		t.Fatalf("cursor at %d, want 1", got)
+	}
+}
+
+// Replace mode is shown with an underline, under the character it is about
+// to overwrite — not insert mode's between-characters bar.
+func TestCursorStyleForMode(t *testing.T) {
+	tests := []struct {
+		mode ModeID
+		want tcell.CursorStyle
+	}{
+		{ModeReplace, tcell.CursorStyleSteadyUnderline},
+		{ModeInsert, tcell.CursorStyleSteadyBar},
+		{ModeNormal, tcell.CursorStyleSteadyBlock},
+		{ModeOperatorPending, tcell.CursorStyleSteadyUnderline},
+		{ModeVisual, tcell.CursorStyleSteadyUnderline},
+		{ModeVisualLine, tcell.CursorStyleSteadyUnderline},
+		{ModeVisualBlock, tcell.CursorStyleSteadyUnderline},
+	}
+	for _, tt := range tests {
+		if got := cursorStyleForMode(tt.mode); got != tt.want {
+			t.Errorf("cursorStyleForMode(%v) = %v, want %v", tt.mode, got, tt.want)
+		}
 	}
 }
