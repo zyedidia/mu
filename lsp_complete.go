@@ -418,9 +418,11 @@ func (e *Editor) registerCompletionBindings() {
 		} else if e.cursorAfterNonSpace() {
 			e.triggerCompletion()
 		} else {
+			// Indentation, not a literal tab character: with
+			// tabstospaces on this inserts spaces to the next tab stop.
 			b := ks.Buf()
 			for i := 0; i < b.NumCursors(); i++ {
-				b.Insert(b.cursors[i].Pos, []byte("\t"))
+				b.Insert(b.cursors[i].Pos, tabInsert(ks, b, b.cursors[i].Pos))
 			}
 		}
 	}, KeyTab)

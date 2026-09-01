@@ -95,18 +95,70 @@ func opYank(ks *KeyState, b *Buffer, start, end int) {
 	}
 }
 
-// indentBytes returns the indent string for one level based on view options.
-func indentBytes(ks *KeyState) []byte {
+// expandTabs reports whether indentation is written as spaces (the
+// tabstospaces option).
+func expandTabs(ks *KeyState) bool {
 	if v := ks.ActiveView(); v != nil && v.Opts != nil {
-		if tts, ok := GetOptBool(v.Opts, "tabstospaces"); ok && tts {
-			ts := 4
-			if n, ok := GetOptInt(v.Opts, "tabsize"); ok && n > 0 {
-				ts = n
-			}
-			return bytes.Repeat([]byte{' '}, ts)
+		if tts, ok := GetOptBool(v.Opts, "tabstospaces"); ok {
+			return tts
 		}
 	}
+	return false
+}
+
+// indentBytes returns the indent string for one level based on view options.
+func indentBytes(ks *KeyState) []byte {
+	if expandTabs(ks) {
+		return bytes.Repeat([]byte{' '}, tabSize(ks))
+	}
 	return []byte("\t")
+}
+
+// indentBackspace returns how many bytes before pos a backspace should
+// delete to take out a whole level of indentation, or 0 for an ordinary
+// one-character backspace. Vim (with softtabstop or smarttab) removes
+// indentation a level at a time, so indentation typed with one Tab comes
+// back out with one Backspace instead of four presses. Only a run of spaces
+// at the start of the line counts: past the first non-blank character, or
+// over a tab — already a whole level on its own — backspace behaves as it
+// always did.
+func indentBackspace(ks *KeyState, b *Buffer, pos int) int {
+	if !expandTabs(ks) {
+		return 0
+	}
+	line, col := b.LineColAt(pos)
+	if col == 0 {
+		return 0
+	}
+	for _, c := range b.Slice(b.OffsetAt(line, 0), pos) {
+		if c != ' ' {
+			return 0
+		}
+	}
+	// Spaces only, so the byte column is the visual one: step back to the
+	// previous tab stop, or a whole level when already on one.
+	ts := tabSize(ks)
+	n := col % ts
+	if n == 0 {
+		n = ts
+	}
+	if n > col {
+		n = col
+	}
+	return n
+}
+
+// tabInsert returns what pressing Tab inserts at pos: a tab character, or,
+// with tabstospaces on, enough spaces to reach the next tab stop. Vim aligns
+// to the stop rather than always inserting a full tabsize, which is what
+// makes a tab typed part way along a line land in the column a real tab
+// would have.
+func tabInsert(ks *KeyState, b *Buffer, pos int) []byte {
+	if !expandTabs(ks) {
+		return []byte("\t")
+	}
+	ts := tabSize(ks)
+	return bytes.Repeat([]byte{' '}, ts-b.VisualCol(pos)%ts)
 }
 
 // tabSize returns the configured tab size from view options.
@@ -936,6 +988,11 @@ func RegisterOperators(ks *KeyState) {
 		for i := 0; i < b.NumCursors(); i++ {
 			c := b.cursors[i]
 			if c.Pos > 0 {
+				// Inside indentation, take out a whole level at once.
+				if n := indentBackspace(ks, b, c.Pos); n > 0 {
+					b.Remove(c.Pos-n, c.Pos)
+					continue
+				}
 				_, _, sz := b.DecodeGraphemeBefore(c.Pos)
 				// Auto-close: delete matching pair if cursor is between them.
 				if autoclose && sz == 1 {

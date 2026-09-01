@@ -11,6 +11,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
 
 	"github.com/pelletier/go-toml"
 	"github.com/zyedidia/ftdetect"
@@ -33,6 +36,16 @@ var globalOpts = map[string]bool{
 
 // optionVerify provides validation functions for specific options.
 var optionVerify = map[string]func(any) error{
+	"tabchar": func(v any) error {
+		s, ok := v.(string)
+		if !ok {
+			return errors.New("tabchar: expected string")
+		}
+		if s != "" && tabCharOf(s) == 0 {
+			return errors.New("tabchar: expected a single narrow character, or \"\" for none")
+		}
+		return nil
+	},
 	"clipboard": func(v any) error {
 		s, ok := v.(string)
 		if !ok {
@@ -55,6 +68,12 @@ type ftOpts struct {
 type Options struct {
 	top map[string]any
 	ft  []ftOpts
+
+	// set records options changed by ":set" this session. They live in top
+	// alongside the defaults, so this is what tells the two apart: an
+	// option the user has just set outranks anything the editor infers
+	// about a file (see SetForBuffer).
+	set map[string]bool
 }
 
 // LoadOptions parses a TOML options file. Top-level keys are global/default
@@ -103,6 +122,20 @@ func (o *Options) Resolve(path, ft string) map[string]any {
 		m[k] = v
 	}
 	// Apply filetype and glob overrides.
+	o.eachSection(path, ft, func(sec map[string]any) {
+		for k, v := range sec {
+			if globalOpts[k] {
+				continue
+			}
+			m[k] = v
+		}
+	})
+	return m
+}
+
+// eachSection calls fn for every filetype and glob section that applies to a
+// buffer at path with the given filetype, in resolution order.
+func (o *Options) eachSection(path, ft string, fn func(map[string]any)) {
 	for _, fto := range o.ft {
 		if strings.HasPrefix(fto.ft, "glob:") {
 			globstr := fto.ft[5:]
@@ -117,14 +150,26 @@ func (o *Options) Resolve(path, ft string) map[string]any {
 		} else if ft != fto.ft {
 			continue
 		}
-		for k, v := range fto.opts {
-			if globalOpts[k] {
-				continue
-			}
-			m[k] = v
-		}
+		fn(fto.opts)
 	}
-	return m
+}
+
+// SetForBuffer reports whether name is set specifically for this buffer,
+// rather than merely inherited from the top-level defaults: either by a
+// [filetype] or glob section that applies to it, or by a ":set" this
+// session. Used to decide whether something the editor infers about the
+// file — its indentation, say — may override the configuration.
+func (o *Options) SetForBuffer(path, ft, name string) bool {
+	if o.set[name] {
+		return true
+	}
+	found := false
+	o.eachSection(path, ft, func(sec map[string]any) {
+		if _, ok := sec[name]; ok {
+			found = true
+		}
+	})
+	return found
 }
 
 // --- Config ---
@@ -312,7 +357,17 @@ func (c *Config) SetGlobalOpt(name string, val any) error {
 		}
 	}
 	c.opts.top[name] = val
+	if c.opts.set == nil {
+		c.opts.set = make(map[string]bool)
+	}
+	c.opts.set[name] = true
 	return nil
+}
+
+// SetForBuffer reports whether name is set specifically for the buffer at
+// path with the given filetype (see Options.SetForBuffer).
+func (c *Config) SetForBuffer(path, ft, name string) bool {
+	return c.opts.SetForBuffer(path, ft, name)
 }
 
 // IsGlobalOpt returns true if the option is global-only.
@@ -324,6 +379,19 @@ func IsGlobalOpt(name string) bool {
 // path and filetype.
 func (c *Config) BufferOptions(path, ft string) map[string]any {
 	return c.opts.Resolve(path, ft)
+}
+
+// tabCharOf returns the mark to show at the start of a tab, or 0 for none.
+// The mark stands in the tab's first cell and the renderer pads the rest
+// (see Visualizer.String), so anything that would not fit one cell — more
+// than one character, or a wide one — marks nothing rather than pushing the
+// line out of alignment.
+func tabCharOf(s string) rune {
+	r, size := utf8.DecodeRuneInString(s)
+	if size != len(s) || r == utf8.RuneError || runewidth.RuneWidth(r) != 1 {
+		return 0
+	}
+	return r
 }
 
 // --- Typed option getters ---

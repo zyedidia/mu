@@ -747,14 +747,49 @@ func (e *Editor) newViewWithOptions(buf *Buffer) *View {
 	return v
 }
 
+// bufferOptions resolves a buffer's options, letting the file's own
+// indentation stand in for tabstospaces where the configuration has not
+// spoken about this particular file. The order, strongest first: a ":set"
+// this session, a [filetype] or glob section matching the file, what the
+// file's existing lines are indented with, and finally the top-level
+// default. Detecting keeps an editor configured for spaces from mixing
+// them into a tab-indented file it was asked to edit, without overruling
+// anything said about that file on purpose.
+func (e *Editor) bufferOptions(b *Buffer) map[string]any {
+	opts := e.config.BufferOptions(b.Path, b.Filetype)
+	if on, ok := GetOptBool(opts, "detectindent"); ok && !on {
+		return opts
+	}
+	if e.config.SetForBuffer(b.Path, b.Filetype, "tabstospaces") {
+		return opts
+	}
+	switch b.IndentStyle() {
+	case indentSpaces:
+		opts["tabstospaces"] = true
+	case indentTabs:
+		opts["tabstospaces"] = false
+	}
+	return opts
+}
+
 // applyViewOptions resolves the buffer's options (using its path and
 // filetype) and applies them to the view's display settings.
 func (e *Editor) applyViewOptions(v *View) {
-	opts := e.config.BufferOptions(v.buf.Path, v.buf.Filetype)
+	opts := e.bufferOptions(v.buf)
 	v.Opts = opts
 
 	if n, ok := GetOptInt(opts, "tabsize"); ok && n > 0 {
 		v.vis.TabSize = n
+	}
+	// Mark tabs with a hidden character (the mark plus padding to the tab
+	// stop, drawn in the theme's hidden-char style).
+	if v.vis.CharMap == nil {
+		v.vis.CharMap = make(map[rune]string)
+	}
+	if s, _ := GetOptString(opts, "tabchar"); tabCharOf(s) != 0 {
+		v.vis.CharMap['\t'] = s
+	} else {
+		delete(v.vis.CharMap, '\t')
 	}
 	if b, ok := GetOptBool(opts, "linenums"); ok {
 		v.LineNums = b
@@ -770,6 +805,38 @@ func (e *Editor) applyViewOptions(v *View) {
 	}
 	if n, ok := GetOptInt(opts, "hscrollmargin"); ok {
 		v.HScrollMargin = n
+	}
+}
+
+// reconfigureBuffer re-runs the setup a buffer got when it was opened, for
+// when it acquires a file name later (":w name" on an unnamed buffer) or is
+// renamed onto one with a different type. Without it the buffer keeps the
+// options, highlighter and language server it resolved under the old name,
+// so a [filetype] or glob section — tabstospaces among them — never applies
+// to a file that only became a Go or Python file when it was saved.
+func (e *Editor) reconfigureBuffer(b *Buffer) {
+	ft := DetectFiletype(e.config, b.Path, b.GetLine(0))
+	changed := ft != b.Filetype
+	b.Filetype = ft
+	e.refreshViewOptions()
+	if !changed {
+		return
+	}
+
+	opts := e.config.BufferOptions(b.Path, ft)
+	if b.syntax != nil {
+		b.DisableSyntax()
+	}
+	if ft != "" && syntaxEnabled(opts) {
+		b.InitSyntax(e.config, ft)
+	}
+	if b.lspServer != nil {
+		b.LspClose()
+		b.ClearDiagnostics()
+		b.ClearInlayHints()
+	}
+	if ft != "" && lspEnabled(opts) {
+		e.initBufferLsp(b, ft)
 	}
 }
 

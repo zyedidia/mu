@@ -134,7 +134,7 @@ func lspFilename(u uri.URI) (name string, ok bool) {
 // format according to the buffer's configuration rather than a hardcoded
 // 4-space indent.
 func (e *Editor) lspFormattingOptions(b *Buffer) lsp.FormattingOptions {
-	opts := e.config.BufferOptions(b.Path, b.Filetype)
+	opts := e.bufferOptions(b)
 	tabsize, ok := GetOptInt(opts, "tabsize")
 	if !ok || tabsize <= 0 {
 		tabsize = 4

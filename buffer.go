@@ -59,6 +59,10 @@ type Buffer struct {
 	onReload    func(*Buffer) // called from watcher when auto-reloaded
 	onHighlight func()        // called when background highlighting finishes
 	beforeSave  func(*Buffer) // called before the buffer is written to disk (e.g. format-on-save)
+
+	// indent caches what the file's own indentation says it uses (see
+	// indent.go), reset whenever the contents are replaced wholesale.
+	indent indentStyle
 }
 
 // NewBuffer creates a new editor buffer from raw file data, auto-detecting
@@ -437,6 +441,7 @@ const maxReloadDiffNodes = 2 << 20
 // buffers with modest changes it diffs and applies edits so undo history is
 // preserved. Otherwise it replaces wholesale (losing undo history).
 func (b *Buffer) SetContent(newb *text.Buffer) {
+	b.indent = indentUnscanned
 	if b.Len() < diffCutoff && newb.Len() < diffCutoff {
 		if edits, ok := DiffBounded(b.text, newb, maxReloadDiffNodes); ok {
 			b.UndoBarrier()

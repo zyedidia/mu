@@ -371,6 +371,8 @@ theme = "monokai"
 syntax = true
 tabsize = 4
 tabstospaces = true
+detectindent = true        # let a file's own indentation set tabstospaces
+tabchar = "|"              # mark tabs with this character ("" for none)
 scrollmargin = 3
 hscrollmargin = 1
 linenums = true
@@ -388,6 +390,42 @@ tabstospaces = false
 softwrap = true
 wordwrap = true
 ```
+
+### Hidden characters
+
+`tabchar` marks each tab with a character in the tab's first cell, padded to
+the tab stop, drawn in the theme's `hidden-char` style — so tab-indented
+text reads as indent guides (`|   |   code`) without changing the columns
+anything sits in. Set it to `""` for none. The mark must fit the one cell it
+stands in: a multi-character or double-width value is refused.
+
+The renderer's `Visualizer.CharMap` maps any rune to a mark this way (`\n`
+included), so other hidden characters can be surfaced the same way.
+
+### Indentation detection
+
+With `detectindent` on (the default), a file already indented one way keeps
+being indented that way, so editing a tab-indented file from a
+spaces-by-default setup does not mix the two. What the file says is only a
+default of its own, weaker than anything said about that specific file.
+Strongest first, `tabstospaces` comes from:
+
+1. a `:set tabstospaces` this session
+2. a `[filetype]` or `glob:` section matching the file
+3. the character the file's own indented lines start with
+4. the top-level default
+
+With spaces, Backspace inside a line's leading whitespace removes a whole
+level of indentation — back to the previous tab stop — rather than one space
+at a time, so indentation typed with one Tab comes back out with one
+Backspace (vim's `softtabstop`). Past the first non-blank character, or over
+a tab, it deletes one character as usual.
+
+Only the tabs-or-spaces choice is inferred; `tabsize` always comes from the
+configuration. Detection reads the first few hundred lines and takes the
+majority, skipping block-comment continuation lines (` * ...`); a file with
+no indentation at all, or an even split, leaves the configured default
+alone.
 
 ```go
 type Config struct {

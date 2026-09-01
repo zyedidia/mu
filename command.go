@@ -238,9 +238,13 @@ func writeCmd(e *Editor, args []string, force bool) error {
 	if !force && fileExists(path) && isReadonly(path) {
 		e.infobar.Prompt("File is read-only. Save with sudo? (y/n)", func(key string) {
 			if key == "y" {
+				named := b.Path == ""
 				if err := e.saveWithSudo(b, path); err != nil {
 					e.infobar.Error(err.Error())
 				} else {
+					if named {
+						e.reconfigureBuffer(b)
+					}
 					e.infobar.Message(fmt.Sprintf("\"%s\" written (sudo)", b.Path))
 				}
 			} else {
@@ -250,8 +254,12 @@ func writeCmd(e *Editor, args []string, force bool) error {
 		return nil
 	}
 
+	named := b.Path == ""
 	if err := b.saveAs(path, force); err != nil {
 		return err
+	}
+	if named {
+		e.reconfigureBuffer(b)
 	}
 	// Persist undo history after successful save.
 	if saveUndo, _ := GetOptBool(e.config.opts.top, "saveundo"); saveUndo {
