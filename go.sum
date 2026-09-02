@@ -45,8 +45,12 @@ github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5Cc
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+github.com/zyedidia/flare v0.1.0 h1:lOEuJKfSMP2yzWLvu4lA99NzkgR4vzEo0qMCIURpvl0=
+github.com/zyedidia/flare v0.1.0/go.mod h1:qP0Vfpg9ab4dssAc6QLtE0geYYLwALZxbKRRHqXAyak=
 github.com/zyedidia/flare v0.1.1-0.20260820060455-4d2344e3fcce h1:Rcl5sRNU0IDGT0pVlbkCmxPGeY7qhX/wYhBVhw59dTo=
 github.com/zyedidia/flare v0.1.1-0.20260820060455-4d2344e3fcce/go.mod h1:4BpP5finXZnjVEgMfn4nVukN+EH1RPuwwzUTXhS5VQo=
+github.com/zyedidia/flare v0.1.1-0.20260902211813-893c8651e9c3 h1:QqBHFpQrp6hJQCNYYyc7xDWLQ9T+HEvRrmiPAboY78w=
+github.com/zyedidia/flare v0.1.1-0.20260902211813-893c8651e9c3/go.mod h1:4BpP5finXZnjVEgMfn4nVukN+EH1RPuwwzUTXhS5VQo=
 github.com/zyedidia/ftdetect v0.0.0-20211003024042-9cc4d4b8aa0d/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/ftdetect v0.1.0 h1:vid9p+sAXbu20dbdvdn953+7FB4FA9pzy51pAbA2F78=
 github.com/zyedidia/ftdetect v0.1.0/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
@@ -54,6 +58,7 @@ github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 h1:oMHjjTLfGXVuyOQBY
 github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3/go.mod h1:YKbIYP//Eln8eDgAJGI3IDvR3s4Tv9Z9TGIOumiyQ5c=
 github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7 h1:Y4YaeD2C+eyDI2JqvweJ7OW06j7mcjTfaaR8VFb7e+k=
 github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7/go.mod h1:4Hhqh6e8X8FRGVQwM0eb2YZVcJ7W4zgTOCOQmpFGPKM=
+github.com/zyedidia/gpeg v0.0.0-20211003220203-241091abc9c8/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
 github.com/zyedidia/gpeg v0.0.0-20260819234325-d601f967c6a3 h1:TNLNOU2lbxNTHR9fw3AiI1gp4gtqc72WhsO86SpiNw0=
 github.com/zyedidia/gpeg v0.0.0-20260819234325-d601f967c6a3/go.mod h1:JUfbyVutLbiMWcCx6HhDyRS+D7Umm76+m0UlCykX0Zs=
 github.com/zyedidia/rope v0.0.0-20210616205215-37fbf22eab3a/go.mod h1:IKo1js3O2gdESAUH9F3B33wlrRBnpJMJR/gXyY0a3ho=

@@ -7,7 +7,7 @@ require (
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/mattn/go-runewidth v0.0.21
 	github.com/pelletier/go-toml v1.9.5
-	github.com/zyedidia/flare v0.1.1-0.20260820060455-4d2344e3fcce
+	github.com/zyedidia/flare v0.1.1-0.20260902211813-893c8651e9c3
 	github.com/zyedidia/ftdetect v0.1.0
 	github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3
 	github.com/zyedidia/gotcl v0.0.0-20240215215839-5ab6c79611d7
