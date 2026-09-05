@@ -291,3 +291,125 @@ func TestSearchNoMatchRestoresViewport(t *testing.T) {
 			b.Cursor().Pos, v.Viewport(), origPos, origVp)
 	}
 }
+
+// --- smartcase ---
+
+func TestPatternHasUpper(t *testing.T) {
+	tests := []struct {
+		pattern string
+		want    bool
+	}{
+		{"foo", false},
+		{"Foo", true},
+		{"foO", true},
+		{`\bfoo\b`, false},
+		{`\Sfoo`, false}, // escaped class: not an uppercase letter
+		{`\W`, false},
+		{`\\Foo`, true}, // escaped backslash, then a real F
+		{`foo\`, false},
+		{"héllo", false},
+		{"héllO", true},
+		{"École", true},
+		{"[a-z]+", false},
+	}
+	for _, tt := range tests {
+		if got := patternHasUpper(tt.pattern); got != tt.want {
+			t.Errorf("patternHasUpper(%q) = %v, want %v", tt.pattern, got, tt.want)
+		}
+	}
+}
+
+func TestCompileSearchSmartcase(t *testing.T) {
+	re, err := compileSearch("foo", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !re.MatchString("FOO") {
+		t.Error("smartcase lowercase pattern should match uppercase text")
+	}
+
+	re, err = compileSearch("Foo", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if re.MatchString("foo") {
+		t.Error("smartcase pattern with an uppercase letter should be case-sensitive")
+	}
+
+	re, err = compileSearch("foo", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if re.MatchString("FOO") {
+		t.Error("smartcase off should be case-sensitive")
+	}
+}
+
+func TestSmartcaseSearchDefault(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("xxx FOO yyy"))
+	*b.Cursor() = b.Cursor().MoveTo(0)
+
+	// Enabled by default: a lowercase pattern matches uppercase text.
+	ed.searchForward("foo")
+	if b.Cursor().Pos != 4 {
+		t.Fatalf("smartcase search: pos=%d, want 4", b.Cursor().Pos)
+	}
+}
+
+func TestSmartcaseSearchUpperIsSensitive(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("xxx foo yyy FOO"))
+	*b.Cursor() = b.Cursor().MoveTo(0)
+
+	ed.searchForward("FOO")
+	if b.Cursor().Pos != 12 {
+		t.Fatalf("uppercase pattern: pos=%d, want 12", b.Cursor().Pos)
+	}
+}
+
+func TestSmartcaseOff(t *testing.T) {
+	configDirOverride = t.TempDir()
+	t.Cleanup(func() { configDirOverride = "" })
+	ed := newTestEditor()
+	if err := ed.config.SetGlobalOpt("smartcase", false); err != nil {
+		t.Fatal(err)
+	}
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("xxx FOO yyy"))
+	*b.Cursor() = b.Cursor().MoveTo(0)
+
+	ed.searchForward("foo")
+	if b.Cursor().Pos != 0 {
+		t.Fatalf("smartcase off: pos=%d, want 0 (no match)", b.Cursor().Pos)
+	}
+}
+
+// * and # search for the word under the cursor case-sensitively, as vim
+// does not apply 'smartcase' to them.
+func TestStarIgnoresSmartcase(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("foo FOO foo"))
+	*b.Cursor() = b.Cursor().MoveTo(0)
+
+	ed.ks.HandleKey("*")
+	if b.Cursor().Pos != 8 {
+		t.Fatalf("* search: pos=%d, want 8", b.Cursor().Pos)
+	}
+}
+
+func TestSmartcaseSubstitute(t *testing.T) {
+	ed := newTestEditor()
+	b := ed.ActiveView().buf
+	b.text.Insert(0, []byte("Foo foo FOO"))
+
+	if err := cmdSubstitute(ed, []string{"foo", "bar", "all"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(b.Slice(0, b.Len())); got != "bar bar bar" {
+		t.Fatalf("substitute: got %q, want %q", got, "bar bar bar")
+	}
+}

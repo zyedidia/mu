@@ -18,6 +18,7 @@ wordwrap = false
 clipboard = "external"
 cursorline = true
 incsearch = true
+smartcase = true
 saveundo = true
 savecursor = true
 savehistory = true

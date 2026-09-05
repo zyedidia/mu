@@ -20,9 +20,38 @@ type SearchState struct {
 // --- Buffer search methods ---
 
 // compileSearch compiles a search pattern with multi-line mode enabled so
-// that ^ and $ anchor to line boundaries, as in vim.
-func compileSearch(pattern string) (*regexp.Regexp, error) {
-	return regexp.Compile("(?m)" + pattern)
+// that ^ and $ anchor to line boundaries, as in vim. With smartcase set the
+// search is made case-insensitive unless the pattern contains an uppercase
+// letter (vim's 'smartcase' behavior).
+func compileSearch(pattern string, smartcase bool) (*regexp.Regexp, error) {
+	flags := "(?m)"
+	if smartcase && !patternHasUpper(pattern) {
+		flags += "(?i)"
+	}
+	return regexp.Compile(flags + pattern)
+}
+
+// patternHasUpper reports whether pattern contains an uppercase letter,
+// ignoring escaped characters so that class escapes like \S or \W (and an
+// escaped literal) don't force a case-sensitive search, as in vim.
+func patternHasUpper(pattern string) bool {
+	for i := 0; i < len(pattern); {
+		r, sz := utf8.DecodeRuneInString(pattern[i:])
+		if r == '\\' {
+			// Skip the escape and whatever it escapes.
+			i += sz
+			if i < len(pattern) {
+				_, sz = utf8.DecodeRuneInString(pattern[i:])
+				i += sz
+			}
+			continue
+		}
+		if unicode.IsUpper(r) {
+			return true
+		}
+		i += sz
+	}
+	return false
 }
 
 // findAllInLine returns all matches of re within line l, with indices
@@ -260,6 +289,17 @@ func extractSubmatch(str string) (name string, num int, rest string, ok bool) {
 
 // --- Editor search methods ---
 
+// smartcase reports whether the 'smartcase' option is enabled.
+func (e *Editor) smartcase() bool {
+	sc, ok := GetOptBool(e.config.opts.top, "smartcase")
+	return !ok || sc
+}
+
+// compileSearch compiles a pattern the user typed, applying 'smartcase'.
+func (e *Editor) compileSearch(pattern string) (*regexp.Regexp, error) {
+	return compileSearch(pattern, e.smartcase())
+}
+
 // incrementalSearch moves the cursor to the nearest match as the user types
 // and highlights the match. When the pattern is empty or matches nothing,
 // the cursor and viewport return to their pre-search state.
@@ -275,7 +315,7 @@ func (e *Editor) incrementalSearch(input string, origPos int, origView Viewport,
 		restore()
 		return
 	}
-	re, err := compileSearch(input)
+	re, err := e.compileSearch(input)
 	if err != nil {
 		restore()
 		return
@@ -307,7 +347,7 @@ func (e *Editor) finalizeSearch(pattern string, dir int) {
 	if pattern == "" {
 		return
 	}
-	re, err := compileSearch(pattern)
+	re, err := e.compileSearch(pattern)
 	if err != nil {
 		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
 		return
@@ -316,31 +356,27 @@ func (e *Editor) finalizeSearch(pattern string, dir int) {
 }
 
 func (e *Editor) searchForward(pattern string) {
-	if pattern == "" {
-		return
-	}
-	re, err := compileSearch(pattern)
-	if err != nil {
-		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
-		return
-	}
-	e.search = SearchState{pattern: pattern, direction: 1, re: re}
-	e.pushJump()
-	e.findNext(1)
+	e.searchPattern(pattern, 1, e.smartcase())
 }
 
 func (e *Editor) searchBackward(pattern string) {
+	e.searchPattern(pattern, -1, e.smartcase())
+}
+
+// searchPattern starts a search for pattern in direction dir, applying
+// smartcase when smart is set.
+func (e *Editor) searchPattern(pattern string, dir int, smart bool) {
 	if pattern == "" {
 		return
 	}
-	re, err := compileSearch(pattern)
+	re, err := compileSearch(pattern, smart)
 	if err != nil {
 		e.infobar.Error(fmt.Sprintf("Invalid pattern: %v", err))
 		return
 	}
-	e.search = SearchState{pattern: pattern, direction: -1, re: re}
+	e.search = SearchState{pattern: pattern, direction: dir, re: re}
 	e.pushJump()
-	e.findNext(-1)
+	e.findNext(dir)
 }
 
 func (e *Editor) searchNext() {
@@ -399,7 +435,7 @@ func cmdSubstitute(e *Editor, args []string) error {
 	replacement := args[1]
 	replaceAll := len(args) >= 3 && args[2] == "all"
 
-	re, err := compileSearch(pattern)
+	re, err := e.compileSearch(pattern)
 	if err != nil {
 		return fmt.Errorf("invalid pattern: %v", err)
 	}
@@ -593,7 +629,8 @@ func (e *Editor) registerSearchBindings() {
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		word := e.wordUnderCursor()
 		if word != "" {
-			e.searchForward(`\b` + regexp.QuoteMeta(word) + `\b`)
+			// vim does not apply 'smartcase' to * and #.
+			e.searchPattern(`\b`+regexp.QuoteMeta(word)+`\b`, 1, false)
 		}
 		ks.ResetAction()
 	}, "*")
@@ -601,7 +638,7 @@ func (e *Editor) registerSearchBindings() {
 	e.ks.modes[ModeNormal].Bindings.Bind(func(ks *KeyState) {
 		word := e.wordUnderCursor()
 		if word != "" {
-			e.searchBackward(`\b` + regexp.QuoteMeta(word) + `\b`)
+			e.searchPattern(`\b`+regexp.QuoteMeta(word)+`\b`, -1, false)
 		}
 		ks.ResetAction()
 	}, "#")

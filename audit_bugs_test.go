@@ -66,7 +66,7 @@ func TestFindUpNoFalseCaretAnchor(t *testing.T) {
 	b := NewEmptyBuffer()
 	b.text.Insert(0, []byte("foofoo\n"))
 
-	re, err := compileSearch("^foo")
+	re, err := compileSearch("^foo", false)
 	if err != nil {
 		t.Fatal(err)
 	}
