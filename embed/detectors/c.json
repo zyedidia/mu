@@ -1,7 +1,7 @@
 {
     "name": "c",
-    "exts": [".c", ".C", ".h", ".H"],
+    "exts": [".c", ".C"],
     "file": {
-        "regex": "\\.[cChH]$"
+        "regex": "\\.[cC]$"
     }
 }

@@ -106,12 +106,12 @@ func TestDetectorUserDisplacesEmbeddedExtension(t *testing.T) {
 }
 
 func TestDetectorUserDisplacesContestedExtension(t *testing.T) {
-	// .h is claimed by two embedded detectors (c and objective-c), which
+	// .h is claimed by two embedded detectors (c++ and objective-c), which
 	// resolve it between themselves. A user detector claiming it displaces
 	// both and wins outright.
 	cfg := userConfig(t, nil)
-	if got := DetectFiletype(cfg, "a.h", nil); got != "c" {
-		t.Errorf("embedded a.h = %q, want c", got)
+	if got := DetectFiletype(cfg, "a.h", nil); got != "c++" {
+		t.Errorf("embedded a.h = %q, want c++", got)
 	}
 
 	cfg = userConfig(t, map[string]string{
@@ -132,11 +132,11 @@ func TestDetectorContestedExtensionsResolve(t *testing.T) {
 	tests := []struct {
 		name, first, want string
 	}{
-		{"a.h", "", "c"},
-		{"a.h", "#include <stdio.h>", "c"},
+		{"a.h", "", "c++"},
+		{"a.h", "#include <stdio.h>", "c++"},
 		{"a.h", "#import <Foundation/Foundation.h>", "objective-c"},
 		{"a.h", "@interface Foo : NSObject", "objective-c"},
-		{"a.H", "", "c"},
+		{"a.H", "", "c++"},
 		{"a.c", "", "c"},
 
 		{"a.m", "", "objective-c"},

@@ -1,4 +1,7 @@
 {
     "name": "c++",
-    "exts": [".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx", ".i", ".ii", ".def"]
+    "exts": [".h", ".H", ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx", ".i", ".ii", ".def"],
+    "file": {
+        "regex": "\\.([hH]|cc|cpp|cxx|hh|hpp|hxx|i|ii|def)$"
+    }
 }
