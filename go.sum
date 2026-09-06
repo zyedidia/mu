@@ -47,6 +47,8 @@ github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zyedidia/flare v0.1.1-0.20260905054744-2b72995cad52 h1:fNLQ/T0pOLbP5vaB8Piu1x2xV4GEvK8wOLsT1ekyAco=
 github.com/zyedidia/flare v0.1.1-0.20260905054744-2b72995cad52/go.mod h1:Wyhk0AkldWhEktlHbHYZxZ1J4DeOtjAnrmQNOx4e1oY=
+github.com/zyedidia/flare v0.1.1-0.20260906004856-db44f603bb76 h1:0Qf8Mzg85w/o2bjsPrFXZlJ5uFJdojTCq4oHoOaZvxY=
+github.com/zyedidia/flare v0.1.1-0.20260906004856-db44f603bb76/go.mod h1:Wyhk0AkldWhEktlHbHYZxZ1J4DeOtjAnrmQNOx4e1oY=
 github.com/zyedidia/ftdetect v0.1.1-0.20260905054707-68b7355d2f37 h1:Xq+z3jlj2JuQOD9P7tWSlqPfzNom5zZqA1MYlU10eco=
 github.com/zyedidia/ftdetect v0.1.1-0.20260905054707-68b7355d2f37/go.mod h1:EdZlkR1FBdsrJH2f+08QoLCSZ35oNMFZzPdCt5d9rYE=
 github.com/zyedidia/glob v0.0.0-20170209203856-dd4023a66dc3 h1:oMHjjTLfGXVuyOQBYj5/td9WC0mw4g1xDBPovIqmHew=
