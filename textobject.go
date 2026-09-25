@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"unicode"
 )
 
@@ -29,6 +30,10 @@ func execTextObjOp(ks *KeyState, to TextObjectDef) {
 		c := b.cursors[i]
 		start, end := to.Fn(b, c.Pos, count)
 		if start < end {
+			// The cursor may lie outside the object (e.g. on the opening
+			// bracket for i{); move it to the start like vim does, so the
+			// operator leaves it there (and c inserts inside the object).
+			b.cursors[i] = b.cursors[i].MoveTo(start)
 			op.Fn(ks, b, start, end)
 		}
 	}
@@ -210,7 +215,35 @@ func toAroundWORD(b *Buffer, pos int, count int) (int, int) {
 	return aroundRun(b, pos, count, wORDClass)
 }
 
+// makeInnerDelim returns the inner delimiter object. Like vim, when the
+// opening delimiter ends its line and the closing one begins its line (after
+// indentation), the object covers just the lines in between.
 func makeInnerDelim(open, close rune) func(b *Buffer, pos int, count int) (int, int) {
+	inner := makeDelimContents(open, close)
+	return func(b *Buffer, pos int, count int) (int, int) {
+		start, end := inner(b, pos, count)
+		if start == end {
+			return start, end
+		}
+		s, e := start, end
+		if b.ByteAt(s) == '\n' {
+			s++
+		}
+		line, _ := b.LineColAt(e)
+		ls := b.OffsetAt(line, 0)
+		if ls > s && len(bytes.TrimLeft(b.Slice(ls, e), " \t")) == 0 {
+			e = ls
+		}
+		if s < e {
+			return s, e
+		}
+		return pos, pos // nothing but a line break between the delimiters
+	}
+}
+
+// makeDelimContents returns the range strictly between the delimiter pair
+// enclosing pos.
+func makeDelimContents(open, close rune) func(b *Buffer, pos int, count int) (int, int) {
 	return func(b *Buffer, pos int, _ int) (int, int) {
 		searchPos := pos
 		// If cursor is on the opening delimiter, step inside.
@@ -271,7 +304,7 @@ func makeInnerDelim(open, close rune) func(b *Buffer, pos int, count int) (int, 
 }
 
 func makeAroundDelim(open, close rune) func(b *Buffer, pos int, count int) (int, int) {
-	inner := makeInnerDelim(open, close)
+	inner := makeDelimContents(open, close)
 	return func(b *Buffer, pos int, count int) (int, int) {
 		start, end := inner(b, pos, count)
 		if start == end {

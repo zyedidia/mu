@@ -236,6 +236,39 @@ func TestVimChangeInnerQuote(t *testing.T) {
 	}
 }
 
+func TestVimChangeInnerBraceOnOpen(t *testing.T) {
+	ks := newVimState("foo{bar}\n")
+
+	// Cursor on the opening brace: insert happens inside the braces.
+	feedKeys(ks, "f{ci{X")
+	feedSpecial(ks, KeyEscape)
+	if bufText(ks) != "foo{X}\n" {
+		t.Fatalf("ci{: got %q", bufText(ks))
+	}
+}
+
+func TestVimChangeInnerBraceMultiline(t *testing.T) {
+	ks := newVimState("foo {\n  a\n  b\n}\n")
+
+	feedKeys(ks, "f{ci{X")
+	feedSpecial(ks, KeyEscape)
+	if bufText(ks) != "foo {\nX\n}\n" {
+		t.Fatalf("ci{: got %q", bufText(ks))
+	}
+
+	ks = newVimState("foo {\n  a\n  b\n}\n")
+	feedKeys(ks, "jdi{")
+	if bufText(ks) != "foo {\n}\n" {
+		t.Fatalf("di{: got %q", bufText(ks))
+	}
+
+	ks = newVimState("x foo {\n  a\n}\n")
+	feedKeys(ks, "jda{")
+	if bufText(ks) != "x foo \n" {
+		t.Fatalf("da{: got %q", bufText(ks))
+	}
+}
+
 // --- Insert mode ---
 
 func TestVimInsertAndEscape(t *testing.T) {
