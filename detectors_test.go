@@ -407,3 +407,24 @@ func count(xs []string, s string) int {
 	}
 	return n
 }
+
+func TestCommentsKeysAreFiletypes(t *testing.T) {
+	// comments.toml is keyed by filetype name (the detector's "name"), which
+	// is not always the detector's file name: cpp.json detects "c++".
+	cfg := userConfig(t, nil)
+	names := map[string]bool{}
+	for _, claimants := range loadDetectors(cfg) {
+		for _, d := range claimants {
+			names[d.Name] = true
+		}
+	}
+	comments := cfg.LoadComments()
+	for ft := range comments {
+		if !names[ft] {
+			t.Errorf("comments.toml entry %q matches no detector name", ft)
+		}
+	}
+	if ft := DetectFiletype(cfg, "a.cpp", nil); comments[ft] != "//" {
+		t.Errorf("a.cpp (filetype %q) comment = %q, want //", ft, comments[ft])
+	}
+}
