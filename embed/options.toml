@@ -2,7 +2,7 @@ autoindent = true
 autoclose = true
 autoformat = false
 cursor = "block"
-theme = "monokai"
+theme = "molokai"
 syntax = true
 lsp = true
 tabsize = 4
@@ -10,10 +10,10 @@ tabstospaces = true
 detectindent = true
 tabchar = "|"
 textwidth = 79
-scrollmargin = 5
-hscrollmargin = 5
+scrollmargin = 3
+hscrollmargin = 1
 linenums = true
-softwrap = false
+softwrap = true
 wordwrap = false
 clipboard = "external"
 cursorline = true
@@ -24,4 +24,7 @@ savecursor = true
 savehistory = true
 
 [makefile]
+tabstospaces = false
+
+[go]
 tabstospaces = false

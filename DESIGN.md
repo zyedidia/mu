@@ -367,7 +367,7 @@ built into flare; `include` directives inside a grammar resolve the same way.
 autoindent = true
 autoformat = false         # format via LSP before every save
 cursor = "block"           # block, bar, underline
-theme = "monokai"
+theme = "molokai"
 syntax = true
 tabsize = 4
 tabstospaces = true
@@ -376,7 +376,7 @@ tabchar = "|"              # mark tabs with this character ("" for none)
 scrollmargin = 3
 hscrollmargin = 1
 linenums = true
-softwrap = false
+softwrap = true
 wordwrap = false
 clipboard = "external"     # internal, external, terminal
 cursorline = true
@@ -385,9 +385,11 @@ cursorline = true
 [makefile]
 tabstospaces = false
 
+[go]
+tabstospaces = false
+
 # Glob pattern overrides
 ["glob:*.md"]
-softwrap = true
 wordwrap = true
 ```
 
